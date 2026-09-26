@@ -32,7 +32,7 @@ struct AgentsSettingsView: View {
             "The \(LilPasswordsKit.cliName) CLI and MCP server can read every password with no prompts while "
               + "\(LilPasswordsKit.productName) is unlocked. Turning this off, or locking the vault, blocks access."
           )
-          Text("Otherwise, agent access follows \(LilPasswordsKit.productName)'s own auto-lock.")
+          Text("Otherwise, agent access follows \(LilPasswordsKit.productName)' own auto-lock.")
         }
       }
 
@@ -56,6 +56,7 @@ struct AgentsSettingsView: View {
       }
     }
     .formStyle(.grouped)
+    .controlSize(.small)
     .frame(width: SettingsLayout.contentWidth)
     .fixedSize(horizontal: false, vertical: true)
     .task { await logModel.refresh() }

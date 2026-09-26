@@ -16,6 +16,7 @@ struct SecuritySettingsView: View {
             Text(interval.displayName).tag(interval)
           }
         }
+        .pickerStyle(.menu)
       } footer: {
         Text(
           "\(LilPasswordsKit.productName) locks and requires Touch ID or your password again after this much inactivity."
@@ -28,11 +29,13 @@ struct SecuritySettingsView: View {
             Text(interval.displayName).tag(interval)
           }
         }
+        .pickerStyle(.menu)
       } footer: {
         Text("Copied passwords and verification codes are removed from the clipboard automatically.")
       }
     }
     .formStyle(.grouped)
+    .controlSize(.small)
     .frame(width: SettingsLayout.contentWidth)
     .fixedSize(horizontal: false, vertical: true)
   }

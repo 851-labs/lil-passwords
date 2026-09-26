@@ -56,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     #if DEBUG
       RecoveryKitDebugMenu.install { [weak self] in self?.mainWindowController?.window }
+      applyOpenSettingsTabOverrideIfNeeded()
       if let tophatDir = ProcessInfo.processInfo.environment["LIL_PASSWORDS_TOPHAT_DIR"] {
         // `RecoveryKitDebugMenu.runTophatCapture` calls `exit(0)` once it's done, so anything meant
         // to run in the same headless capture pass has to go before it, not after.
@@ -154,6 +155,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
       default: break
       }
+    }
+
+    /// `-OpenSettingsTab general|security|agents` opens the Settings window straight to that tab
+    /// on launch, DEBUG-only. Exists so tophat/manual-QA screenshots of Settings (851-2460) can be
+    /// captured deterministically — by launching a build with this argument (plus
+    /// `-ForceAppearance`/`-SeedSampleData`/`-AutoUnlockForTophat`) and grabbing this process' own
+    /// window via `CGWindowListCopyWindowInfo` filtered on `kCGWindowOwnerPID` — rather than
+    /// driving a live menu click or keyboard shortcut through `System Events`, which can't reliably
+    /// be scoped to one process among several concurrently-running same-named instances on a
+    /// shared machine. `SettingsTabViewController.Tab`'s raw values (`general`/`security`/`agents`)
+    /// are exactly the accepted strings. Never compiled into Release builds.
+    private func applyOpenSettingsTabOverrideIfNeeded() {
+      guard let raw = UserDefaults.standard.string(forKey: "OpenSettingsTab"),
+        let tab = SettingsTabViewController.Tab(rawValue: raw)
+      else { return }
+      SettingsWindowController.shared.show(tab: tab)
     }
   #endif
 }

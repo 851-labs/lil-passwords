@@ -51,6 +51,7 @@ struct GeneralSettingsView: View {
       }
     }
     .formStyle(.grouped)
+    .controlSize(.small)
     .frame(width: SettingsLayout.contentWidth)
     .fixedSize(horizontal: false, vertical: true)
   }

@@ -28,9 +28,21 @@ final class SettingsWindowController: NSWindowController {
   }
 
   /// Shows the Settings window, bringing the app to the front so it's immediately visible even
-  /// if the app wasn't active when "Settings…" was chosen.
-  func show() {
+  /// if the app wasn't active when "Settings…" was chosen. Pass `tab` to also jump straight to a
+  /// specific tab (see `AppDelegate`'s `-OpenSettingsTab` DEBUG override, which is the only caller
+  /// that does today).
+  ///
+  /// Order matters here: the window is put on screen *before* switching tabs, not after.
+  /// `SettingsTabViewController`'s resize-on-select logic forces a layout pass and reads the
+  /// newly-selected child's `fittingSize` — ordering front first means `viewDidLoad`'s own initial
+  /// resize (for General, the tab it always starts on) has already run, so a subsequent `selectTab`
+  /// switches tabs the same way a live click would, rather than being the very first layout/resize
+  /// this window has ever gone through.
+  func show(tab: SettingsTabViewController.Tab? = nil) {
     NSApp.activate(ignoringOtherApps: true)
     window?.makeKeyAndOrderFront(nil)
+    if let tab, let tabViewController = window?.contentViewController as? SettingsTabViewController {
+      tabViewController.selectTab(tab)
+    }
   }
 }

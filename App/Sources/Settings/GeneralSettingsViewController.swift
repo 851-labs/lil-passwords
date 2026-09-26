@@ -8,10 +8,11 @@ import SwiftUI
 final class GeneralSettingsViewController: NSHostingController<GeneralSettingsView> {
   init(settings: AppSettings = .shared) {
     super.init(rootView: GeneralSettingsView(settings: ObservableAppSettings(settings: settings)))
-    // Keeps `preferredContentSize` in sync with the SwiftUI content's own ideal size, which is
-    // what `SettingsTabViewController.tabView(_:didSelect:)` reads to resize the window per tab —
-    // the same "fixed width, height follows content" contract the old AppKit `SettingsLayout`
-    // computed by hand.
+    // Keeps this hosting controller's own `view.fittingSize` tracking the SwiftUI content's ideal
+    // size ("fixed width, height follows content" — the same contract the old AppKit
+    // `SettingsLayout` computed by hand). `SettingsTabViewController` reads `fittingSize` (not
+    // `preferredContentSize`, which never gets populated for a hosting controller nested under
+    // another view controller) to resize the window per tab.
     sizingOptions = [.intrinsicContentSize]
   }
 
