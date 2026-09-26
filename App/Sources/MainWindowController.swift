@@ -47,6 +47,11 @@ final class MainWindowController: NSWindowController {
 
     window.contentViewController = splitViewController
     toolbarController.splitView = splitViewController.splitView
+    // The search field lives in the toolbar (851-2461), spanning the list column between two
+    // tracking separators, but `ItemListViewController` still owns query handling/focus — hand it
+    // the field and make it the delegate.
+    toolbarController.searchField.delegate = splitViewController.listViewController
+    splitViewController.listViewController.searchField = toolbarController.searchField
     window.toolbar = toolbarController.makeToolbar()
 
     store.update(VaultSnapshot(items: dataSource.items))
@@ -72,7 +77,7 @@ final class MainWindowController: NSWindowController {
 
     // ⌘F focuses the search field (851-2417). Handled as a local event monitor, rather than a
     // `MainMenu.swift` menu item's action, since that file is 851-2424's. The search field itself
-    // lives in the list column's header, not the toolbar (851-2461).
+    // lives in the toolbar, spanning the list column (851-2461) — see the wiring above.
     searchKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
       guard let self,
         event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,

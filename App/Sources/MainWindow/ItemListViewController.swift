@@ -33,8 +33,12 @@ final class ItemListViewController: NSViewController {
 
   weak var delegate: ItemListViewControllerDelegate?
 
-  private let searchBar = NSView()
-  private let searchField = NSSearchField()
+  /// The toolbar's search field (851-2461): owned and laid out by `MainToolbarController`, not
+  /// here — it sits in the toolbar row itself, spanning the list column via a pair of
+  /// `NSTrackingSeparatorToolbarItem`s. `MainWindowController` hands it over after constructing
+  /// both controllers, along with setting its delegate to `self`, so ⌘F/query handling can stay
+  /// here without this view controller owning any toolbar UI.
+  weak var searchField: NSSearchField?
   private let headerBar = NSView()
   private let countLabel = NSTextField(labelWithString: "")
   private let sortButton = NSButton()
@@ -72,34 +76,27 @@ final class ItemListViewController: NSViewController {
 
   override func loadView() {
     let view = NSView()
-    configureSearchBar()
     configureHeaderBar()
     configureTableView()
     configureEmptyStateView()
 
-    view.addSubview(searchBar)
     view.addSubview(headerBar)
     view.addSubview(scrollView)
     view.addSubview(emptyStateView)
 
-    searchBar.translatesAutoresizingMaskIntoConstraints = false
     headerBar.translatesAutoresizingMaskIntoConstraints = false
     scrollView.translatesAutoresizingMaskIntoConstraints = false
     emptyStateView.translatesAutoresizingMaskIntoConstraints = false
 
     NSLayoutConstraint.activate([
-      searchBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-      searchBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      headerBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      headerBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
       // Anchored to the safe area (not `view.topAnchor`) because the window uses a transparent
       // unified toolbar (`titlebarAppearsTransparent = true`): this split-view item's content
       // extends *behind* the toolbar, so pinning to the plain top anchor drew content underneath
-      // the titlebar instead of below it.
-      searchBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-      searchBar.heightAnchor.constraint(equalToConstant: 44),
-
-      headerBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-      headerBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-      headerBar.topAnchor.constraint(equalTo: searchBar.bottomAnchor),
+      // the titlebar instead of below it. The search field itself now lives in the toolbar row
+      // (851-2461), so the "N Items"/sort row is the first thing below the toolbar here.
+      headerBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
       headerBar.heightAnchor.constraint(equalToConstant: 24),
 
       scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -138,10 +135,12 @@ final class ItemListViewController: NSViewController {
     rebuildRows(preservingSelection: false)
   }
 
-  /// Focuses and selects-all in the embedded search field, in response to ⌘F (851-2417),
-  /// forwarded here by `MainWindowController`'s local event monitor since the search field lives
-  /// in the list column's header, not the toolbar (851-2461).
+  /// Focuses and selects-all in the toolbar's search field, in response to ⌘F (851-2417),
+  /// forwarded here by `MainWindowController`'s local event monitor. The field itself lives in the
+  /// toolbar (851-2461), owned by `MainToolbarController`; `searchField` above is just a weak
+  /// reference to it.
   func focusSearchField() {
+    guard let searchField else { return }
     view.window?.makeFirstResponder(searchField)
     if let editor = searchField.currentEditor() {
       editor.selectAll(nil)
@@ -157,19 +156,6 @@ final class ItemListViewController: NSViewController {
   }
 
   // MARK: Configuration
-
-  private func configureSearchBar() {
-    searchField.translatesAutoresizingMaskIntoConstraints = false
-    searchField.placeholderString = "Search"
-    searchField.delegate = self
-
-    searchBar.addSubview(searchField)
-    NSLayoutConstraint.activate([
-      searchField.leadingAnchor.constraint(equalTo: searchBar.leadingAnchor, constant: 10),
-      searchField.trailingAnchor.constraint(equalTo: searchBar.trailingAnchor, constant: -10),
-      searchField.centerYAnchor.constraint(equalTo: searchBar.centerYAnchor),
-    ])
-  }
 
   private func configureHeaderBar() {
     countLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -500,9 +486,9 @@ extension ItemListViewController: NSSearchFieldDelegate {
     updateSearch(query: field.stringValue)
   }
 
-  /// Called when the user presses Esc or clicks the field's cancel button — `NSSearchField`
-  /// already clears its own text for both, this just makes sure the query (and results) reset to
-  /// match, satisfying "Esc clears it" (851-2461).
+  /// Called when the user presses Esc or clicks the field's cancel button in the toolbar's search
+  /// field — `NSSearchField` already clears its own text for both, this just makes sure the query
+  /// (and results) reset to match, satisfying "Esc clears it" (851-2461).
   func searchFieldDidEndSearching(_ sender: NSSearchField) {
     updateSearch(query: "")
   }
