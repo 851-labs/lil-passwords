@@ -379,22 +379,19 @@ final class ItemListViewController: NSViewController {
     guard let item = selectedItems().first, selectedItems().count == 1,
       let username = item.usernames.first(where: { !$0.isEmpty })
     else { return }
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(username, forType: .string)
+    Pasteboard.copySecret(username)
   }
 
   @objc private func copyPassword(_ sender: Any?) {
     let items = selectedItems()
     guard items.count == 1, !items[0].password.isEmpty else { return }
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(items[0].password, forType: .string)
+    Pasteboard.copySecret(items[0].password)
   }
 
   @objc private func copyVerificationCode(_ sender: Any?) {
     let items = selectedItems()
     guard items.count == 1, let totp = items[0].totp else { return }
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(totp.code(), forType: .string)
+    Pasteboard.copySecret(totp.code())
   }
 
   @objc private func deleteMenuAction(_ sender: Any?) {
