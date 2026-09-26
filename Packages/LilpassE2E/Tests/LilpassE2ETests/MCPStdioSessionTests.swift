@@ -57,7 +57,7 @@ struct MCPStdioSessionTests {
     session.helper.stop()
   }
 
-  @Test func initializesAndListsAllFiveTools() async throws {
+  @Test func initializesAndListsAllEightTools() async throws {
     let session = try await startSession()
     defer { stop(session) }
 
@@ -65,6 +65,7 @@ struct MCPStdioSessionTests {
     #expect(
       Set(tools.map(\.name)) == [
         "list_passwords", "search_passwords", "get_password", "get_verification_code", "generate_password",
+        "create_password", "update_password", "delete_password",
       ])
   }
 
