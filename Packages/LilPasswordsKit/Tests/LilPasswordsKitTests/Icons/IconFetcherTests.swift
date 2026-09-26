@@ -1,4 +1,6 @@
+import CoreGraphics
 import Foundation
+import ImageIO
 import Testing
 
 @testable import LilPasswordsKit
@@ -168,5 +170,61 @@ import Testing
   @Test func normalizedPNGDataReturnsNilForNonImageData() {
     let normalized = IconFetcher.normalizedPNGData(from: Data("not an image".utf8), maxDimension: 64)
     #expect(normalized == nil)
+  }
+
+  /// A solid-color bitmap of the given pixel size — content doesn't matter, only its dimensions,
+  /// which is all `largestFrameIndex(in:)`/`normalizedPNGData` care about.
+  private static func makeSolidCGImage(width: Int, height: Int) -> CGImage {
+    let context = CGContext(
+      data: nil,
+      width: width,
+      height: height,
+      bitsPerComponent: 8,
+      bytesPerRow: 0,
+      space: CGColorSpaceCreateDeviceRGB(),
+      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    )!
+    context.setFillColor(CGColor(red: 1, green: 0, blue: 0, alpha: 1))
+    context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+    return context.makeImage()!
+  }
+
+  /// A multi-page TIFF (as raw bytes) containing one frame per `(width, height)` in `sizes`, in
+  /// that order — this app's real multi-frame case is a `.ico` embedding several resolutions, but
+  /// a multi-page TIFF is a simpler fixture to synthesize and `CGImageSourceGetCount` treats it
+  /// exactly the same way (multiple indexable frames in one file).
+  private static func makeMultiFrameImageData(sizes: [(width: Int, height: Int)]) -> Data {
+    let data = NSMutableData()
+    let destination = CGImageDestinationCreateWithData(data, "public.tiff" as CFString, sizes.count, nil)!
+    for size in sizes {
+      CGImageDestinationAddImage(destination, makeSolidCGImage(width: size.width, height: size.height), nil)
+    }
+    #expect(CGImageDestinationFinalize(destination))
+    return data as Data
+  }
+
+  @Test func largestFrameIndexPicksTheLargestAreaFrame() {
+    let data = Self.makeMultiFrameImageData(sizes: [(16, 16), (256, 256), (48, 48)])
+    let source = CGImageSourceCreateWithData(data as CFData, nil)!
+    #expect(IconFetcher.largestFrameIndex(in: source) == 1)
+  }
+
+  @Test func largestFrameIndexReturnsZeroForASingleFrameSource() {
+    let data = Self.makeMultiFrameImageData(sizes: [(32, 32)])
+    let source = CGImageSourceCreateWithData(data as CFData, nil)!
+    #expect(IconFetcher.largestFrameIndex(in: source) == 0)
+  }
+
+  @Test func normalizedPNGDataUsesTheLargestFrameFromAMultiFrameSource() {
+    // A multi-size `.ico` (16/32/48/256px in one file is a common real shape for a favicon.ico)
+    // should stay sharp by picking its biggest frame, not whichever frame happens to be first
+    // (851-2467).
+    let data = Self.makeMultiFrameImageData(sizes: [(16, 16), (128, 128), (32, 32)])
+    let normalized = IconFetcher.normalizedPNGData(from: data, maxDimension: 256)
+    #expect(normalized != nil)
+    let normalizedSource = CGImageSourceCreateWithData(normalized! as CFData, nil)!
+    let cgImage = CGImageSourceCreateImageAtIndex(normalizedSource, 0, nil)!
+    #expect(cgImage.width == 128)
+    #expect(cgImage.height == 128)
   }
 }

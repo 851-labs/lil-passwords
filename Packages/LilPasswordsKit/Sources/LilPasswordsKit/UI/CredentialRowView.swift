@@ -40,10 +40,21 @@ public final class CredentialRowView: NSTableCellView {
   /// just keep showing ``MonogramIcon`` and never attempt a fetch — the case for every other caller
   /// of this view (`MenuBarListViewController`, `AddVerificationCodeSheetController`, and the
   /// AutoFill extension's own list, none of which are among the "4 places" 851-2459 calls out).
-  public typealias IconLoader = (_ host: String?, _ onIconLoaded: @escaping @MainActor (NSImage) -> Void) -> Task<
-    Void, Never
-  >?
+  ///
+  /// - Note: `dimension` (851-2467, rebased onto this type after it moved here) is always
+  ///   ``iconDimension`` for this view's own fixed 40pt icon, but is threaded through explicitly —
+  ///   rather than assumed by the loader — so `WebsiteIconLoader.loadIcon` can hand the same
+  ///   fetched icon to callers with different icon sizes (the detail pane, menu bar item detail,
+  ///   and New Password sheet, none of which go through `CredentialRowView`) without this type's
+  ///   own fixed size leaking into that shared entry point's contract.
+  public typealias IconLoader = (
+    _ host: String?, _ dimension: CGFloat, _ onIconLoaded: @escaping @MainActor (NSImage) -> Void
+  ) -> Task<Void, Never>?
   public var iconLoader: IconLoader?
+
+  /// The side length, in points, this view's icon is drawn at — fixed by its own layout
+  /// constraints below, and passed to ``iconLoader`` so a fetched icon is clipped/tiled to match.
+  private static let iconDimension: CGFloat = 40
 
   public static func dequeue(from tableView: NSTableView, owner: Any?) -> CredentialRowView {
     if let existing = tableView.makeView(withIdentifier: reuseIdentifier, owner: owner) as? CredentialRowView {
@@ -116,7 +127,7 @@ public final class CredentialRowView: NSTableCellView {
   ///     selection highlight. Kept in sync after the initial `configure` call by
   ///     ``setSeparatorHidden(_:)``, since selection changes don't re-invoke `configure`.
   public func configure(title: String, subtitle: String?, hidesSeparator: Bool) {
-    iconView.image = MonogramIcon.icon(for: title, dimension: 40)
+    iconView.image = MonogramIcon.icon(for: title, dimension: Self.iconDimension)
     titleField.stringValue = title
     subtitleField.stringValue = subtitle ?? ""
     subtitleField.isHidden = subtitle == nil
@@ -141,7 +152,7 @@ public final class CredentialRowView: NSTableCellView {
     setAccessibilityLabel(
       Self.accessibilityLabel(title: item.title, subtitle: subtitle, hasVerificationCode: item.totpURI != nil))
 
-    iconLoadTask = iconLoader?(item.websites.first?.host) { [weak self] icon in
+    iconLoadTask = iconLoader?(item.websites.first?.host, Self.iconDimension) { [weak self] icon in
       self?.iconView.image = icon
     }
   }

@@ -345,7 +345,8 @@ final class DetailViewController: NSViewController {
       isEditing: isEditing
     )
     let displayItemID = displayItem.id
-    iconLoadTask = WebsiteIconLoader.loadIcon(forHost: displayItem.websites.first?.host) { [weak self] icon in
+    iconLoadTask = WebsiteIconLoader.loadIcon(forHost: displayItem.websites.first?.host, dimension: 64) {
+      [weak self] icon in
       guard let self, self.itemID == displayItemID else { return }
       self.identityView.setIcon(icon)
     }

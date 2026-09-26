@@ -163,8 +163,9 @@ public actor IconFetcher {
   }
 
   /// Decodes `rawData` as an image (PNG, ICO, JPEG, or anything else `ImageIO` recognizes),
-  /// downsamples it so its longer side is at most `maxDimension` pixels, and re-encodes the
-  /// result as PNG. Returns `nil` if `rawData` isn't a decodable image.
+  /// downsamples its sharpest available frame (see ``largestFrameIndex(in:)``) so its longer side
+  /// is at most `maxDimension` pixels, and re-encodes the result as PNG. Returns `nil` if
+  /// `rawData` isn't a decodable image.
   ///
   /// `nonisolated` (and not actor-isolated state) so tests can call it directly with fixture
   /// bytes without going through a network stub at all.
@@ -176,13 +177,43 @@ public actor IconFetcher {
         kCGImageSourceThumbnailMaxPixelSize: maxDimension,
         kCGImageSourceCreateThumbnailWithTransform: true,
       ] as CFDictionary
-    guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions) else { return nil }
+    let frameIndex = largestFrameIndex(in: source)
+    guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, frameIndex, thumbnailOptions) else {
+      return nil
+    }
 
     let mutableData = NSMutableData()
     guard let destination = CGImageDestinationCreateWithData(mutableData, Self.pngUTType, 1, nil) else { return nil }
     CGImageDestinationAddImage(destination, cgImage, nil)
     guard CGImageDestinationFinalize(destination) else { return nil }
     return mutableData as Data
+  }
+
+  /// The index, among every frame/representation `source` contains, whose pixel dimensions are
+  /// largest — so it stays sharp at 40pt @2x (851-2467). A multi-size `.ico` (the common shape of
+  /// a real `favicon.ico`, which often embeds 16/32/48/256px variants in a single file) picks its
+  /// biggest frame instead of whatever index `ImageIO` happens to list first, which isn't
+  /// guaranteed to be the largest. Single-frame sources (a plain PNG/JPEG `apple-touch-icon.png`,
+  /// or whatever a page's `<link rel="icon">` points to) just return `0`, their only index.
+  nonisolated static func largestFrameIndex(in source: CGImageSource) -> Int {
+    let count = CGImageSourceGetCount(source)
+    guard count > 1 else { return 0 }
+
+    var bestIndex = 0
+    var bestArea: Double = 0
+    for index in 0..<count {
+      guard let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any] else {
+        continue
+      }
+      let width = (properties[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue ?? 0
+      let height = (properties[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue ?? 0
+      let area = width * height
+      if area > bestArea {
+        bestArea = area
+        bestIndex = index
+      }
+    }
+    return bestIndex
   }
 
   private static var pngUTType: CFString {
