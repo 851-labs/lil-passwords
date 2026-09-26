@@ -40,7 +40,10 @@ public final class CredentialRowView: NSTableCellView {
   /// just keep showing ``MonogramIcon`` and never attempt a fetch — the case for every other caller
   /// of this view (`MenuBarListViewController`, `AddVerificationCodeSheetController`, and the
   /// AutoFill extension's own list, none of which are among the "4 places" 851-2459 calls out).
-  public var iconLoader: ((_ host: String?, _ onIconLoaded: @escaping (NSImage) -> Void) -> Task<Void, Never>?)?
+  public typealias IconLoader = (_ host: String?, _ onIconLoaded: @escaping @MainActor (NSImage) -> Void) -> Task<
+    Void, Never
+  >?
+  public var iconLoader: IconLoader?
 
   public static func dequeue(from tableView: NSTableView, owner: Any?) -> CredentialRowView {
     if let existing = tableView.makeView(withIdentifier: reuseIdentifier, owner: owner) as? CredentialRowView {
