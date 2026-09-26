@@ -439,8 +439,8 @@ final class AddVerificationCodeSheetController: NSWindowController {
     case CaptureError.noDisplay:
       return "No display was available to capture."
     default:
-      return "Lil Passwords couldn't capture the screen. Check that it has Screen Recording permission in "
-        + "System Settings > Privacy & Security, then try again."
+      return "\(LilPasswordsKit.productName) couldn't capture the screen. Check that it has Screen Recording "
+        + "permission in System Settings > Privacy & Security, then try again."
     }
   }
 
