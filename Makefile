@@ -27,27 +27,28 @@ test:
 # E2E_EXTRA_ARGS is empty by default (kept out of normal local runs' output) — CI sets it to
 # `--verbose` for extra `swift test` diagnostics while chasing 851-2434's CI-only hang.
 #
-# --no-parallel: required, not a nicety. Each suite here already carries `.serialized`, but that
-# trait only serializes the tests *within* one suite — swift-testing still runs separate suites
-# concurrently with each other by default, and this package's suites all construct an
-# E2EHelperProcess/run the lilpass binary via the same generic Process/Pipe machinery
-# (LilpassBinary/E2EHelperProcess). A CI run with the HangWatchdog instrumentation below (added
-# alongside this flag) caught it directly: five suites' `init()`s interleaved within milliseconds of
-# each other, then every thread livelocked in the Swift runtime's generic-metadata cache
-# (`swift::MetadataCacheEntryBase::awaitSatisfyingState`/`getOrInsert`/`MetadataCacheKey::operator==`)
-# — the same first-time-generic-instantiation race `MCPStdioSessionTests`'s doc comment already
-# describes, just racing across suites instead of within one. `--no-parallel` runs one suite (and
-# one test) at a time for the whole package, which is the only thing that actually removes the
-# cross-suite race; the per-suite `.serialized` traits stay as defense in depth for anyone who runs
-# a single suite directly (e.g. via `--filter`) without this flag.
+# --no-parallel: cheap insurance, not the fix for 851-2434's CI-only hang. Each suite here already
+# carries `.serialized`, but that trait only serializes tests *within* one suite — swift-testing
+# still runs separate suites concurrently with each other by default, and an early CI run's
+# HangWatchdog dump caught exactly that: five suites' `init()`s interleaving within milliseconds of
+# each other, racing to instantiate the same generic metadata for the first time
+# (`swift::MetadataCacheEntryBase::awaitSatisfyingState`). `--no-parallel` removes that race by
+# running one suite (and one test) at a time for the whole package. It was believed for a while to be
+# the actual fix — it wasn't: a CI run with `--no-parallel` in place still livelocked 3 times in a
+# row, always partway through `MCPStdioSessionTests`, with every suite's `init()` demonstrably running
+# strictly one at a time. See that suite's doc comment (`Packages/LilpassE2E/Tests/LilpassE2ETests/
+# MCPStdioSessionTests.swift`) for the full diagnostic history and the two real, stacked root causes
+# that were actually inside that suite's own teardown: a leaked MCP `Client` background `Task` (fixed
+# by calling `disconnect()`), and a blocking `Process.waitUntilExit()` call starving Swift
+# Concurrency's cooperative thread pool from inside `async` code (fixed by polling `isRunning` with
+# `Task.sleep` instead). `--no-parallel` and every suite's `.serialized` trait stay on anyway — they
+# guard against the race they were originally built for, which is real even if it wasn't this bug —
+# but don't mistake either one for why `make e2e` reliably passes now; the two fixes in
+# `MCPStdioSessionTests.swift` are why.
 #
-# `--no-parallel` is a substantial improvement, not a guaranteed cure: of several local
-# `make e2e --no-parallel` runs taken while verifying this fix, all but one passed cleanly in
-# ~13-14s, but one still tripped HangWatchdog — the same generic-metadata-cache symptom, just far
-# rarer now than "every run" (its prior, pre-`--no-parallel`, cross-suite-interleaved form). This
-# target deliberately does *not* retry on failure — a hang here should surface immediately to
+# This target deliberately does *not* retry on failure — a hang here should surface immediately to
 # whoever's running it locally, not get silently swallowed. CI's E2E step (.github/workflows/ci.yml)
-# does retry a few times instead, as defense in depth against this residual rarity, while keeping
+# retries a few times instead, as defense in depth against any residual flakiness, while keeping
 # every attempt's HangWatchdog tracing in the log.
 e2e: build
 	swift build --package-path Packages/LilpassE2E --product LilpassE2EHelper

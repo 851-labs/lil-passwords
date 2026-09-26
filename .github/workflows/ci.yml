@@ -58,27 +58,23 @@ jobs:
         run: make build
 
       - name: End-to-end tests (built lilpass binary + disposable in-memory helper)
-        # This step used to hang CI for a full 30-minute timeout with zero output. Root-caused via
-        # a background `make e2e` + periodic `sample` of the stuck process: it wasn't our
-        # helper/XPC/MCP code blocking on I/O at all — it was the Swift runtime spinning inside
-        # swift::MetadataCacheEntryBase::awaitSatisfyingState, a lock-free generic-metadata-cache
-        # "wait for another thread's in-flight instantiation of this same type" spin, reached from
-        # MCPStdioSessionTests' use of Client.connect(transport:) (see that suite's doc comment).
-        # First "fixed" by adding `.serialized` to that suite alone — then it recurred anyway,
-        # because `.serialized` only serializes tests *within* one suite, and swift-testing still
-        # runs separate suites concurrently by default. This package's suites all construct an
-        # E2EHelperProcess/run the lilpass binary via the same generic Process/Pipe machinery, so a
-        # CI run with the HangWatchdog instrumentation below caught the same livelock again, just
-        # racing across suites instead of within one — see the Makefile's `e2e` target for the full
-        # writeup and the `--no-parallel` flag that actually removes the cross-suite race.
+        # This step used to hang CI for a full 30-minute timeout with zero output — 851-2434.
+        # Root-caused via a background `make e2e` + periodic `sample` of the stuck process, across
+        # several wrong-or-partial turns before landing on the real, stacked causes; see
+        # `Packages/LilpassE2E/Tests/LilpassE2ETests/MCPStdioSessionTests.swift`'s doc comment for the
+        # full diagnostic history. Short version: it wasn't test/suite parallelism (`.serialized` and
+        # `--no-parallel`, both still on below, guard against a *real* but different race and were
+        # never actually why this hung). It was that suite's own teardown, in two independent ways —
+        # a leaked MCP `Client` background `Task` from a missing `disconnect()` call, and a blocking
+        # `Process.waitUntilExit()` call starving Swift Concurrency's cooperative thread pool from
+        # inside `async` code — both now fixed there.
         #
-        # The retry loop below is deliberate, not a crutch: even with `--no-parallel`, one local
-        # verification run out of several still tripped HangWatchdog before this landed, so the
-        # underlying Swift-runtime generic-metadata race is treated as reduced-to-rare rather than
-        # eliminated. Each attempt fails fast (the 90s HangWatchdog plus its `sample` dump, well
+        # The retry loop below stays on as defense in depth, not because either fix above is expected
+        # to be incomplete, but because this step burned enough investigation time already that
+        # failing fast with full diagnostics beats a silent 30-minute stall if something new ever
+        # shows up here. Each attempt fails fast (the 90s HangWatchdog plus its `sample` dump, well
         # under this step's 10-minute budget) and leaves full tracing in the log either way, so a
-        # retry that goes green still leaves the failed attempt's diagnostics behind to investigate
-        # — this isn't retrying away a mystery silently.
+        # retry that goes green still leaves the failed attempt's diagnostics behind to investigate.
         #
         # `timeout-minutes: 10` and every suite's own `.timeLimit(.minutes(1))` trait stay on as a
         # backstop: a genuine future hang should fail fast and name the offending test, rather than

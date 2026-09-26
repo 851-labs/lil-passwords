@@ -22,20 +22,46 @@ import Testing
 /// of those calls never returned — a per-test time limit turns that into a fast, attributable
 /// failure (naming exactly which test timed out) instead of another silent freeze.
 ///
-/// `.serialized`: root cause of the CI-only hang, found by `sample`-ing the stuck process on CI
-/// (see .github/workflows/ci.yml's E2E step) — the hang wasn't in our helper/XPC/MCP code at all,
-/// it was the Swift runtime itself, spinning inside `swift::MetadataCacheEntryBase::
-/// awaitSatisfyingState` while instantiating generic metadata reachable from `Client.connect
-/// (transport:)`'s `AsyncThrowingStream` plumbing (in the MCP Swift SDK). That function is a
-/// classic lock-free-cache "wait for the other thread to finish instantiating this same generic
-/// type" spin, and this suite is the only one in the package that calls it — every test here
-/// starts its own `Client` and calls `connect(transport:)`, and without `.serialized` swift-testing
-/// runs them all in parallel, so on first run every one of those tasks would race to instantiate
-/// the exact same generic metadata simultaneously. That race apparently never loses on a beefier
-/// dev Mac, but reliably livelocks on CI's more core-constrained runner. Serializing this suite
-/// means only one test ever does that first-time instantiation at once, removing the race outright
-/// — it's a suite-local, always-safe fix regardless of whether it's also a genuine Swift runtime
-/// bug worth reporting upstream.
+/// This suite hung CI's E2E job repeatedly, and its diagnosis went through three wrong-or-partial
+/// turns before landing on the real causes (plural — there were two, stacked) — worth recording so
+/// nobody re-treads the same dead ends:
+///
+/// 1. First theory: parallel tests within this suite raced to instantiate the same generic
+///    metadata the first time `Client.connect(transport:)` ran, livelocking in the Swift runtime's
+///    `swift::MetadataCacheEntryBase::awaitSatisfyingState`. Adding `.serialized` here "fixed" it —
+///    for a while.
+/// 2. It recurred anyway, now with all 5 of this package's suites' `init()`s interleaving. Second
+///    theory: `.serialized` only serializes *within* a suite, and swift-testing still runs separate
+///    suites concurrently by default, so the race was actually cross-suite. Adding `--no-parallel`
+///    to the package's `swift test` invocation (see the Makefile's `e2e` target) "fixed" that — but
+///    a CI run with `--no-parallel` in place still livelocked, 3 times in a row, always partway
+///    through this suite specifically, with every suite's `init()` running strictly one at a time.
+/// 3. Third theory, and the first real root cause (see `stop(_:)`'s `disconnect()` call below):
+///    `Client.connect(transport:)` starts a background `Task` that runs a message-handling loop for
+///    the client's *entire lifetime*, and this suite's teardown never disconnected the client — only
+///    killed the child process and moved on. That Task doesn't reliably exit just because its process
+///    died; it keeps running (and racing to instantiate the same generic metadata
+///    `.serialized`/`--no-parallel` were meant to protect) until the killed process's stdout pipe
+///    hits EOF, which isn't instant. Every test here built a fresh `Client`, so every test leaked one
+///    more of these loops — by the 3rd or 4th test, several were alive simultaneously. Calling
+///    `await session.client.disconnect()` in teardown fixed *this* — six full local repro runs after
+///    landing it never once recurred in the generic-metadata-cache codepath — but three of those six
+///    runs *still* hung, always in a different place: `-[NSConcreteTask waitUntilExit]`.
+/// 4. The second, independent root cause (see `stop(_:)`'s final poll loop below): that leftover
+///    `waitUntilExit()` call is a synchronous, blocking Objective-C API, called directly from this
+///    `async` teardown. That blocks whichever of Swift Concurrency's cooperative-pool threads happens
+///    to run it for as long as the wait takes — and that pool is sized to the machine's core count.
+///    CI's runner has few cores; this package runs 31 tests, several of which (this suite's) each wait
+///    on a whole subprocess's exit in teardown. Enough of those overlapping can exhaust the pool and
+///    deadlock everything else that needs a pool thread next — including, apparently, whatever
+///    bookkeeping that very `waitUntilExit()` call was itself waiting on, which is exactly why it never
+///    resolved on its own. Replacing it with a plain `isRunning` poll via `Task.sleep` (a suspension
+///    point, not a thread-blocking one) is the fix; the SIGKILL sent just above it guarantees the poll
+///    stays short.
+///
+/// `.serialized` and the package's `--no-parallel` flag stay on regardless — they're cheap, and
+/// still legitimate insurance against the *originally hypothesized* race actually existing somewhere
+/// too — but don't assume either one is why this suite passes; the two fixes in `stop(_:)` are.
 @Suite(.timeLimit(.minutes(1)), .serialized)
 struct MCPStdioSessionTests {
   init() {
@@ -74,25 +100,62 @@ struct MCPStdioSessionTests {
   }
 
   /// `terminate()` only requests a graceful exit (`SIGTERM`) — if `lilpass mcp` somehow never acts
-  /// on it, a bare `waitUntilExit()` right after would hang this teardown (and, per this suite's
-  /// own `.timeLimit`, eventually the whole test) indefinitely. The watchdog below forces the issue
-  /// with `SIGKILL` after a generous deadline so a stuck child can never outlive its test.
-  private func stop(_ session: (helper: E2EHelperProcess, process: Process, client: Client)) {
+  /// on it, a bare wait right after would hang this teardown (and, per this suite's own `.timeLimit`,
+  /// eventually the whole test) indefinitely. The polling loop below forces the issue with `SIGKILL`
+  /// after a generous deadline so a stuck child can never outlive its test.
+  ///
+  /// This function carries 851-2434's actual two-part fix — see the suite's doc comment above for
+  /// the full diagnostic history of how each part was found:
+  ///
+  /// 1. `await session.client.disconnect()` must come first, and must actually be awaited.
+  ///    `Client.connect(transport:)` starts a background `Task` that runs its message-handling loop
+  ///    for the client's *entire lifetime*; `disconnect()` is the only way to cancel it. Without
+  ///    calling it, that loop keeps running after a test returns — it only notices the connection is
+  ///    gone once the killed `lilpass mcp` process's stdout pipe actually hits EOF, which isn't
+  ///    instant — and because every test here builds a fresh `Client`, each test used to leak one more
+  ///    of these loops, eventually racing each other (and a brand new test's own `connect(transport:)`
+  ///    call) to instantiate the same generic metadata for the first time in the process.
+  /// 2. The final wait for the child process's exit polls `isRunning` with `Task.sleep` rather than
+  ///    calling `waitUntilExit()` — a synchronous, blocking call — directly from this `async` function.
+  ///    Doing that ties up one of Swift Concurrency's cooperative-pool threads (sized to the machine's
+  ///    core count) for the whole wait; enough of those overlapping on a low-core CI runner can exhaust
+  ///    the pool and deadlock everything else needing a pool thread next.
+  ///
+  /// `.serialized` and the package's `--no-parallel` flag stay on as cheap, harmless insurance, but
+  /// neither one touches either of the above — only this function's two fixes do.
+  private func stop(_ session: (helper: E2EHelperProcess, process: Process, client: Client)) async {
+    await session.client.disconnect()
+
     session.process.terminate()
     let deadline = DispatchTime.now() + .seconds(5)
     while session.process.isRunning, DispatchTime.now() < deadline {
-      Thread.sleep(forTimeInterval: 0.05)
+      try? await Task.sleep(for: .milliseconds(50))
     }
     if session.process.isRunning {
       kill(session.process.processIdentifier, SIGKILL)
     }
-    session.process.waitUntilExit()
+    // Not `session.process.waitUntilExit()`: that's a synchronous, blocking Objective-C call, and
+    // calling it directly from `async` code is its own footgun, distinct from (and layered underneath)
+    // the leaked-Task one above. It ties up whichever of Swift Concurrency's cooperative-pool threads
+    // happens to run this line for as long as the wait takes; that pool is sized to the machine's core
+    // count, and CI's runner has few cores. A couple of tests' `waitUntilExit()` calls overlapping —
+    // easy with 31 tests and 90s of headroom — can exhaust the whole pool and deadlock everything that
+    // needs a pool thread to make progress next, including, it turns out, whatever bookkeeping this
+    // very wait was depending on: confirmed by repeated local reproduction after the `disconnect()` fix
+    // above landed, where every remaining hang's `sample` dump was stuck in exactly this call
+    // (`-[NSConcreteTask waitUntilExit]`), never recurring in the generic-metadata-cache codepath that
+    // `disconnect()` was fixing. Polling `isRunning` with `Task.sleep` — a suspension point, not a
+    // thread-blocking one — gets the same answer without starving the pool. The SIGKILL above makes
+    // this poll short-lived: the process cannot decline to die.
+    while session.process.isRunning {
+      try? await Task.sleep(for: .milliseconds(20))
+    }
     session.helper.stop()
   }
 
   @Test func initializesAndListsAllEightTools() async throws {
     let session = try await startSession()
-    defer { stop(session) }
+    defer { await stop(session) }
 
     let (tools, _) = try await session.client.listTools()
     #expect(
@@ -105,7 +168,7 @@ struct MCPStdioSessionTests {
   @Test func listPasswordsToolCallReturnsSummariesWithoutSecrets() async throws {
     let item = makeE2ETestItem(title: "GitHub", notes: "very secret notes")
     let session = try await startSession(items: [item])
-    defer { stop(session) }
+    defer { await stop(session) }
 
     let (content, isError) = try await session.client.callTool(name: "list_passwords")
     #expect(isError == false)
@@ -117,7 +180,7 @@ struct MCPStdioSessionTests {
   @Test func getPasswordToolCallReturnsTheFullRecord() async throws {
     let item = makeE2ETestItem(title: "GitHub", password: "hunter2")
     let session = try await startSession(items: [item])
-    defer { stop(session) }
+    defer { await stop(session) }
 
     let (content, isError) = try await session.client.callTool(
       name: "get_password", arguments: ["item": "GitHub"])
@@ -128,7 +191,7 @@ struct MCPStdioSessionTests {
 
   @Test func generatePasswordToolCallWithALength() async throws {
     let session = try await startSession()
-    defer { stop(session) }
+    defer { await stop(session) }
 
     let (content, isError) = try await session.client.callTool(
       name: "generate_password", arguments: ["length": 16, "noSymbols": true])
@@ -139,7 +202,7 @@ struct MCPStdioSessionTests {
 
   @Test func aLockedVaultReturnsTheSameMessageTheCLIWouldPrint() async throws {
     let session = try await startSession(items: [makeE2ETestItem()], locked: true)
-    defer { stop(session) }
+    defer { await stop(session) }
 
     let (content, isError) = try await session.client.callTool(name: "list_passwords")
     #expect(isError == true)
