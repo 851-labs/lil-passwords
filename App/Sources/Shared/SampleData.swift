@@ -249,6 +249,27 @@ public enum SampleData {
           createdAt: days(50),
           modifiedAt: days(50)
         ),
+        // The remaining two items exist to exercise the Security sidebar category (851-2419):
+        // Peacock reuses Hulu's password above, and Yelp's password is on the bundled
+        // common-password list, so together they populate both the "Reused" and "Weak" groups.
+        PasswordItem(
+          title: "Peacock",
+          usernames: ["jordan.reyes@icloud.com"],
+          password: "Popcorn-Marathon-8",
+          websites: [URL(string: "https://www.peacocktv.com")!],
+          group: "Entertainment",
+          createdAt: days(70),
+          modifiedAt: days(70)
+        ),
+        PasswordItem(
+          title: "Yelp",
+          usernames: ["jordan.reyes@icloud.com"],
+          password: "letmein1",
+          websites: [URL(string: "https://www.yelp.com")!],
+          group: "Personal",
+          createdAt: days(40),
+          modifiedAt: days(40)
+        ),
       ]
     }
   #endif
