@@ -16,6 +16,24 @@ import Testing
     try await VaultStoringSharedBehavior.assertSearch(InMemoryVaultStore())
   }
 
+  @Test func restore() async throws {
+    try await VaultStoringSharedBehavior.assertRestore(InMemoryVaultStore())
+  }
+
+  @Test func deletePermanently() async throws {
+    try await VaultStoringSharedBehavior.assertDeletePermanently(InMemoryVaultStore())
+  }
+
+  @Test func purgeExpired() async throws {
+    try await VaultStoringSharedBehavior.assertPurgeExpired(InMemoryVaultStore())
+  }
+
+  @Test func restoreAndDeletePermanentlyAndPurgeExpiredSignalChangeObservers() async throws {
+    try await VaultStoringSharedBehavior.assertRestoreAndDeletePermanentlyAndPurgeExpiredSignalChangeObservers(
+      InMemoryVaultStore()
+    )
+  }
+
   @Test func changeLogOrdering() async throws {
     try await VaultStoringSharedBehavior.assertChangeLogOrdering(InMemoryVaultStore())
   }

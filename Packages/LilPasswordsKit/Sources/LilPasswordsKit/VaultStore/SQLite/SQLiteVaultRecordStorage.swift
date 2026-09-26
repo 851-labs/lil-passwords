@@ -11,11 +11,41 @@ final class SQLiteVaultRecordStorage: VaultRecordStorage {
   private var didEnsureSchema = false
 
   init(databaseURL: URL) throws {
-    try FileManager.default.createDirectory(
-      at: databaseURL.deletingLastPathComponent(),
-      withIntermediateDirectories: true
-    )
+    let directory = databaseURL.deletingLastPathComponent()
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+
     db = try SQLiteDatabase(path: databaseURL.path)
+    try Self.restrictSidecarFilePermissions(databaseURL: databaseURL)
+
+    // Overwrite deleted content's on-disk bytes with zeroes instead of leaving them in freed
+    // pages until something else happens to reuse that page — belt-and-suspenders for a file
+    // that, restrictive permissions aside, still holds every password this vault has ever had.
+    try db.execute("PRAGMA secure_delete = ON")
+  }
+
+  /// Whether this storage's own connection currently has `secure_delete` enabled. Test-only
+  /// (hence not exposed any further up than this internal type): `PRAGMA secure_delete` is a
+  /// per-connection setting, not persisted in the database file, so verifying it means querying
+  /// this exact connection rather than a fresh one opened separately against the same file.
+  func isSecureDeleteEnabled() throws -> Bool {
+    let statement = try db.prepare("PRAGMA secure_delete")
+    guard try statement.step() else { return false }
+    return statement.columnInt64(0) != 0
+  }
+
+  /// Restricts `databaseURL` itself, plus its `-wal`/`-shm` sidecar files if either already
+  /// exists, to owner-only read/write (`0600`). This project doesn't currently enable WAL mode
+  /// (see `docs/adr/0003-vaultstore.md`), so those sidecars normally don't exist — but a database
+  /// file inherited from a build that did, or a future one that turns WAL on, shouldn't end up
+  /// with a stray sidecar sitting at whatever the process umask happened to allow.
+  private static func restrictSidecarFilePermissions(databaseURL: URL) throws {
+    let fileManager = FileManager.default
+    for suffix in ["", "-wal", "-shm"] {
+      let path = databaseURL.path + suffix
+      guard fileManager.fileExists(atPath: path) else { continue }
+      try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path)
+    }
   }
 
   // MARK: - Schema and migrations

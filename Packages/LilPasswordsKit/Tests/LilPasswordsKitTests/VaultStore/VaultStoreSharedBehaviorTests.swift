@@ -71,6 +71,114 @@ enum VaultStoringSharedBehavior {
     #expect(neverExisted == nil)
   }
 
+  static func assertRestore(_ store: some VaultStoring) async throws {
+    _ = try await store.createVault()
+
+    let item = makeSamplePasswordItem()
+    try await store.create(item)
+    try await store.delete(id: item.id)
+    #expect(try await store.item(id: item.id)?.deletedAt != nil)
+
+    try await store.restore(id: item.id)
+    let restored = try await store.item(id: item.id)
+    #expect(restored?.deletedAt == nil)
+    #expect(restored?.title == item.title)
+
+    // Restoring an item that was never deleted is a harmless no-op on content.
+    try await store.restore(id: item.id)
+    #expect(try await store.item(id: item.id)?.deletedAt == nil)
+
+    let missingId = UUID()
+    await #expect(throws: VaultStoreError.itemNotFound(missingId)) {
+      try await store.restore(id: missingId)
+    }
+
+    // Once permanently deleted, there's nothing left to restore.
+    try await store.deletePermanently(id: item.id)
+    await #expect(throws: VaultStoreError.itemNotFound(item.id)) {
+      try await store.restore(id: item.id)
+    }
+  }
+
+  static func assertDeletePermanently(_ store: some VaultStoring) async throws {
+    _ = try await store.createVault()
+
+    let item = makeSamplePasswordItem()
+    try await store.create(item)
+    try await store.delete(id: item.id)
+
+    let changesBefore = try await store.changes(since: 0)
+    try await store.deletePermanently(id: item.id)
+
+    // Gone from the decrypted index entirely, not just flagged.
+    let afterPurge = try await store.item(id: item.id)
+    #expect(afterPurge == nil)
+    let all = try await store.allItems()
+    #expect(all.contains(where: { $0.id == item.id }) == false)
+
+    // The change log still records the write, for a future sync engine.
+    let changesAfter = try await store.changes(since: 0)
+    #expect(changesAfter.count == changesBefore.count + 1)
+    #expect(changesAfter.last?.recordId == item.id)
+
+    // Already gone — a second permanent delete has nothing to act on.
+    await #expect(throws: VaultStoreError.itemNotFound(item.id)) {
+      try await store.deletePermanently(id: item.id)
+    }
+
+    let missingId = UUID()
+    await #expect(throws: VaultStoreError.itemNotFound(missingId)) {
+      try await store.deletePermanently(id: missingId)
+    }
+
+    // Permanently deleting an item that was never soft-deleted is allowed.
+    let neverSoftDeleted = makeSamplePasswordItem(title: "Never soft-deleted")
+    try await store.create(neverSoftDeleted)
+    try await store.deletePermanently(id: neverSoftDeleted.id)
+    #expect(try await store.item(id: neverSoftDeleted.id) == nil)
+  }
+
+  static func assertPurgeExpired(_ store: some VaultStoring) async throws {
+    _ = try await store.createVault()
+
+    let reference = Date()
+    let fresh = makeSamplePasswordItem(title: "Fresh")
+    let borderline = makeSamplePasswordItem(title: "Borderline")
+    let expired = makeSamplePasswordItem(title: "Expired")
+    let neverDeleted = makeSamplePasswordItem(title: "Never deleted")
+
+    for item in [fresh, borderline, expired, neverDeleted] {
+      try await store.create(item)
+    }
+    try await store.delete(id: fresh.id)
+    try await store.delete(id: borderline.id)
+    try await store.delete(id: expired.id)
+
+    let retention = PasswordItem.recentlyDeletedRetentionPeriod
+
+    // Nothing is old enough yet.
+    let purgedNow = try await store.purgeExpired(now: reference)
+    #expect(purgedNow.isEmpty)
+
+    // Exactly at the retention boundary: "more than 30 days" hasn't happened yet.
+    let purgedAtBoundary = try await store.purgeExpired(now: reference.addingTimeInterval(retention))
+    #expect(purgedAtBoundary.isEmpty)
+
+    // Just past the boundary: only the items actually deleted purge; a never-deleted item never
+    // qualifies no matter how far `now` is pushed out.
+    let purged = try await store.purgeExpired(now: reference.addingTimeInterval(retention + 5))
+    #expect(Set(purged) == Set([fresh.id, borderline.id, expired.id]))
+
+    #expect(try await store.item(id: fresh.id) == nil)
+    #expect(try await store.item(id: borderline.id) == nil)
+    #expect(try await store.item(id: expired.id) == nil)
+    #expect(try await store.item(id: neverDeleted.id) != nil)
+
+    // Already purged — running it again finds nothing left to do.
+    let purgedAgain = try await store.purgeExpired(now: reference.addingTimeInterval(retention * 2))
+    #expect(purgedAgain.isEmpty)
+  }
+
   static func assertSearch(_ store: some VaultStoring) async throws {
     _ = try await store.createVault()
 
@@ -142,5 +250,42 @@ enum VaultStoringSharedBehavior {
     async let sawWrite = waitForFirstElement(of: secondStream)
     try await store.create(makeSamplePasswordItem())
     #expect(await sawWrite)
+  }
+
+  /// `restore`, `deletePermanently`, and `purgeExpired` (when it actually purges something) are
+  /// writes just like `create`/`update`/`delete`, and should signal `observeChanges()` the same
+  /// way — this is easy to get wrong by forgetting the `notifyOfLocalChange()` call each of
+  /// `VaultStore`/`InMemoryVaultStore` is responsible for adding around its `VaultStoreCore` call.
+  static func assertRestoreAndDeletePermanentlyAndPurgeExpiredSignalChangeObservers(
+    _ store: some VaultStoring
+  ) async throws {
+    _ = try await store.createVault()
+    let item = makeSamplePasswordItem()
+    try await store.create(item)
+    try await store.delete(id: item.id)
+
+    let restoreStream = await store.observeChanges()
+    async let sawRestore = waitForFirstElement(of: restoreStream)
+    try await store.restore(id: item.id)
+    #expect(await sawRestore)
+
+    try await store.delete(id: item.id)
+
+    let deleteStream = await store.observeChanges()
+    async let sawDeletePermanently = waitForFirstElement(of: deleteStream)
+    try await store.deletePermanently(id: item.id)
+    #expect(await sawDeletePermanently)
+
+    let second = makeSamplePasswordItem(title: "Second")
+    try await store.create(second)
+    try await store.delete(id: second.id)
+
+    let purgeStream = await store.observeChanges()
+    async let sawPurge = waitForFirstElement(of: purgeStream)
+    let purged = try await store.purgeExpired(
+      now: Date().addingTimeInterval(PasswordItem.recentlyDeletedRetentionPeriod + 5)
+    )
+    #expect(purged == [second.id])
+    #expect(await sawPurge)
   }
 }
