@@ -12,7 +12,7 @@ final class MainSplitViewController: NSSplitViewController {
   init(store: VaultSnapshotStore, dataSource: VaultViewModel) {
     sidebarViewController = SidebarViewController(store: store)
     listViewController = ItemListViewController(dataSource: dataSource)
-    detailViewController = DetailViewController()
+    detailViewController = DetailViewController(vaultViewModel: dataSource)
     super.init(nibName: nil, bundle: nil)
   }
 
