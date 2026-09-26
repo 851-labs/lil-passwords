@@ -44,7 +44,6 @@ final class MainWindowController: NSWindowController {
       authenticator: MainWindowController.makeAuthenticator()
     )
 
-
     // `InMemoryVaultStore` is a real `VaultStoring` conformance (851-2404) — real crypto, real
     // CRUD/change-log semantics — just without a SQLite file or cross-process Darwin
     // notifications. It stands in for the XPC-backed `VaultStore` the app will talk to once the
