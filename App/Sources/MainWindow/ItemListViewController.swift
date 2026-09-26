@@ -85,8 +85,12 @@ final class ItemListViewController: NSViewController {
     NSLayoutConstraint.activate([
       headerBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
       headerBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-      headerBar.topAnchor.constraint(equalTo: view.topAnchor),
-      headerBar.heightAnchor.constraint(equalToConstant: 28),
+      // Anchored to the safe area (not `view.topAnchor`) because the window uses a transparent
+      // unified toolbar (`titlebarAppearsTransparent = true`): this split-view item's content
+      // extends *behind* the toolbar/search field, so pinning to the plain top anchor drew the
+      // count label and sort button underneath the search pill instead of below it.
+      headerBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+      headerBar.heightAnchor.constraint(equalToConstant: 24),
 
       scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
       scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
@@ -166,6 +170,12 @@ final class ItemListViewController: NSViewController {
     tableView.allowsMultipleSelection = true
     tableView.allowsEmptySelection = true
     tableView.floatsGroupRows = true
+    // `.plain` (rather than leaving `.automatic`, which resolves to extra inset padding around
+    // rows/group rows in some window chrome configurations) plus zeroed `intercellSpacing`, since
+    // row/section spacing is fully controlled by `tableView(_:heightOfRow:)` below — anything else
+    // just stacks on top of that and produces the "twice the row height" look between sections.
+    tableView.style = .plain
+    tableView.intercellSpacing = NSSize(width: 0, height: 0)
     tableView.dataSource = self
     tableView.delegate = self
     tableView.onDeleteKey = { [weak self] in self?.deleteSelectedItems() }
@@ -387,8 +397,8 @@ extension ItemListViewController: NSTableViewDelegate {
 
   func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
     switch rows[row] {
-    case .section: return 20
-    case .item: return 44
+    case .section: return 28
+    case .item: return 40
     }
   }
 
