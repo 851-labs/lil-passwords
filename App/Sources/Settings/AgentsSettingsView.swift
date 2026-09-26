@@ -10,6 +10,8 @@ import SwiftUI
 struct AgentsSettingsView: View {
   @StateObject private var agentSettings: AgentSettingsViewModel
   @StateObject private var logModel = AccessLogViewModel()
+  @StateObject private var cliInstall = CLIInstallViewModel()
+  @StateObject private var connections = AgentConnectionsViewModel()
 
   init(client: AgentClient) {
     _agentSettings = StateObject(wrappedValue: AgentSettingsViewModel(client: client))
@@ -47,6 +49,27 @@ struct AgentsSettingsView: View {
       }
 
       Section {
+        CLIInstallSectionBody(viewModel: cliInstall)
+      } header: {
+        Text("Command Line Tool")
+      } footer: {
+        Text(cliInstallFooterText)
+      }
+
+      Section {
+        ForEach(AgentConnectionsViewModel.Agent.allCases) { agent in
+          AgentConnectionRow(agent: agent, viewModel: connections)
+        }
+      } header: {
+        Text("Connect Agents")
+      } footer: {
+        Text(
+          "Sets up \(LilPasswordsKit.cliName)'s MCP server so the agent can use \(LilPasswordsKit.productName) "
+            + "directly, subject to the access setting above."
+        )
+      }
+
+      Section {
         AccessLogTable(entries: logModel.entries)
         TextField("Filter", text: $logModel.filterText)
         HStack {
@@ -71,6 +94,98 @@ struct AgentsSettingsView: View {
     .fixedSize(horizontal: false, vertical: true)
     .task { await logModel.refresh() }
     .task { await agentSettings.refresh() }
+    .task { cliInstall.refresh() }
+    .task { connections.refresh() }
+  }
+
+  /// `~/.local/bin` (the fallback location — see `CLIInstaller`'s documentation) isn't guaranteed
+  /// to be on every shell's `PATH` out of the box, unlike `/usr/local/bin`, so the footer calls that
+  /// out only when it's actually relevant.
+  private var cliInstallFooterText: String {
+    switch cliInstall.status {
+    case .notInstalled:
+      return "Installs a \"\(LilPasswordsKit.cliName)\" command so agents (and you) can use it from a terminal."
+    case .installed(let path) where path.hasPrefix(NSHomeDirectory() + "/.local/bin"):
+      return "Installed to \(path). If your terminal can't find it, add ~/.local/bin to your shell's PATH."
+    case .installed(let path):
+      return "Installed to \(path)."
+    case .pointsElsewhere(let path, let target):
+      return "Something else is already at \(path) (pointing to \(target)). Installing will replace it."
+    }
+  }
+}
+
+/// The "Command Line Tool" section's contents: current status plus an Install or Uninstall button,
+/// wired to `CLIInstallViewModel`/`CLIInstaller` (851-2432).
+private struct CLIInstallSectionBody: View {
+  @ObservedObject var viewModel: CLIInstallViewModel
+
+  var body: some View {
+    HStack {
+      VStack(alignment: .leading, spacing: 2) {
+        Text(statusText)
+        if let lastErrorMessage = viewModel.lastErrorMessage {
+          Text(lastErrorMessage)
+            .foregroundStyle(.red)
+        }
+      }
+      Spacer()
+      switch viewModel.status {
+      case .notInstalled:
+        Button("Install \"\(LilPasswordsKit.cliName)\" Command") { viewModel.install() }
+      case .installed:
+        Button("Uninstall") { viewModel.uninstall() }
+      case .pointsElsewhere:
+        Button("Install \"\(LilPasswordsKit.cliName)\" Command") { viewModel.install() }
+      }
+    }
+  }
+
+  private var statusText: String {
+    switch viewModel.status {
+    case .notInstalled:
+      return "Not installed"
+    case .installed(let path):
+      return "Installed at \(path)"
+    case .pointsElsewhere(let path, let target):
+      return "A different program is at \(path) (\(target))"
+    }
+  }
+}
+
+/// One row in the "Connect Agents" section (851-2432) — a single agent's name, its current MCP
+/// connection status, and the "Copy Setup"/"Add Automatically" actions.
+private struct AgentConnectionRow: View {
+  let agent: AgentConnectionsViewModel.Agent
+  @ObservedObject var viewModel: AgentConnectionsViewModel
+
+  var body: some View {
+    HStack {
+      VStack(alignment: .leading, spacing: 2) {
+        Text(agent.displayName)
+        Text(statusText)
+          .font(.callout)
+          .foregroundStyle(.secondary)
+      }
+      Spacer()
+      Button("Copy Setup") {
+        Pasteboard.copyText(viewModel.snippet(for: agent))
+      }
+      if viewModel.canAddAutomatically(for: agent) {
+        Button("Add Automatically") {
+          Task { await viewModel.addAutomatically(for: agent) }
+        }
+        .disabled(viewModel.isAddingAutomatically(agent))
+      }
+    }
+  }
+
+  private var statusText: String {
+    switch viewModel.status(for: agent) {
+    case .notConfigured: return "Not connected"
+    case .configured: return "Connected"
+    case .configuredDifferently: return "Configured differently"
+    }
   }
 }
 
