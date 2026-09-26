@@ -97,8 +97,9 @@ public enum AgentRequest: Sendable, Codable, Equatable {
   case setAgentSettings(AgentSettings)
 }
 
-/// The 851-2428 "Allow agents to access passwords" toggle and its "keep agent access available
-/// while the Mac is unlocked" nuance — persisted **helper-side** (`AgentSettingsStoring`), read and
+/// The 851-2428 "Allow agents to access passwords" toggle, its "keep agent access available while
+/// the Mac is unlocked" nuance, and the 851-2433 "Allow agents to create, edit, and delete
+/// passwords" write-access toggle — persisted **helper-side** (`AgentSettingsStoring`), read and
 /// written exclusively through ``AgentRequest/getAgentSettings``/``AgentRequest/setAgentSettings(_:)``,
 /// both restricted to the app's own, code-signing-verified connection
 /// (`CallerIdentity.isVerifiedApp(appBundleIdentifier:)`).
@@ -109,6 +110,14 @@ public enum AgentRequest: Sendable, Codable, Equatable {
 /// silently flip its own access back on. See docs/adr/0001-storage-and-process-model.md (e) for
 /// the full reasoning and the alternative (sealing these in the vault's own metadata) that was
 /// considered and rejected.
+///
+/// **851-2433 fold-in**: `agentWriteAccessEnabled` used to live in its own, near-duplicate
+/// helper-owned Keychain item (`AgentWriteAccessStoring`/`KeychainAgentWriteAccessStore`), read and
+/// written through a separate `getAgentWriteAccessEnabled`/`setAgentWriteAccessEnabled` XPC pair,
+/// while this struct and its real `getAgentSettings`/`setAgentSettings` ops (851-2428) were still
+/// in review. Now that both have landed, write access is just a third field here, sharing this
+/// struct's one Keychain item/ACL and one XPC pair — see `AgentServer.requireWriteAccess(for:)` for
+/// where it's enforced.
 public struct AgentSettings: Sendable, Codable, Equatable {
   /// Settings → Agents → "Allow agents to access passwords".
   public var agentAccessEnabled: Bool
@@ -117,9 +126,45 @@ public struct AgentSettings: Sendable, Codable, Equatable {
   /// separate from the app's own auto-lock.
   public var keepAgentAccessAvailableWhileMacUnlocked: Bool
 
-  public init(agentAccessEnabled: Bool, keepAgentAccessAvailableWhileMacUnlocked: Bool) {
+  /// Settings → Agents → "Allow agents to create, edit, and delete passwords" (851-2433) — a
+  /// separate, narrower toggle than ``agentAccessEnabled``. Meaningless on its own: a caller only
+  /// ever gets write access when this **and** ``agentAccessEnabled`` are both on — see
+  /// `AgentServer.requireWriteAccess(for:)`, which only runs once the read-access check has
+  /// already passed, so a non-app caller with read access off always sees
+  /// `AgentError.agentAccessDisabled`, never `.agentWriteAccessDisabled`, regardless of this
+  /// field's value. Defaults to `false`, matching this struct's overall fail-closed philosophy —
+  /// an agent never gains the ability to modify a vault just because this field was left
+  /// unspecified.
+  public var agentWriteAccessEnabled: Bool
+
+  public init(
+    agentAccessEnabled: Bool,
+    keepAgentAccessAvailableWhileMacUnlocked: Bool,
+    agentWriteAccessEnabled: Bool = false
+  ) {
     self.agentAccessEnabled = agentAccessEnabled
     self.keepAgentAccessAvailableWhileMacUnlocked = keepAgentAccessAvailableWhileMacUnlocked
+    self.agentWriteAccessEnabled = agentWriteAccessEnabled
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case agentAccessEnabled
+    case keepAgentAccessAvailableWhileMacUnlocked
+    case agentWriteAccessEnabled
+  }
+
+  /// A custom, rather than synthesized, `Decodable` conformance so a Keychain item written before
+  /// 851-2433 added ``agentWriteAccessEnabled`` (no such key in its stored JSON at all) still
+  /// decodes instead of throwing — falling back to `false`, the same fail-closed default this
+  /// field's own documentation promises, rather than treating a pre-851-2433 item as corrupt.
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    agentAccessEnabled = try container.decode(Bool.self, forKey: .agentAccessEnabled)
+    keepAgentAccessAvailableWhileMacUnlocked = try container.decode(
+      Bool.self,
+      forKey: .keepAgentAccessAvailableWhileMacUnlocked
+    )
+    agentWriteAccessEnabled = try container.decodeIfPresent(Bool.self, forKey: .agentWriteAccessEnabled) ?? false
   }
 
   /// The fail-closed default: every reader of a stored `AgentSettings` — `AgentServer`,
@@ -128,7 +173,8 @@ public struct AgentSettings: Sendable, Codable, Equatable {
   /// access is never silently treated as enabled just because it couldn't be confirmed disabled.
   public static let disabled = AgentSettings(
     agentAccessEnabled: false,
-    keepAgentAccessAvailableWhileMacUnlocked: false
+    keepAgentAccessAvailableWhileMacUnlocked: false,
+    agentWriteAccessEnabled: false
   )
 }
 
@@ -204,6 +250,12 @@ public enum AgentError: Error, Sendable, Codable, Equatable, CustomStringConvert
   /// setting, not authenticate).
   case agentAccessDisabled
 
+  /// The vault and agent read access are both available, but the caller tried to create, update,
+  /// or delete an item while "Allow agents to create, edit, and delete passwords" is off in
+  /// Settings → Agents (851-2433) — a separate, narrower toggle than ``agentAccessEnabled``. Never
+  /// thrown for the app's own connection, only for other callers (`lilpass`/MCP).
+  case agentWriteAccessDisabled
+
   /// An `ItemReference` (or a plain id) matched no item.
   case notFound
 
@@ -235,6 +287,8 @@ public enum AgentError: Error, Sendable, Codable, Equatable, CustomStringConvert
       return "lil passwords is locked — unlock the app"
     case .agentAccessDisabled:
       return "agent access is disabled in Settings → Agents"
+    case .agentWriteAccessDisabled:
+      return "agent write access is disabled in Settings → Agents"
     case .notFound:
       return "no matching item"
     case .ambiguous:

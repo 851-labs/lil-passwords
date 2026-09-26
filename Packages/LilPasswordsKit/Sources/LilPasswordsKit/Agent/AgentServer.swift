@@ -43,12 +43,13 @@ public actor AgentServer {
   ///     caller-identity-resolution and gating code production does; only which identifier counts
   ///     as trusted changes.
   ///   - agentSettingsStore: Where `.getAgentSettings`/`.setAgentSettings` persist the 851-2428
-  ///     agent-access settings — the real, Keychain-backed `KeychainAgentSettingsStore` in
-  ///     production, an in-memory double in tests. Defaults to `InMemoryAgentSettingsStore()` for
-  ///     the same "existing call sites that don't care don't need updating" reason
-  ///     `vaultKeyStore`'s default exists; production wiring (`Agent/Sources/main.swift`) always
-  ///     passes `KeychainAgentSettingsStore()` explicitly, and shares that one instance with the
-  ///     `AgentSettingsAccessPolicy` it also constructs.
+  ///     agent-access settings, including the 851-2433 write-access toggle
+  ///     (`AgentSettings.agentWriteAccessEnabled`) — the real, Keychain-backed
+  ///     `KeychainAgentSettingsStore` in production, an in-memory double in tests. Defaults to
+  ///     `InMemoryAgentSettingsStore()` for the same "existing call sites that don't care don't
+  ///     need updating" reason `vaultKeyStore`'s default exists; production wiring
+  ///     (`Agent/Sources/main.swift`) always passes `KeychainAgentSettingsStore()` explicitly, and
+  ///     shares that one instance with the `AgentSettingsAccessPolicy` it also constructs.
   public init(
     vaultStore: any VaultStoring,
     vaultKeyStore: any VaultKeyStoring = InMemoryVaultKeyStore(),
@@ -209,6 +210,26 @@ public actor AgentServer {
     caller.isVerifiedApp(appBundleIdentifier: appCallerBundleIdentifier)
   }
 
+  /// Gates `.createItem`/`.updateItem`/`.deleteItem` for non-app callers behind the separate
+  /// 851-2433 write-access toggle (`AgentSettings.agentWriteAccessEnabled`). The app itself
+  /// (`isAppCaller(_:)` — the same check `.createVault`/`.unlock`/`.getAgentSettings`/
+  /// `.setAgentSettings` use) is always exempt: its own "add/edit/delete password" screens go
+  /// through this exact XPC path, so gating it on a toggle meant for `lilpass`/MCP would break the
+  /// app's own core CRUD whenever a person turns write access off.
+  ///
+  /// Only reachable once ``vaultResponse(for:caller:)``'s `AccessPolicyProviding.isAccessAllowed(for:)`
+  /// guard has already passed — read access must already be on before write access can matter,
+  /// which is why a non-app caller with read access off sees `.agentAccessDisabled`, never
+  /// `.agentWriteAccessDisabled`, even if write access happens to be stored as "on". That's also
+  /// why this reads the same `agentSettingsStore`-backed ``currentAgentSettings()`` the read-access
+  /// checks do, rather than a second, independent store: `agentWriteAccessEnabled` and
+  /// `agentAccessEnabled` are two fields of the same struct, persisted together, so they can never
+  /// independently go stale relative to each other.
+  private func requireWriteAccess(for caller: CallerIdentity) throws {
+    guard !isAppCaller(caller) else { return }
+    guard currentAgentSettings().agentWriteAccessEnabled else { throw AgentError.agentWriteAccessDisabled }
+  }
+
   // MARK: - Vault operations (logged via AccessLogging)
 
   private func vaultOutcome(for request: AgentRequest, caller: CallerIdentity) async -> AgentOutcome {
@@ -251,14 +272,20 @@ public actor AgentServer {
       return .item(try await resolve(reference))
 
     case .createItem(let item):
+      try requireWriteAccess(for: caller)
       try await vaultStore.create(item)
       return .created(item)
 
     case .updateItem(let item):
+      try requireWriteAccess(for: caller)
       try await vaultStore.update(item)
       return .updated(item)
 
     case .deleteItem(let reference):
+      try requireWriteAccess(for: caller)
+      // `VaultStoring.delete(id:)` only ever soft-deletes (sets `deletedAt`; see `isLive(_:)`'s
+      // doc comment) — there is no permanent-delete request anywhere in `AgentRequest` for an
+      // agent caller to reach, by design (851-2433).
       let item = try await resolve(reference)
       try await vaultStore.delete(id: item.id)
       return .deleted

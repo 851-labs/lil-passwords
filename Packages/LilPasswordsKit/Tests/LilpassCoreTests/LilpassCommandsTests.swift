@@ -103,6 +103,124 @@ import Testing
     #expect(password.count == 16)
   }
 
+  // MARK: - Write commands (851-2433)
+  //
+  // `Harness`'s in-process XPC connection always resolves as the app caller (see its own
+  // documentation), so these test `add`/`edit`/`remove`'s own logic — not the write-access gate
+  // itself, which only ever rejects a *non-app* caller and is covered end-to-end, with real
+  // synthetic app/CLI callers, by `AgentServerTests`'s write-access matrix.
+
+  @Test func addCreatesANewItemAndReturnsItsSummary() async throws {
+    let harness = try await Harness()
+
+    let created = try await LilpassCommands.add(
+      client: harness.client,
+      title: "GitHub",
+      usernames: ["octocat"],
+      password: "hunter2",
+      websites: ["github.com"],
+      notes: "",
+      group: nil
+    )
+    #expect(created.title == "GitHub")
+    #expect(created.usernames == ["octocat"])
+    #expect(created.websites == ["https://github.com"])
+
+    let listed = try await LilpassCommands.list(client: harness.client, category: nil)
+    #expect(listed.map(\.id) == [created.id])
+
+    let detail = try await LilpassCommands.getDetail(client: harness.client, identifier: "GitHub")
+    #expect(detail.password == "hunter2")
+  }
+
+  @Test func addRejectsAWebsiteThatDoesNotParseIntoAURLWithAHost() async throws {
+    let harness = try await Harness()
+    do {
+      _ = try await LilpassCommands.add(
+        client: harness.client,
+        title: "GitHub",
+        usernames: [],
+        password: "hunter2",
+        websites: ["   "],
+        notes: "",
+        group: nil
+      )
+      Issue.record("expected a usage error")
+    } catch let error as LilpassError {
+      #expect(error.exitCode == .usage)
+    }
+  }
+
+  @Test func editChangesOnlyTheFieldsPassed() async throws {
+    let item = makeTestItem(title: "GitHub", usernames: ["octocat"], password: "hunter2", notes: "old notes")
+    let harness = try await Harness(items: [item])
+
+    let updated = try await LilpassCommands.edit(
+      client: harness.client,
+      identifier: "GitHub",
+      title: "GitHub Enterprise",
+      usernames: [],
+      password: nil,
+      websites: [],
+      notes: nil,
+      group: nil
+    )
+    #expect(updated.title == "GitHub Enterprise")
+
+    let detail = try await LilpassCommands.getDetail(client: harness.client, identifier: "GitHub Enterprise")
+    #expect(detail.password == "hunter2")
+    #expect(detail.notes == "old notes")
+    #expect(detail.usernames == ["octocat"])
+  }
+
+  @Test func editReplacesThePasswordWhenOneIsGiven() async throws {
+    let item = makeTestItem(title: "GitHub", password: "hunter2")
+    let harness = try await Harness(items: [item])
+
+    _ = try await LilpassCommands.edit(
+      client: harness.client,
+      identifier: "GitHub",
+      title: nil,
+      usernames: [],
+      password: "new-password",
+      websites: [],
+      notes: nil,
+      group: nil
+    )
+
+    let detail = try await LilpassCommands.getDetail(client: harness.client, identifier: "GitHub")
+    #expect(detail.password == "new-password")
+  }
+
+  @Test func editOnAnUnknownItemMapsToNotFound() async throws {
+    let harness = try await Harness()
+    do {
+      _ = try await LilpassCommands.edit(
+        client: harness.client, identifier: "nonexistent", title: "x", usernames: [], password: nil, websites: [],
+        notes: nil, group: nil
+      )
+      Issue.record("expected .notFound")
+    } catch let error as LilpassError {
+      #expect(error.exitCode == .notFound)
+    }
+  }
+
+  @Test func removeSoftDeletesTheItemAndReturnsItsPreDeletionSummary() async throws {
+    let item = makeTestItem(title: "GitHub")
+    let harness = try await Harness(items: [item])
+
+    let removed = try await LilpassCommands.remove(client: harness.client, identifier: "GitHub")
+    #expect(removed.id == item.id)
+    #expect(removed.title == "GitHub")
+
+    do {
+      _ = try await LilpassCommands.getDetail(client: harness.client, identifier: "GitHub")
+      Issue.record("expected .notFound after removal")
+    } catch let error as LilpassError {
+      #expect(error.exitCode == .notFound)
+    }
+  }
+
   // MARK: - Exit code mapping
 
   @Test func vaultOperationsBeforeUnlockMapToTheLockedExitCode() async throws {

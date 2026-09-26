@@ -30,6 +30,18 @@ final class AgentSettingsViewModel: ObservableObject {
     }
   }
 
+  /// Settings → Agents → "Allow agents to create, edit, and delete passwords" (851-2433) — a
+  /// separate, narrower toggle than `agentAccessEnabled`; see `AgentSettings.agentWriteAccessEnabled`'s
+  /// documentation for why it's meaningless on its own without read access also being on.
+  /// `AgentsSettingsView` disables this toggle's control whenever `agentAccessEnabled` is off, to
+  /// reflect that dependency visually, but the helper enforces it regardless of what the UI shows.
+  @Published var agentWriteAccessEnabled: Bool = false {
+    didSet {
+      guard !isApplyingRemoteUpdate, oldValue != agentWriteAccessEnabled else { return }
+      push()
+    }
+  }
+
   private let client: AgentClient
 
   /// Set while applying a value read *from* the helper, so that write-back-on-`didSet` doesn't
@@ -55,7 +67,8 @@ final class AgentSettingsViewModel: ObservableObject {
   private func push() {
     let settings = AgentSettings(
       agentAccessEnabled: agentAccessEnabled,
-      keepAgentAccessAvailableWhileMacUnlocked: keepAgentAccessAvailableWhileMacUnlocked
+      keepAgentAccessAvailableWhileMacUnlocked: keepAgentAccessAvailableWhileMacUnlocked,
+      agentWriteAccessEnabled: agentWriteAccessEnabled
     )
     Task {
       do {
@@ -71,6 +84,7 @@ final class AgentSettingsViewModel: ObservableObject {
     isApplyingRemoteUpdate = true
     agentAccessEnabled = settings.agentAccessEnabled
     keepAgentAccessAvailableWhileMacUnlocked = settings.keepAgentAccessAvailableWhileMacUnlocked
+    agentWriteAccessEnabled = settings.agentWriteAccessEnabled
     isApplyingRemoteUpdate = false
   }
 }

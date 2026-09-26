@@ -16,6 +16,7 @@ public enum LilpassExitCode: Int32, Sendable, Equatable {
   case notFound = 5
   case ambiguous = 6
   case helperUnreachable = 7
+  case agentWriteAccessDisabled = 8
 }
 
 /// The one error type every `LilpassCore` entry point throws: a stable exit code plus a message safe
@@ -67,6 +68,8 @@ extension LilpassError {
       return LilpassError(exitCode: .locked, message: error.description)
     case .agentAccessDisabled:
       return LilpassError(exitCode: .agentAccessDisabled, message: error.description)
+    case .agentWriteAccessDisabled:
+      return LilpassError(exitCode: .agentWriteAccessDisabled, message: error.description)
     case .notFound:
       return LilpassError(exitCode: .notFound, message: error.description)
     case .ambiguous:

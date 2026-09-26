@@ -26,6 +26,12 @@ struct AgentsSettingsView: View {
         )
         .toggleStyle(.switch)
         .disabled(!agentSettings.agentAccessEnabled)
+        Toggle(
+          "Allow agents to create, edit, and delete passwords",
+          isOn: $agentSettings.agentWriteAccessEnabled
+        )
+        .toggleStyle(.switch)
+        .disabled(!agentSettings.agentAccessEnabled)
       } footer: {
         VStack(alignment: .leading, spacing: 6) {
           Text(
@@ -33,6 +39,10 @@ struct AgentsSettingsView: View {
               + "\(LilPasswordsKit.productName) is unlocked. Turning this off, or locking the vault, blocks access."
           )
           Text("Otherwise, agent access follows \(LilPasswordsKit.productName)' own auto-lock.")
+          Text(
+            "Write access is separate from read access and off by default — turn it on only if you want agents "
+              + "to be able to add, change, or delete passwords, not just read them."
+          )
         }
       }
 

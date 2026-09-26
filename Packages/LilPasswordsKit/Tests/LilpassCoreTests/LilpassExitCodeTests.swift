@@ -23,6 +23,14 @@ import Testing
     #expect(LilpassError.from(error).exitCode == .agentAccessDisabled)
   }
 
+  @Test func mapsRemoteAgentWriteAccessDisabledToItsOwnExitCode() {
+    let error = AgentClient.RequestError.remote(.agentWriteAccessDisabled)
+    #expect(LilpassError.from(error).exitCode == .agentWriteAccessDisabled)
+    // 851-2430 already claimed exit codes 0-7; 851-2433's new case must not collide with any of
+    // them or with any future ticket picking the "next" code without checking here first.
+    #expect(LilpassExitCode.agentWriteAccessDisabled.rawValue == 8)
+  }
+
   @Test func mapsRemoteNotFoundToNotFound() {
     let error = AgentClient.RequestError.remote(.notFound)
     #expect(LilpassError.from(error).exitCode == .notFound)

@@ -47,6 +47,12 @@ do {
   accessLog = NoOpAccessLog()
 }
 
+// `agentSettingsStore` above also owns 851-2433's "Allow agents to create, edit, and delete
+// passwords" toggle (`AgentSettings.agentWriteAccessEnabled`) — a separate, narrower toggle
+// `AgentServer` enforces only for non-app callers, on top of (never instead of) the read-access
+// check `accessPolicy` performs. It shares this same Keychain item/ACL and
+// `.getAgentSettings`/`.setAgentSettings` XPC pair rather than a second, near-duplicate store, so
+// there's nothing extra to wire up here beyond what 851-2428 already provides.
 let server = AgentServer(
   vaultStore: sharedVaultStore,
   vaultKeyStore: vaultKeyStore,

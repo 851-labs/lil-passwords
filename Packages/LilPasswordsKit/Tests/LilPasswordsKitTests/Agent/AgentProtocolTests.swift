@@ -83,6 +83,7 @@ import Testing
     let errors: [AgentError] = [
       .locked,
       .agentAccessDisabled,
+      .agentWriteAccessDisabled,
       .notFound,
       .ambiguous,
       .unsupportedProtocolVersion(requested: 99, supported: AgentProtocolVersion.current),
