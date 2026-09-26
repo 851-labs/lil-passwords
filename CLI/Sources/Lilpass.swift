@@ -22,7 +22,13 @@ struct Lilpass: AsyncParsableCommand {
     discussion: """
       Every command talks to LilPasswordsAgent over XPC — lilpass never reads the vault directly.
       Secrets only ever reach stdout from `get`, `read`, and `totp`; `run` and `inject` resolve
-      secrets without printing them.
+      secrets without printing them, using lilpw://item/field references (see `lilpw read --help`).
+
+      Requires the vault unlocked and "Allow agents to access passwords" turned on in Settings.
+      Check both with `lilpw status`. Every command exits with one of a stable set of 0-7 codes
+      (0 = ok, 3 = locked, 4 = agent access disabled, ...) regardless of --json — see docs/agents.md
+      in the repo for the full table, MCP setup (`lilpw mcp`), and guidance for agents on keeping
+      secrets out of their own transcripts.
       """,
     subcommands: [
       StatusCommand.self,
