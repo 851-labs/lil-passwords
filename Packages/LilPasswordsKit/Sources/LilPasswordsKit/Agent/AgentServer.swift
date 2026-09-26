@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// The helper's request handler: dispatches every `AgentRequest` to its `VaultStoring`, the
@@ -119,15 +120,20 @@ public actor AgentServer {
     return AgentReplyEnvelope(outcome: outcome)
   }
 
-  /// 851-2441: the AutoFill credential provider extension's connection is trusted for exactly five
-  /// operations — `.status` (always answerable, regardless of caller), `.unlock`/`.lock` (its own
-  /// `LAContext`-gated "Unlock" button, the same trust rationale `.unlock`'s documentation gives the
-  /// app), and the two `.autoFill*` ops built specifically for it. Every other `AgentRequest` is
-  /// refused outright for this caller, `.list`/`.search`/`.getItem` included — even though those
-  /// are already covered for other non-app callers by `AccessPolicyProviding`/`requireWriteAccess`,
-  /// AutoFill gets no dispatch route to them at all, so "only the chosen identity, never general
-  /// list/search access" (this ticket's own requirement) is structural, not just a policy that a
-  /// future change to `AgentSettingsAccessPolicy` could accidentally loosen.
+  /// 851-2441/851-2442: the AutoFill credential provider extension's connection is trusted for
+  /// exactly seven operations — `.status` (always answerable, regardless of caller),
+  /// `.unlock`/`.lock` (its own `LAContext`-gated "Unlock" button, the same trust rationale
+  /// `.unlock`'s documentation gives the app), the two `.autoFill*` password ops, and the two
+  /// `.passkey*` ops (851-2442) built specifically for passkey registration/assertion. Every other
+  /// `AgentRequest` is refused outright for this caller, `.list`/`.search`/`.getItem`/`.passkeys`
+  /// included — even though those are already covered for other non-app callers by
+  /// `AccessPolicyProviding`/`requireWriteAccess`, AutoFill gets no dispatch route to them at all,
+  /// so "only the chosen identity, never general list/search access" (this ticket's own
+  /// requirement) is structural, not just a policy that a future change to
+  /// `AgentSettingsAccessPolicy` could accidentally loosen. `.passkeyIdentities` is denied here too:
+  /// its `credentialId`-bearing identities are for `CredentialIdentityStoreSyncCoordinator`, which
+  /// runs in the app, not the extension — the extension resolves a specific passkey purely from the
+  /// `ASPasskeyCredentialIdentity` the system hands it, never by asking the helper to enumerate.
   ///
   /// Every other caller (the app, `lilpass`) is unaffected: this only ever narrows AutoFill's own
   /// connection, so it's checked first, before any of the existing app-only/access-policy/
@@ -135,11 +141,11 @@ public actor AgentServer {
   private func isRequestPermitted(_ request: AgentRequest, for caller: CallerIdentity) -> Bool {
     guard isAutoFillCaller(caller) else { return true }
     switch request {
-    case .status, .unlock, .lock, .autoFillIdentities, .autoFillCredential:
+    case .status, .unlock, .lock, .autoFillIdentities, .autoFillCredential, .passkeyRegister, .passkeyAssert:
       return true
     case .createVault, .rotateRecoveryKey, .getAgentSettings, .setAgentSettings, .list, .search, .getItem,
       .createItem, .updateItem, .deleteItem, .generatePassword, .totpCode,
-      .pendingApprovals, .resolveApproval:
+      .pendingApprovals, .resolveApproval, .passkeys, .passkeyIdentities, .deletePasskey:
       // 851-2445: approval management is an app-only concern (see `isAppCaller` gating elsewhere in
       // this file) — AutoFill has no business seeing or resolving another caller's pending
       // approvals, so it's refused here alongside the rest of the general vault surface.
@@ -465,6 +471,76 @@ public actor AgentServer {
       guard let item = try await vaultStore.item(id: id), isLive(item) else { throw AgentError.notFound }
       guard let username = item.usernames.first else { throw AgentError.notFound }
       return .autoFillCredential(username: username, password: item.password)
+
+    case .passkeys:
+      // 851-2442: same read-access gate as `.list`/`.search` above — no separate toggle for
+      // passkeys. Never includes `PasskeyItem.privateKeyPKCS8`/`credentialId`; see
+      // `PasskeyMetadata.init(_:)`.
+      return .passkeys(try await vaultStore.allPasskeys().map(PasskeyMetadata.init))
+
+    case .passkeyIdentities:
+      // 851-2442: app-only (denied for the AutoFill caller above); same read-access gate as
+      // `.passkeys`. Unlike `.passkeys`, this does carry `credentialId` — see `PasskeyIdentity`'s
+      // documentation for why that's fine here specifically — but never `privateKeyPKCS8`.
+      return .passkeyIdentities(try await vaultStore.allPasskeys().map(PasskeyIdentity.init))
+
+    case .deletePasskey(let id):
+      try requireWriteAccess(for: caller)
+      guard try await vaultStore.passkey(id: id) != nil else { throw AgentError.notFound }
+      try await vaultStore.deletePasskeyPermanently(id: id)
+      return .passkeyDeleted
+
+    case .passkeyRegister(let registration):
+      // 851-2442: the only place a passkey private key is ever generated. It's sealed into the
+      // vault via `createPasskey` and never appears in the returned `PasskeyRegistrationResult`.
+      try requireWriteAccess(for: caller)
+      let privateKey = P256.Signing.PrivateKey()
+      let credentialId = SecureRandom.bytes(32)
+      let item = PasskeyItem(
+        relyingPartyIdentifier: registration.relyingPartyIdentifier,
+        userHandle: registration.userHandle,
+        userName: registration.userName,
+        userDisplayName: registration.userDisplayName,
+        credentialId: credentialId,
+        privateKeyPKCS8: privateKey.derRepresentation
+      )
+      try await vaultStore.createPasskey(item)
+      let attestedCredentialData = PasskeyAuthenticator.attestedCredentialData(
+        credentialId: credentialId,
+        publicKey: privateKey.publicKey
+      )
+      let authenticatorData = PasskeyAuthenticator.authenticatorData(
+        relyingPartyIdentifier: registration.relyingPartyIdentifier,
+        signCount: item.signCount,
+        attestedCredentialData: attestedCredentialData
+      )
+      let attestationObject = PasskeyAuthenticator.attestationObject(authenticatorData: authenticatorData)
+      return .passkeyRegistered(PasskeyRegistrationResult(credentialId: credentialId, attestationObject: attestationObject))
+
+    case .passkeyAssert(let assertion):
+      // 851-2442: the only other place a passkey private key is ever used. Looked up by
+      // `credentialId` (the relying-party-facing identifier), not vault `id` — `VaultStoring` has
+      // no by-`credentialId` lookup, so this is a linear scan over the (typically small) passkey
+      // set, matching how `.autoFillIdentities` above already scans `allItems()`.
+      try requireWriteAccess(for: caller)
+      guard var item = try await vaultStore.allPasskeys().first(where: { $0.credentialId == assertion.credentialId })
+      else { throw AgentError.notFound }
+      let privateKey = try P256.Signing.PrivateKey(derRepresentation: item.privateKeyPKCS8)
+      item.signCount += 1
+      item.lastUsedAt = Date()
+      let authenticatorData = PasskeyAuthenticator.authenticatorData(
+        relyingPartyIdentifier: assertion.relyingPartyIdentifier,
+        signCount: item.signCount
+      )
+      let signature = try PasskeyAuthenticator.sign(
+        authenticatorData: authenticatorData,
+        clientDataHash: assertion.clientDataHash,
+        privateKey: privateKey
+      )
+      try await vaultStore.updatePasskey(item)
+      return .passkeyAsserted(
+        PasskeyAssertionResult(userHandle: item.userHandle, signature: signature, authenticatorData: authenticatorData)
+      )
 
     case .status, .createVault, .unlock, .lock, .getAgentSettings, .setAgentSettings, .rotateRecoveryKey,
       .pendingApprovals, .resolveApproval:

@@ -238,6 +238,57 @@ public actor AgentClient {
     }
   }
 
+  // MARK: - Passkeys (851-2442)
+
+  /// Every passkey in the vault, reduced to non-secret ``PasskeyMetadata`` — powers the app's
+  /// Passkeys sidebar category and, when agent access is on, `lilpass`/MCP's read-only passkey
+  /// listing. See `AgentRequest.passkeys`.
+  public func passkeys() async throws -> [PasskeyMetadata] {
+    guard case .passkeys(let passkeys) = try await send(.passkeys) else {
+      throw RequestError.connection(.invalidReply)
+    }
+    return passkeys
+  }
+
+  /// Every passkey's `ASCredentialIdentityStoreSync`-facing identity, including `credentialId` —
+  /// unlike ``passkeys()``, never used for UI display, only for registering
+  /// `ASPasskeyCredentialIdentity` entries with the system. See `AgentRequest.passkeyIdentities`.
+  public func passkeyIdentities() async throws -> [PasskeyIdentity] {
+    guard case .passkeyIdentities(let identities) = try await send(.passkeyIdentities) else {
+      throw RequestError.connection(.invalidReply)
+    }
+    return identities
+  }
+
+  /// Permanently deletes the passkey at `id` — the Passkeys detail card's Delete button. See
+  /// `AgentRequest.deletePasskey(id:)`.
+  public func deletePasskey(id: UUID) async throws {
+    guard case .passkeyDeleted = try await send(.deletePasskey(id: id)) else {
+      throw RequestError.connection(.invalidReply)
+    }
+  }
+
+  /// 851-2442: registers a brand-new passkey. Restricted to the AutoFill extension's own verified
+  /// connection by the helper; see `AgentServer.isRequestPermitted(_:for:)`. Powers
+  /// `prepareInterface(forPasskeyRegistration:)`.
+  public func passkeyRegister(_ request: PasskeyRegistrationRequest) async throws -> PasskeyRegistrationResult {
+    guard case .passkeyRegistered(let result) = try await send(.passkeyRegister(request)) else {
+      throw RequestError.connection(.invalidReply)
+    }
+    return result
+  }
+
+  /// 851-2442: signs an assertion with an existing passkey. Restricted to the AutoFill extension's
+  /// own verified connection by the helper, same as ``passkeyRegister(_:)``. Powers
+  /// `provideCredentialWithoutUserInteraction(for: ASPasskeyCredentialRequest)`/
+  /// `prepareInterfaceToProvideCredential(for:)`.
+  public func passkeyAssert(_ request: PasskeyAssertionRequest) async throws -> PasskeyAssertionResult {
+    guard case .passkeyAsserted(let result) = try await send(.passkeyAssert(request)) else {
+      throw RequestError.connection(.invalidReply)
+    }
+    return result
+  }
+
   /// Tears down the current connection, if any. The next call reconnects. Not required in normal
   /// use (interruption/invalidation already clear it), but useful for tests and for explicit
   /// "log out" style flows.

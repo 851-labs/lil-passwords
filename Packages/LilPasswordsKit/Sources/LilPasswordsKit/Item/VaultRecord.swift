@@ -23,6 +23,10 @@ public struct VaultRecord: Sendable, Equatable, Codable {
   /// `VaultCrypto.AAD`, which needs a stable wire value.
   public enum RecordType: String, Sendable, Equatable, Codable, CaseIterable {
     case passwordItem = "password-item"
+
+    /// A `PasskeyItem` (851-2442). Shares this same table/schema with `.passwordItem` — see
+    /// `VaultRecordStorage`, which has no type-specific SQL constraints.
+    case passkeyItem = "passkey-item"
   }
 
   /// Matches the sealed item's own `id` (e.g. `PasswordItem.id`). Also serves as `VaultCrypto.AAD.recordId`.

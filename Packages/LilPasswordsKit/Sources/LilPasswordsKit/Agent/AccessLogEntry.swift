@@ -216,6 +216,37 @@ enum AccessEventSummary {
       // to report, by construction.
       return Summary(operation: "autoFillCredential", itemId: id, itemTitle: nil, fields: ["username", "password"])
 
+    case .passkeys:
+      // 851-2442: a list, like `.list`/`.search` — no single item, and the response
+      // (`[PasskeyMetadata]`) structurally cannot carry a private key.
+      return Summary(operation: "passkeys", itemId: nil, itemTitle: nil, fields: ["relyingPartyIdentifier", "userName"])
+
+    case .passkeyIdentities:
+      // 851-2442: app-only, powers `CredentialIdentityStoreSyncCoordinator` — a list, like
+      // `.passkeys`, but also reports that `credentialId` (never a private key) was read, since
+      // this is the one op where that's true.
+      return Summary(
+        operation: "passkeyIdentities", itemId: nil, itemTitle: nil,
+        fields: ["relyingPartyIdentifier", "userName", "credentialId"]
+      )
+
+    case .deletePasskey(let id):
+      return Summary(operation: "deletePasskey", itemId: id, itemTitle: nil, fields: [])
+
+    case .passkeyRegister(let request):
+      // Never logs `privateKeyPKCS8`/`credentialId` — neither is even present on
+      // `PasskeyRegistrationRequest`/`PasskeyRegistrationResult`; see AgentProtocol.swift.
+      return Summary(
+        operation: "passkeyRegister",
+        itemId: nil,
+        itemTitle: request.relyingPartyIdentifier,
+        fields: ["relyingPartyIdentifier", "userName"]
+      )
+
+    case .passkeyAssert:
+      // Never logs the signature or the key that produced it — only that an assertion happened.
+      return Summary(operation: "passkeyAssert", itemId: nil, itemTitle: nil, fields: ["relyingPartyIdentifier"])
+
     case .status, .createVault, .unlock, .lock, .getAgentSettings, .setAgentSettings, .rotateRecoveryKey,
       .pendingApprovals, .resolveApproval:
       preconditionFailure(

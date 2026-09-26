@@ -102,6 +102,31 @@ public actor InMemoryVaultStore: VaultStoring {
     try core.items(matching: query)
   }
 
+  // MARK: - Passkey CRUD (851-2442)
+
+  public func createPasskey(_ item: PasskeyItem) throws {
+    _ = try core.createPasskey(item)
+    notifyOfLocalChange()
+  }
+
+  public func updatePasskey(_ item: PasskeyItem) throws {
+    _ = try core.updatePasskey(item)
+    notifyOfLocalChange()
+  }
+
+  public func deletePasskeyPermanently(id: UUID) throws {
+    _ = try core.deletePasskeyPermanently(id: id)
+    notifyOfLocalChange()
+  }
+
+  public func passkey(id: UUID) throws -> PasskeyItem? {
+    try core.passkey(id: id)
+  }
+
+  public func allPasskeys() throws -> [PasskeyItem] {
+    try core.allPasskeys()
+  }
+
   // MARK: - Change log
 
   public func changes(since seq: Int64) throws -> [VaultChangeLogEntry] {

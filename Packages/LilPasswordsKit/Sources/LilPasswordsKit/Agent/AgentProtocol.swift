@@ -132,6 +132,52 @@ public enum AgentRequest: Sendable, Codable, Equatable {
   /// dialog. Restricted to the app itself, same as ``pendingApprovals``.
   case resolveApproval(id: UUID, decision: ApprovalDecision)
 
+  // MARK: - Passkeys (851-2442)
+
+  /// Every passkey in the vault, reduced to ``PasskeyMetadata`` — **never** the private key. Powers
+  /// the app's Passkeys sidebar category and, when the 851-2428 agent-access toggle is on,
+  /// `lilpass`/MCP's read-only passkey listing (the ticket's "list metadata only if agent access
+  /// is on; never keys" requirement) — both go through the same `accessPolicy.isAccessAllowed(for:)`
+  /// gate ``list``/``search`` already use, so there's no separate toggle for passkeys specifically.
+  case passkeys
+
+  /// 851-2442: every passkey's `ASCredentialIdentityStoreSync`-facing identity — relying party id,
+  /// user name/handle, and (unlike ``passkeys``) the WebAuthn `credentialId`, reduced to
+  /// ``PasskeyIdentity``. `credentialId` is not a secret — it's the public identifier a relying
+  /// party already embeds in its own `allowCredentials` list — but it has no purpose in the app's
+  /// own Passkeys UI or in agent access, so it deliberately doesn't ride along on ``passkeys``.
+  /// This is its one legitimate exit from the helper: registering `ASPasskeyCredentialIdentity`
+  /// entries with the system so macOS can offer a passkey before the AutoFill extension even
+  /// launches. Powers `CredentialIdentityStoreSyncCoordinator`, the app-side analog of how
+  /// ``autoFillIdentities(serviceIdentifiers:)`` powers the extension's own password list — but,
+  /// unlike that op, reachable by the app (the identity-store sync runs there), not the extension.
+  case passkeyIdentities
+
+  /// Permanently removes the passkey at `id` — the Passkeys detail card's Delete button. Unlike
+  /// ``deleteItem(_:)``, there is no soft-delete/"Recently Deleted" stage for passkeys (see
+  /// `PasskeyItem`), so this is immediately permanent. Restricted to the app itself
+  /// (`AgentServer.isAppCaller(_:)`) — agents never manage passkeys at all — rather than gated by
+  /// `AgentServer.requireWriteAccess(for:)` the way ``deleteItem(_:)`` is; see the 851-2442 security
+  /// review note on `AgentServer.isRequestPermitted(_:for:)`.
+  case deletePasskey(id: UUID)
+
+  /// Registers a brand-new passkey: generates a P-256 key pair, seals the private key into the
+  /// vault as a ``PasskeyItem``, and builds a "none"-attestation `attestationObject` for it. This
+  /// and ``passkeyAssert(_:)`` are the only two operations that ever cause a private key to be
+  /// generated or used — and they're the only two that ever run, structurally, inside
+  /// `LilPasswordsAgent`; see `PasskeyAuthenticator`. Restricted to the verified AutoFill extension
+  /// connection **only** — not the app, not `lilpass`, regardless of write-access settings — by
+  /// `AgentServer.isRequestPermitted(_:for:)`, which hard-refuses this case for every other caller
+  /// before `requireWriteAccess(for:)` is ever consulted; the system's own AutoFill picker UI is the
+  /// user-presence gate here, not a disableable settings toggle. See that method's "Security history
+  /// (851-2442 review)" documentation.
+  case passkeyRegister(PasskeyRegistrationRequest)
+
+  /// Signs an assertion with an existing passkey's private key, incrementing its `signCount` and
+  /// updating `lastUsedAt`. See ``passkeyRegister(_:)`` for the AutoFill-only trust model this
+  /// shares.
+  case passkeyAssert(PasskeyAssertionRequest)
+
   /// Whether this is `.generatePassword` — the one vault-adjacent request `AgentServer` exempts
   /// from 851-2445's `AgentAccessScope.askEveryTime` approval gate, since it never reads or writes
   /// any existing item and so has nothing an approval dialog could meaningfully describe (there's
@@ -140,6 +186,166 @@ public enum AgentRequest: Sendable, Codable, Equatable {
   public var isGeneratePassword: Bool {
     if case .generatePassword = self { return true }
     return false
+  }
+}
+
+/// Everything `AgentServer` needs to register a brand-new passkey, sent by the AutoFill extension
+/// from `prepareInterface(forPasskeyRegistration:)`'s `ASCredentialRequest`/
+/// `ASPasskeyCredentialRequestParameters`. Carries no key material — the private key is generated
+/// entirely inside the helper; this only carries what the relying party asked for.
+public struct PasskeyRegistrationRequest: Sendable, Codable, Equatable {
+  public var relyingPartyIdentifier: String
+  public var userHandle: Data
+  public var userName: String
+  public var userDisplayName: String
+
+  public init(relyingPartyIdentifier: String, userHandle: Data, userName: String, userDisplayName: String) {
+    self.relyingPartyIdentifier = relyingPartyIdentifier
+    self.userHandle = userHandle
+    self.userName = userName
+    self.userDisplayName = userDisplayName
+  }
+}
+
+/// `AgentServer`'s answer to ``AgentRequest/passkeyRegister(_:)`` — exactly what
+/// `ASPasskeyRegistrationCredential(relyingParty:clientDataHash:credentialID:attestationObject:)`
+/// needs beyond what the extension already has (`relyingParty`/`clientDataHash` come from its own
+/// `ASCredentialRequest`). **Never** includes the private key: the helper is the only place that
+/// ever held it, and it stays there.
+public struct PasskeyRegistrationResult: Sendable, Codable, Equatable {
+  public var credentialId: Data
+  public var attestationObject: Data
+
+  public init(credentialId: Data, attestationObject: Data) {
+    self.credentialId = credentialId
+    self.attestationObject = attestationObject
+  }
+}
+
+/// Everything `AgentServer` needs to sign an assertion, sent by the AutoFill extension from
+/// `provideCredentialWithoutUserInteraction(for: ASPasskeyCredentialRequest)`/
+/// `prepareInterfaceToProvideCredential(for:)`'s `ASPasskeyCredentialRequest`.
+public struct PasskeyAssertionRequest: Sendable, Codable, Equatable {
+  /// Identifies which passkey to sign with — matched against ``PasskeyItem/credentialId``, the
+  /// same way `.autoFillCredential(id:)` matches a password item by its vault id rather than by
+  /// anything relying-party-supplied.
+  public var credentialId: Data
+  public var relyingPartyIdentifier: String
+  public var clientDataHash: Data
+
+  public init(credentialId: Data, relyingPartyIdentifier: String, clientDataHash: Data) {
+    self.credentialId = credentialId
+    self.relyingPartyIdentifier = relyingPartyIdentifier
+    self.clientDataHash = clientDataHash
+  }
+}
+
+/// `AgentServer`'s answer to ``AgentRequest/passkeyAssert(_:)`` — exactly what
+/// `ASPasskeyAssertionCredential(userHandle:relyingParty:signature:clientDataHash:authenticatorData:credentialID:)`
+/// needs beyond what the extension already has. **Never** includes the private key.
+public struct PasskeyAssertionResult: Sendable, Codable, Equatable {
+  public var userHandle: Data
+  public var signature: Data
+  public var authenticatorData: Data
+
+  public init(userHandle: Data, signature: Data, authenticatorData: Data) {
+    self.userHandle = userHandle
+    self.signature = signature
+    self.authenticatorData = authenticatorData
+  }
+}
+
+/// A passkey's non-secret metadata (851-2442): everything the Passkeys sidebar category's list row
+/// and detail card need (site, user, created date) — the passkey analog of ``CredentialIdentity``.
+/// **Never** carries ``PasskeyItem/privateKeyPKCS8`` or even ``PasskeyItem/credentialId`` (which,
+/// unlike a password's website, has no legitimate use outside the helper/relying party exchange) —
+/// kept as its own type, distinct from `PasskeyItem`, specifically so `AgentResponse.passkeys`
+/// cannot carry the private key no matter how `PasskeyItem` itself grows later.
+public struct PasskeyMetadata: Sendable, Codable, Equatable, Identifiable {
+  public var id: UUID
+  public var relyingPartyIdentifier: String
+  public var userName: String
+  public var userDisplayName: String
+  public var website: URL?
+  public var createdAt: Date
+  public var lastUsedAt: Date?
+
+  public init(
+    id: UUID,
+    relyingPartyIdentifier: String,
+    userName: String,
+    userDisplayName: String,
+    website: URL?,
+    createdAt: Date,
+    lastUsedAt: Date?
+  ) {
+    self.id = id
+    self.relyingPartyIdentifier = relyingPartyIdentifier
+    self.userName = userName
+    self.userDisplayName = userDisplayName
+    self.website = website
+    self.createdAt = createdAt
+    self.lastUsedAt = lastUsedAt
+  }
+
+  /// The name to show in list rows and the detail card: `userDisplayName` if the relying party
+  /// gave one, otherwise `userName` — mirrors `PasskeyItem.displayName`.
+  public var displayName: String {
+    userDisplayName.isEmpty ? userName : userDisplayName
+  }
+}
+
+extension PasskeyMetadata {
+  /// Reduces a decrypted `PasskeyItem` to the wire-safe metadata `AgentResponse.passkeys` sends —
+  /// the one, explicit place `privateKeyPKCS8` (and `credentialId`) get dropped on the way out of
+  /// the helper.
+  public init(_ item: PasskeyItem) {
+    self.init(
+      id: item.id,
+      relyingPartyIdentifier: item.relyingPartyIdentifier,
+      userName: item.userName,
+      userDisplayName: item.userDisplayName,
+      website: item.website,
+      createdAt: item.createdAt,
+      lastUsedAt: item.lastUsedAt
+    )
+  }
+}
+
+/// A passkey's identity for `ASCredentialIdentityStoreSync` purposes (851-2442): enough to
+/// register an `ASPasskeyCredentialIdentity` with the system — relying party id, user name/handle,
+/// and the WebAuthn `credentialId` — and **never** the private key, which structurally cannot
+/// appear here any more than it can on ``PasskeyMetadata``. Kept as its own type, distinct from
+/// both `PasskeyItem` and ``PasskeyMetadata``, so `AgentResponse.passkeyIdentities` carries exactly
+/// what `ASCredentialIdentityStoreSync` needs and nothing a relying party or an agent shouldn't see.
+public struct PasskeyIdentity: Sendable, Codable, Equatable, Identifiable {
+  public var id: UUID
+  public var relyingPartyIdentifier: String
+  public var userName: String
+  public var userHandle: Data
+  public var credentialId: Data
+
+  public init(id: UUID, relyingPartyIdentifier: String, userName: String, userHandle: Data, credentialId: Data) {
+    self.id = id
+    self.relyingPartyIdentifier = relyingPartyIdentifier
+    self.userName = userName
+    self.userHandle = userHandle
+    self.credentialId = credentialId
+  }
+}
+
+extension PasskeyIdentity {
+  /// Reduces a decrypted `PasskeyItem` to the wire-safe identity `AgentResponse.passkeyIdentities`
+  /// sends — the one, explicit place `privateKeyPKCS8` gets dropped on the way out of the helper
+  /// for this op, mirroring ``PasskeyMetadata/init(_:)``.
+  public init(_ item: PasskeyItem) {
+    self.init(
+      id: item.id,
+      relyingPartyIdentifier: item.relyingPartyIdentifier,
+      userName: item.userName,
+      userHandle: item.userHandle,
+      credentialId: item.credentialId
+    )
   }
 }
 
@@ -433,6 +639,17 @@ public enum AgentResponse: Sendable, Codable, Equatable {
   case pendingApprovals([PendingApprovalSummary])
   /// Answers ``AgentRequest/resolveApproval(id:decision:)``.
   case approvalResolved
+
+  /// Answers ``AgentRequest/passkeys``.
+  case passkeys([PasskeyMetadata])
+  /// Answers ``AgentRequest/passkeyIdentities``.
+  case passkeyIdentities([PasskeyIdentity])
+  /// Answers ``AgentRequest/deletePasskey(id:)``.
+  case passkeyDeleted
+  /// Answers ``AgentRequest/passkeyRegister(_:)``.
+  case passkeyRegistered(PasskeyRegistrationResult)
+  /// Answers ``AgentRequest/passkeyAssert(_:)``.
+  case passkeyAsserted(PasskeyAssertionResult)
 }
 
 /// Every way an `AgentRequest` can fail, as a typed, `Codable` value rather than an opaque string
