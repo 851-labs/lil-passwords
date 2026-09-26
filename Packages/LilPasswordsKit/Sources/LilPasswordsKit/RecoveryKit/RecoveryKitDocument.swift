@@ -224,13 +224,25 @@ public enum RecoveryKitDocument {
 /// output — one pixel sampled per module (including whatever quiet-zone border the generator
 /// surrounds the code with), at 1:1 scale, so there's no resampling for this step to get wrong
 /// either.
-struct QRModuleGrid {
-  let moduleCount: Int
+///
+/// Public (unlike the rest of this file, which is a headless PDF-rendering detail): the Wi-Fi
+/// category's on-screen QR sheet (`App/Sources/MainWindow/WiFi/QRCodeView.swift`) reuses this same
+/// vector-module grid to draw a live `WIFI:...` QR code, for the same reason this file avoids
+/// embedding a raster image in the recovery-kit PDF — see ``drawQRCode(_:in:context:)``'s doc
+/// comment.
+public struct QRModuleGrid {
+  public let moduleCount: Int
   private let isDarkFlags: [Bool]
 
   /// - Returns: `nil` if `CIQRCodeGenerator`/`CIContext` can't produce an image for `string` at
   ///   all (not expected in practice for the short ASCII strings this app ever encodes).
   init?(displayKey string: String) {
+    self.init(encoding: string)
+  }
+
+  /// Same as ``init(displayKey:)``, under the name that makes sense for callers encoding
+  /// something other than a recovery key (e.g. a `WIFI:...;;` payload).
+  public init?(encoding string: String) {
     let filter = CIFilter.qrCodeGenerator()
     filter.message = Data(string.utf8)
     filter.correctionLevel = "M"
@@ -272,7 +284,7 @@ struct QRModuleGrid {
     self.isDarkFlags = flags
   }
 
-  func isDark(row: Int, column: Int) -> Bool {
+  public func isDark(row: Int, column: Int) -> Bool {
     isDarkFlags[row * moduleCount + column]
   }
 }

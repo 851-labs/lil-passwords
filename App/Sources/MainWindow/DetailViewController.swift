@@ -556,9 +556,3 @@ final class DetailViewController: NSViewController {
     alert.beginSheetModal(for: window)
   }
 }
-
-/// A plain flipped `NSView`, so the document view inside `scrollView` lays out top-down like
-/// everything else in AppKit instead of `NSScrollView`'s default bottom-up coordinate space.
-private final class FlippedView: NSView {
-  override var isFlipped: Bool { true }
-}

@@ -1,5 +1,17 @@
 import AppKit
 
+/// Which toolbar layout should be installed for the currently-selected sidebar category: the
+/// default list+detail chrome (All/Passkeys), Codes/Security/Deleted's reduced full-width chrome,
+/// or Wi-Fi's own chrome (851-2444) — the default layout's list title and search field, but no
+/// sort/"+" capsule (nothing in `WiFiListViewController` is sortable or addable) and its Edit item
+/// left present-but-disabled rather than removed (`MainSplitViewController` disables the shared
+/// `editControl` for `.wifi` the same way it already does for "nothing selected").
+enum ToolbarLayoutMode: Equatable {
+  case splitView
+  case fullWidth
+  case wifi
+}
+
 /// Builds and manages the unified toolbar, matching Apple Passwords' per-column layout (851-2463):
 ///
 /// - Over the list column: a two-line title (category name + "N Items", `ListTitleToolbarView`)
@@ -35,14 +47,15 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
   /// has a toolbar installed.
   private weak var toolbar: NSToolbar?
 
-  /// Whether a full-width category view (Codes/Security/Deleted, 851-2418/851-2419/851-2420) is
-  /// currently showing in place of the list+detail split. Those views replace
+  /// Which layout is currently installed — see `ToolbarLayoutMode`. Full-width category views
+  /// (Codes/Security/Deleted, 851-2418/851-2419/851-2420) replace
   /// `MainSplitViewController.detailViewController`'s content but not the window's toolbar, which
   /// is independent of split-view content — so left alone, this toolbar's list-column title/sort/
   /// add and detail-column Edit/search would keep floating uselessly (and confusingly, duplicating
-  /// each full-width view's own "N Items" header) over content none of them apply to. Toggled by
-  /// `MainSplitViewController.onFullWidthModeChange`, wired in `MainWindowController.init()`.
-  private var isFullWidthModeActive = false
+  /// each full-width view's own "N Items" header) over content none of them apply to; Wi-Fi
+  /// (851-2444) needs its own middle-ground layout, neither of the other two exactly. Toggled by
+  /// `MainSplitViewController.onToolbarLayoutModeChange`, wired in `MainWindowController.init()`.
+  private var toolbarMode: ToolbarLayoutMode = .splitView
 
   /// Leading over the list column: the current category's name + item count. `ItemListViewController`
   /// pushes new text into this whenever its rows are rebuilt (rename from before this ticket, when
@@ -114,7 +127,7 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
   }
 
   func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-    isFullWidthModeActive ? fullWidthItemIdentifiers : splitViewItemIdentifiers
+    itemIdentifiers(for: toolbarMode)
   }
 
   func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -143,16 +156,43 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     [.toggleSidebar, .sidebarTrackingSeparator]
   }
 
-  /// Adds or removes the list/detail-column toolbar items to match whether a full-width category
-  /// view is showing — see `isFullWidthModeActive`'s documentation. Safe to call before
-  /// `makeToolbar()`/before the toolbar is installed on the window (a no-op until then); the next
-  /// `makeToolbar()` picks up the current mode via `toolbarDefaultItemIdentifiers(_:)`.
-  func setFullWidthModeActive(_ active: Bool) {
-    guard isFullWidthModeActive != active else { return }
-    isFullWidthModeActive = active
+  /// Wi-Fi's own toolbar layout (851-2444): the default layout's list title and search field —
+  /// `WiFiListViewController` needs both, same as `ItemListViewController` — but no sort/"+"
+  /// capsule, since nothing in a known-networks list is sortable or addable from inside this app
+  /// (see that controller's doc comment). The Edit item stays in the list (rather than being
+  /// dropped the way `fullWidthItemIdentifiers` drops it): `MainSplitViewController` disables it
+  /// via the shared `editControl` instead, matching review guidance that it be "hidden or disabled".
+  private var wifiItemIdentifiers: [NSToolbarItem.Identifier] {
+    [
+      .toggleSidebar,
+      .sidebarTrackingSeparator,
+      ItemIdentifier.listTitle,
+      .flexibleSpace,
+      ItemIdentifier.listDetailTrackingSeparator,
+      ItemIdentifier.edit,
+      ItemIdentifier.search,
+    ]
+  }
+
+  private func itemIdentifiers(for mode: ToolbarLayoutMode) -> [NSToolbarItem.Identifier] {
+    switch mode {
+    case .splitView: return splitViewItemIdentifiers
+    case .fullWidth: return fullWidthItemIdentifiers
+    case .wifi: return wifiItemIdentifiers
+    }
+  }
+
+  /// Swaps in `mode`'s toolbar items in place of whatever's currently installed — called by
+  /// `MainSplitViewController.onToolbarLayoutModeChange` whenever the sidebar selection changes.
+  /// Safe to call before `makeToolbar()`/before the toolbar is installed on the window (a no-op
+  /// until then); the next `makeToolbar()` picks up the current mode via
+  /// `toolbarDefaultItemIdentifiers(_:)`.
+  func setToolbarLayoutMode(_ mode: ToolbarLayoutMode) {
+    guard toolbarMode != mode else { return }
+    toolbarMode = mode
     guard let toolbar else { return }
 
-    let targetIdentifiers = active ? fullWidthItemIdentifiers : splitViewItemIdentifiers
+    let targetIdentifiers = itemIdentifiers(for: mode)
 
     // Remove first (highest index first, so earlier removals don't shift later indices), then
     // insert whatever's missing at its target position — by the time the insert loop reaches
