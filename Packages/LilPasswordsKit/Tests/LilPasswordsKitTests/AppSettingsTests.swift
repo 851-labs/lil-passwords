@@ -22,8 +22,6 @@ struct AppSettingsTests {
     #expect(settings.defaultPasswordLength == 20)
     #expect(settings.includeSymbolsInGeneratedPasswords == true)
     #expect(settings.warnAboutCompromisedPasswords == true)
-    #expect(settings.agentAccessEnabled == false)
-    #expect(settings.keepAgentAccessAvailableWhileMacUnlocked == false)
     #expect(settings.showInMenuBar == true)
     #expect(settings.menuBarBrowserSuggestionsEnabled == false)
   }
@@ -46,12 +44,6 @@ struct AppSettingsTests {
 
     settings.warnAboutCompromisedPasswords = false
     #expect(settings.warnAboutCompromisedPasswords == false)
-
-    settings.agentAccessEnabled = true
-    #expect(settings.agentAccessEnabled == true)
-
-    settings.keepAgentAccessAvailableWhileMacUnlocked = true
-    #expect(settings.keepAgentAccessAvailableWhileMacUnlocked == true)
 
     settings.showInMenuBar = false
     #expect(settings.showInMenuBar == false)

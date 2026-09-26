@@ -43,6 +43,34 @@ public struct CallerIdentity: Sendable, Equatable {
   }
 }
 
+extension CallerIdentity {
+  /// The single, shared, **verified** "is this caller the app itself" check — used by both
+  /// `AgentServer.isAppCaller(_:)` (gating `.createVault`/`.unlock`/`.getAgentSettings`/
+  /// `.setAgentSettings`) and `AgentSettingsAccessPolicy`'s own-connection exemption (851-2428).
+  ///
+  /// Reads only ``bundleIdentifier`` — resolved from the connection's audit token via
+  /// `SecCodeCopyGuestWithAttributes`/`SecCodeCheckValidity`/`SecCodeCopySigningInformation`, i.e.
+  /// the process's actual, currently-valid code signature — never ``processPath`` (a plain string
+  /// an attacker can set to anything at all, e.g. `cp lilpass "/tmp/lil passwords"`, without touching
+  /// the copy's inherited code signature one bit). A prior, separate implementation of this same
+  /// "is it the app" question (`AppSettingsAccessPolicy.defaultIsAppCaller`, before the 851-2428
+  /// security review) compared `processPath`'s last path component against the product name
+  /// instead — exactly that spoofable comparison. Having exactly one implementation, here, means
+  /// every caller of it gets the verified answer and the two checks can never independently drift.
+  ///
+  /// Falls back to `AgentConnectionSecurity.isDebugBuild` when ``bundleIdentifier`` is `nil` (an
+  /// unsigned/ad-hoc local or CI build, or an in-process XPC test harness peer with no real
+  /// identifier to read) — the same DEBUG-vs-Release philosophy `AgentConnectionSecurity` already
+  /// applies at the whole-connection level, applied here too so this per-request check doesn't
+  /// independently reject every local/CI build.
+  public func isVerifiedApp(
+    appBundleIdentifier: String = AgentConnectionSecurity.PeerIdentifier.app.rawValue
+  ) -> Bool {
+    guard let bundleIdentifier else { return AgentConnectionSecurity.isDebugBuild }
+    return bundleIdentifier == appBundleIdentifier
+  }
+}
+
 /// Resolves a `CallerIdentity` from a pid using `libproc`/`sysctl`, both best-effort: any lookup
 /// that fails just leaves the corresponding field `nil` rather than throwing, since a caller
 /// identity that's harder to attribute is still more useful to the access log than none at all.
@@ -157,7 +185,7 @@ public enum CallerIdentityResolver {
 
   /// Walks the process tree starting at `pid` itself, out through its ancestors, for 851-2429's
   /// access log to render a full "which tool spawned which tool" chain — e.g.
-  /// `["lilpw", "node", "claude"]` for a `lilpw` invocation made by a Node-based MCP server that
+  /// `["lilpass", "node", "claude"]` for a `lilpass` invocation made by a Node-based MCP server that
   /// Claude Desktop itself launched — rather than just the one-hop ``parentProcessName(of:)`` used
   /// by ``resolve(pid:)`` above.
   ///
@@ -166,7 +194,7 @@ public enum CallerIdentityResolver {
   /// to fully attribute is still more useful logged than not logged at all. `maxDepth` bounds the
   /// walk so an unusual process tree (or, in principle, a pid recycled into a cycle) can't spin
   /// forever; real ancestor chains are a handful of hops at most (shell → MCP client → MCP server →
-  /// `lilpw`), so the default is generous.
+  /// `lilpass`), so the default is generous.
   ///
   /// Must be called promptly after the pid is observed (e.g. at XPC connection-accept time, not
   /// lazily whenever a log entry finally gets written): a short-lived CLI invocation's ancestors

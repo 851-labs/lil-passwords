@@ -48,7 +48,7 @@ public actor AccessLogStore: AccessLogging {
     try Self.ensureDirectoryExists(for: self.fileURL, fileManager: fileManager)
   }
 
-  /// `~/Library/Application Support/Lil Passwords/access-log.jsonl` — the same directory
+  /// `~/Library/Application Support/lil passwords/access-log.jsonl` — the same directory
   /// `VaultStore.defaultDatabaseURL()` uses, so both land under one already-`0700` directory.
   public static func defaultFileURL(fileManager: FileManager = .default) throws -> URL {
     let appSupport = try fileManager.url(
@@ -59,7 +59,7 @@ public actor AccessLogStore: AccessLogging {
     )
     return
       appSupport
-      .appendingPathComponent("Lil Passwords", isDirectory: true)
+      .appendingPathComponent("lil passwords", isDirectory: true)
       .appendingPathComponent("access-log.jsonl", isDirectory: false)
   }
 

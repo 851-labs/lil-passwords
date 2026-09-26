@@ -128,3 +128,52 @@ extension CallerIdentityResolverTests {
     #expect(chain.count <= 1)
   }
 }
+
+/// `CallerIdentity.isVerifiedApp(appBundleIdentifier:)` — the single, shared "is this the app"
+/// check `AgentServer.isAppCaller(_:)` and `AgentSettingsAccessPolicy.defaultIsAppCaller` both
+/// delegate to (851-2428 security review). See `AgentSettingsAccessPolicyTests` for the
+/// policy-level regression test covering the same spoofed-path scenario end to end.
+extension CallerIdentityResolverTests {
+  private static let appBundleIdentifier = AgentConnectionSecurity.PeerIdentifier.app.rawValue
+  private static let cliBundleIdentifier = AgentConnectionSecurity.PeerIdentifier.cli.rawValue
+
+  @Test func isVerifiedAppIsTrueForTheAppsOwnBundleIdentifierRegardlessOfPath() {
+    let caller = CallerIdentity(
+      pid: 10,
+      processPath: "/private/tmp/not-actually-the-app-path",
+      parentProcessName: nil,
+      bundleIdentifier: Self.appBundleIdentifier
+    )
+    #expect(caller.isVerifiedApp() == true)
+  }
+
+  /// The exact Blocker 1 regression: a peer whose *code signature* identifies it as `lilpass`, not
+  /// the app, must not be treated as the app just because its executable happens to sit at a path
+  /// named "lil passwords" — e.g. after `cp lilpass "/tmp/lil passwords"`. `isVerifiedApp()` never
+  /// reads `processPath` at all, so this must be `false`.
+  @Test func isVerifiedAppIsFalseForACLISignedPeerAtAPathNamedLilPasswords() {
+    let spoofedPathCLICaller = CallerIdentity(
+      pid: 11,
+      processPath: "/tmp/lil passwords",
+      parentProcessName: nil,
+      bundleIdentifier: Self.cliBundleIdentifier
+    )
+    #expect(spoofedPathCLICaller.isVerifiedApp() == false)
+  }
+
+  @Test func isVerifiedAppFallsBackToIsDebugBuildWhenNoBundleIdentifierIsResolved() {
+    let unresolved = CallerIdentity(pid: 12, processPath: nil, parentProcessName: nil, bundleIdentifier: nil)
+    #expect(unresolved.isVerifiedApp() == AgentConnectionSecurity.isDebugBuild)
+  }
+
+  @Test func isVerifiedAppRespectsAnExplicitAppBundleIdentifierOverride() {
+    let customCaller = CallerIdentity(
+      pid: 13,
+      processPath: nil,
+      parentProcessName: nil,
+      bundleIdentifier: "com.example.custom-app"
+    )
+    #expect(customCaller.isVerifiedApp(appBundleIdentifier: "com.example.custom-app") == true)
+    #expect(customCaller.isVerifiedApp(appBundleIdentifier: Self.appBundleIdentifier) == false)
+  }
+}

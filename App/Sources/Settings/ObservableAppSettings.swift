@@ -2,7 +2,7 @@ import Combine
 import LilPasswordsKit
 
 /// Bridges `AppSettings` — a plain class backed by a shared `UserDefaults` suite, so it can be
-/// read the same way from the app, the helper, and `lilpw` (see its documentation) — into an
+/// read the same way from the app, the helper, and `lilpass` (see its documentation) — into an
 /// `ObservableObject` the SwiftUI settings panes (851-2460) can bind to directly with `$`.
 ///
 /// The app is the only writer of these settings today (`AppSettings`'s own doc comment), so this
@@ -34,13 +34,10 @@ final class ObservableAppSettings: ObservableObject {
     didSet { settings.warnAboutCompromisedPasswords = warnAboutCompromisedPasswords }
   }
 
-  @Published var agentAccessEnabled: Bool {
-    didSet { settings.agentAccessEnabled = agentAccessEnabled }
-  }
-
-  @Published var keepAgentAccessAvailableWhileMacUnlocked: Bool {
-    didSet { settings.keepAgentAccessAvailableWhileMacUnlocked = keepAgentAccessAvailableWhileMacUnlocked }
-  }
+  // The 851-2428 agent-access toggles are deliberately not bridged here: they no longer live in
+  // `AppSettings`/the shared `UserDefaults` suite at all (see that class's documentation). Settings
+  // → Agents binds to `AgentSettingsViewModel`, which reads/writes them through `AgentClient`
+  // instead.
 
   init(settings: AppSettings = .shared) {
     self.settings = settings
@@ -49,7 +46,5 @@ final class ObservableAppSettings: ObservableObject {
     defaultPasswordLength = settings.defaultPasswordLength
     includeSymbolsInGeneratedPasswords = settings.includeSymbolsInGeneratedPasswords
     warnAboutCompromisedPasswords = settings.warnAboutCompromisedPasswords
-    agentAccessEnabled = settings.agentAccessEnabled
-    keepAgentAccessAvailableWhileMacUnlocked = settings.keepAgentAccessAvailableWhileMacUnlocked
   }
 }

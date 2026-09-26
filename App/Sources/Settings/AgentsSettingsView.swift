@@ -3,21 +3,29 @@ import SwiftUI
 
 /// Settings → Agents: the access toggle and its policy nuance (851-2428), and the access log
 /// (851-2429).
+///
+/// The two toggles bind to `AgentSettingsViewModel`, not `ObservableAppSettings` — see that view
+/// model's documentation for why the 851-2428 settings are read and written through `AgentClient`
+/// rather than `AppSettings`/`UserDefaults`.
 struct AgentsSettingsView: View {
-  @ObservedObject var settings: ObservableAppSettings
+  @StateObject private var agentSettings: AgentSettingsViewModel
   @StateObject private var logModel = AccessLogViewModel()
+
+  init(client: AgentClient) {
+    _agentSettings = StateObject(wrappedValue: AgentSettingsViewModel(client: client))
+  }
 
   var body: some View {
     Form {
       Section {
-        Toggle("Allow agents to access passwords", isOn: $settings.agentAccessEnabled)
+        Toggle("Allow agents to access passwords", isOn: $agentSettings.agentAccessEnabled)
           .toggleStyle(.switch)
         Toggle(
           "Keep agent access available while the Mac is unlocked",
-          isOn: $settings.keepAgentAccessAvailableWhileMacUnlocked
+          isOn: $agentSettings.keepAgentAccessAvailableWhileMacUnlocked
         )
         .toggleStyle(.switch)
-        .disabled(!settings.agentAccessEnabled)
+        .disabled(!agentSettings.agentAccessEnabled)
       } footer: {
         VStack(alignment: .leading, spacing: 6) {
           Text(
@@ -51,10 +59,11 @@ struct AgentsSettingsView: View {
     .frame(width: SettingsLayout.contentWidth)
     .fixedSize(horizontal: false, vertical: true)
     .task { await logModel.refresh() }
+    .task { await agentSettings.refresh() }
   }
 }
 
-/// The access log's table — time, agent (the process chain, e.g. "claude → node → lilpw"), item,
+/// The access log's table — time, agent (the process chain, e.g. "claude → node → lilpass"), item,
 /// and fields accessed. A plain SwiftUI `Table` rather than a bridged `NSTableView`: it's available
 /// on this project's macOS 13 deployment target and needs none of `NSTableView`'s
 /// delegate/data-source boilerplate the old placeholder implementation had.

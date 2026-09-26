@@ -4,10 +4,15 @@ import SwiftUI
 
 /// Hosts `AgentsSettingsView` (851-2460): Settings → Agents — the access toggle (851-2428) and the
 /// access log (851-2429).
+///
+/// Constructs its own `AgentClient`, matching this codebase's existing per-consumer-instance
+/// pattern (e.g. `AppDelegate`'s own `agentClient`, `StatusCommand`'s own `AgentClient()` in the
+/// CLI) rather than requiring `SettingsWindowController`/`SettingsTabViewController` — both
+/// currently parameterless — to thread a shared instance through.
 @MainActor
 final class AgentsSettingsViewController: NSHostingController<AgentsSettingsView> {
-  init(settings: AppSettings = .shared) {
-    super.init(rootView: AgentsSettingsView(settings: ObservableAppSettings(settings: settings)))
+  init(client: AgentClient = AgentClient()) {
+    super.init(rootView: AgentsSettingsView(client: client))
     sizingOptions = [.intrinsicContentSize]
   }
 

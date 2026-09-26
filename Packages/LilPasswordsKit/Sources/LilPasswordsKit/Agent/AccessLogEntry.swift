@@ -21,8 +21,8 @@ public struct AccessLogEntry: Sendable, Codable, Equatable, Identifiable {
   /// stays stable even if `AgentRequest`'s Swift case names ever change.
   public var operation: String
 
-  /// The calling process chain, immediate caller first — e.g. `["lilpw", "node", "claude"]` — for
-  /// ``callerDescription`` to render as `"claude → node → lilpw"`. May be a single element, or
+  /// The calling process chain, immediate caller first — e.g. `["lilpass", "node", "claude"]` — for
+  /// ``callerDescription`` to render as `"claude → node → lilpass"`. May be a single element, or
   /// empty if nothing could be resolved at all.
   public var callerChain: [String]
 
@@ -60,8 +60,8 @@ public struct AccessLogEntry: Sendable, Codable, Equatable, Identifiable {
     self.fields = fields
   }
 
-  /// Display string for the Settings → Agents table's "Agent" column, e.g. `"claude → node → lilpw"`
-  /// (outermost caller first, `lilpw`/the resolved executable last), or `"unknown"` if
+  /// Display string for the Settings → Agents table's "Agent" column, e.g. `"claude → node → lilpass"`
+  /// (outermost caller first, `lilpass`/the resolved executable last), or `"unknown"` if
   /// ``callerChain`` couldn't be resolved at all.
   public var callerDescription: String {
     callerChain.isEmpty ? "unknown" : callerChain.reversed().joined(separator: " → ")
@@ -168,8 +168,10 @@ enum AccessEventSummary {
     case .totpCode(let reference):
       return Summary(operation: "totpCode", itemId: reference.directId, itemTitle: nil, fields: ["totp"])
 
-    case .status, .createVault, .unlock, .lock:
-      preconditionFailure("AgentServer never sends lock-lifecycle requests to the access log")
+    case .status, .createVault, .unlock, .lock, .getAgentSettings, .setAgentSettings:
+      preconditionFailure(
+        "AgentServer never sends lock-lifecycle/helper-configuration requests to the access log"
+      )
     }
   }
 

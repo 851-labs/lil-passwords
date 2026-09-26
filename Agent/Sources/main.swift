@@ -20,12 +20,20 @@ let sharedVaultStore = try VaultStore()
 // the legacy, file-based Keychain rather than the Data Protection Keychain.
 let vaultKeyStore = KeychainVaultKeyStore()
 
+// The real, Keychain-backed `AgentSettingsStoring` (851-2428 security review): the agent-access
+// settings — "Allow agents to access passwords" and "keep agent access available while the Mac is
+// unlocked" — are owned by this helper alone, in an explicitly ACL'd Keychain item, rather than
+// the shared, any-process-writable `AppSettings` UserDefaults suite. See that protocol's
+// documentation and docs/adr/0001-storage-and-process-model.md (e). One instance, shared between
+// the access policy below (reads only) and `AgentServer` (reads and writes, via the
+// `.getAgentSettings`/`.setAgentSettings` ops the Settings UI calls through `AgentClient`).
+let agentSettingsStore = KeychainAgentSettingsStore()
+
 // Agent access starts disabled and stays that way until a user explicitly turns it on in
-// Settings → Agents — never hardcode `true` here. `AppSettingsAccessPolicy` reads that toggle
-// (and the app's own-connection exemption) live out of the same shared `AppSettings` the Settings
-// window writes to; see its documentation for why re-reading per request is sufficient without
-// separate KVO/notification plumbing.
-let accessPolicy: any AccessPolicyProviding = AppSettingsAccessPolicy()
+// Settings → Agents — never hardcode `true` here. `AgentSettingsAccessPolicy` reads that toggle
+// (and the app's own-connection exemption) live out of `agentSettingsStore`; see its documentation
+// for why re-reading per request is sufficient without separate KVO/notification plumbing.
+let accessPolicy: any AccessPolicyProviding = AgentSettingsAccessPolicy(store: agentSettingsStore)
 
 // The real, 851-2429 access log: an append-only, permission-restricted JSONL file in Application
 // Support, pruned to 30 days. Falls back to `NoOpAccessLog` only if the file/directory can't be
@@ -43,7 +51,8 @@ let server = AgentServer(
   vaultStore: sharedVaultStore,
   vaultKeyStore: vaultKeyStore,
   accessPolicy: accessPolicy,
-  accessLog: accessLog
+  accessLog: accessLog,
+  agentSettingsStore: agentSettingsStore
 )
 
 // Accept only connections from the app or `lilpass`, validated against our own running process's

@@ -3,7 +3,7 @@ import Testing
 
 @testable import LilPasswordsKit
 
-private let testCaller = CallerIdentity(pid: 1, processPath: "/usr/local/bin/lilpw", parentProcessName: "zsh")
+private let testCaller = CallerIdentity(pid: 1, processPath: "/usr/local/bin/lilpass", parentProcessName: "zsh")
 
 /// A distinctive value that would never otherwise appear on disk, so any test that finds it in the
 /// log file has proven a real leak rather than a coincidental match.

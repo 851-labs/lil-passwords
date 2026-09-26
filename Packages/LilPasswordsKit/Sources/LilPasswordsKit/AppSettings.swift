@@ -4,9 +4,12 @@ import Foundation
 ///
 /// The app isn't sandboxed (see `docs/adr/0001-storage-and-process-model.md`), so any process
 /// that knows the suite name can read the same domain: `LilPasswordsAgent` reads
-/// ``autoLockInterval``, ``clipboardClearInterval``, and the agent-access toggles to enforce them
-/// (851-2411, 851-2423, 851-2428), and `lilpass` can do the same. The app is the only writer today
-/// — everything here is edited from the Settings window (851-2424).
+/// ``autoLockInterval``/``clipboardClearInterval`` to enforce them (851-2411, 851-2423), and
+/// `lilpass` can do the same. The app is the only writer today — everything here is edited from the
+/// Settings window (851-2424).
+///
+/// The 851-2428 agent-access toggles are **not** stored here — see ``suiteName``'s documentation
+/// for why a security-sensitive, any-process-writable preference needed a different home.
 public final class AppSettings: @unchecked Sendable {
   /// The default, shared instance every process should use unless a test needs isolation.
   public static let shared = AppSettings()
@@ -18,6 +21,13 @@ public final class AppSettings: @unchecked Sendable {
   /// it logs a warning and behaves like `.standard` — because the app's own domain is already
   /// its default search location. A dedicated suite name is what actually makes the domain
   /// readable by the other two (differently-bundle-ID'd) processes.
+  ///
+  /// This suite is, by construction, readable *and freely writable* by any local process that
+  /// knows its name — which is exactly why the 851-2428 agent-access settings
+  /// (`agentAccessEnabled`/`keepAgentAccessAvailableWhileMacUnlocked`) don't live here: see
+  /// `AgentSettingsStoring` and docs/adr/0001-storage-and-process-model.md (e). Only
+  /// non-security preferences (auto-lock, clipboard, password-generation defaults) belong in this
+  /// suite.
   public static let suiteName = "com.851labs.lilpasswords.shared"
 
   /// Posted on the default `NotificationCenter` (main queue not guaranteed) whenever any setting
@@ -100,8 +110,6 @@ public final class AppSettings: @unchecked Sendable {
     static let defaultPasswordLength = "AppSettings.defaultPasswordLength"
     static let includeSymbolsInGeneratedPasswords = "AppSettings.includeSymbolsInGeneratedPasswords"
     static let warnAboutCompromisedPasswords = "AppSettings.warnAboutCompromisedPasswords"
-    static let agentAccessEnabled = "AppSettings.agentAccessEnabled"
-    static let keepAgentAccessAvailableWhileMacUnlocked = "AppSettings.keepAgentAccessAvailableWhileMacUnlocked"
     static let showInMenuBar = "AppSettings.showInMenuBar"
     static let menuBarBrowserSuggestionsEnabled = "AppSettings.menuBarBrowserSuggestionsEnabled"
   }
@@ -124,8 +132,6 @@ public final class AppSettings: @unchecked Sendable {
       Key.defaultPasswordLength: 20,
       Key.includeSymbolsInGeneratedPasswords: true,
       Key.warnAboutCompromisedPasswords: true,
-      Key.agentAccessEnabled: false,
-      Key.keepAgentAccessAvailableWhileMacUnlocked: false,
       Key.showInMenuBar: true,
       Key.menuBarBrowserSuggestionsEnabled: false,
     ])
@@ -168,19 +174,11 @@ public final class AppSettings: @unchecked Sendable {
     set { set(newValue, forKey: Key.warnAboutCompromisedPasswords) }
   }
 
-  /// Settings → Agents → "Allow agents to access passwords". `LilPasswordsAgent` is the actual
-  /// enforcement point (851-2428); this is just the stored preference.
-  public var agentAccessEnabled: Bool {
-    get { defaults.bool(forKey: Key.agentAccessEnabled) }
-    set { set(newValue, forKey: Key.agentAccessEnabled) }
-  }
-
-  /// Settings → Agents → "Keep agent access available while the Mac is unlocked", a policy
-  /// nuance separate from the app's own auto-lock (851-2428).
-  public var keepAgentAccessAvailableWhileMacUnlocked: Bool {
-    get { defaults.bool(forKey: Key.keepAgentAccessAvailableWhileMacUnlocked) }
-    set { set(newValue, forKey: Key.keepAgentAccessAvailableWhileMacUnlocked) }
-  }
+  // Settings → Agents' two toggles ("Allow agents to access passwords" and "keep agent access
+  // available while the Mac is unlocked") are deliberately *not* here — see ``suiteName``'s
+  // documentation. They're owned by `LilPasswordsAgent` itself, in an `AgentSettingsStoring`
+  // Keychain item, and read/written exclusively through `AgentClient.agentSettings()`/
+  // `.setAgentSettings(_:)` (851-2428).
 
   /// Settings → General → "Show in menu bar" (851-2425): whether `AppDelegate` shows the
   /// `NSStatusItem` menu bar extra at all. On by default, matching Apple Passwords.
