@@ -28,33 +28,24 @@ public enum ItemReference: Sendable, Codable, Equatable {
   case query(String)
 }
 
-/// The vault key handoff: the app performs `LAContext` authentication (Touch ID/password), then
-/// sends the already-unwrapped vault key to the helper so it never has to touch the Keychain's
-/// `.userPresence` path itself — see docs/adr/0001-storage-and-process-model.md (b) for why.
-public struct UnlockPayload: Sendable, Codable, Equatable {
-  /// The vault key's raw bytes. Never logged, never persisted by `AgentServer` itself — see
-  /// `AccessLogging`'s documentation for the structural guarantee that this never reaches the
-  /// access log (851-2429).
-  public var sessionKey: Data
-
-  /// Which vault key this is (`VaultCrypto.Key.id`), so a future multi-vault-key world (rotation)
-  /// isn't a breaking wire change.
-  public var keyId: UUID
-
-  public init(sessionKey: Data, keyId: UUID) {
-    self.sessionKey = sessionKey
-    self.keyId = keyId
-  }
-}
-
 /// Every operation `LilPasswordsAgent` supports.
 public enum AgentRequest: Sendable, Codable, Equatable {
   /// Whether the vault is locked/unlocked and whether agent access is currently enabled. Always
   /// answerable, regardless of lock state or the 851-2428 toggle.
   case status
 
-  /// Hands the vault key to the helper after the app's `LAContext` evaluation succeeds.
-  case unlock(UnlockPayload)
+  /// First run: asks the helper to generate a fresh vault key, create the vault, and persist the
+  /// key to the local Keychain — see `VaultKeyStoring`. Restricted to the app itself (never
+  /// `lilpw`); see `AgentError.callerNotAuthorized`.
+  case createVault
+
+  /// An unlock **intent**, carrying no key material at all: the app performs `LAContext`
+  /// authentication (Touch ID/Apple Watch/login password) first, then sends this so the helper
+  /// reads the vault key itself from the local Keychain (`VaultKeyStoring`) and opens the store.
+  /// The key never leaves the helper process — see docs/adr/0001-storage-and-process-model.md (b).
+  /// Restricted to the app itself, the same as `.createVault`, and authenticated by the
+  /// connection's code-signing requirement rather than anything in this payload.
+  case unlock
 
   /// Discards the in-memory vault key and any open store. Idempotent.
   case lock
@@ -108,15 +99,25 @@ public struct AgentStatus: Sendable, Codable, Equatable {
   /// independent of `locked` — both must be satisfied for a vault operation to succeed.
   public var agentAccessEnabled: Bool
 
-  public init(locked: Bool, agentAccessEnabled: Bool) {
+  /// Whether a vault has ever been created at this helper's database. Lets the app distinguish
+  /// "first run — no vault yet" (show vault setup) from "vault exists, currently locked" (show
+  /// the 851-2422 lock screen) without attempting, and failing, an `.unlock` first.
+  public var vaultExists: Bool
+
+  public init(locked: Bool, agentAccessEnabled: Bool, vaultExists: Bool = true) {
     self.locked = locked
     self.agentAccessEnabled = agentAccessEnabled
+    self.vaultExists = vaultExists
   }
 }
 
 /// A successful answer to an `AgentRequest`. Exactly one case per request case, in the same order.
 public enum AgentResponse: Sendable, Codable, Equatable {
   case status(AgentStatus)
+  /// Answers `.createVault`: the freshly created vault's recovery key, rendered the same
+  /// human-transcribable way `VaultCrypto.RecoveryKey.displayString` always is. This is the app's
+  /// only chance to see it — nothing else in the protocol ever hands it back.
+  case vaultCreated(recoveryKeyDisplayString: String)
   case unlocked
   case locked
   case items([PasswordItem])
@@ -155,6 +156,12 @@ public enum AgentError: Error, Sendable, Codable, Equatable, CustomStringConvert
   /// degrading.
   case unsupportedProtocolVersion(requested: Int, supported: Int)
 
+  /// The connecting process isn't allowed to make this request — currently only reachable for
+  /// `.createVault`/`.unlock`, both restricted to the app itself (never `lilpw`), since only the
+  /// app performs the `LAContext` authentication that's supposed to gate them. See
+  /// `AgentServer`'s caller check for how the app is told apart from any other peer.
+  case callerNotAuthorized
+
   /// Anything else. `message` is always safe to log or display — it must never be built from a
   /// secret value (a vault item's password, the vault key, etc.); see call sites in
   /// `AgentServer`.
@@ -172,6 +179,8 @@ public enum AgentError: Error, Sendable, Codable, Equatable, CustomStringConvert
       return "more than one item matched"
     case .unsupportedProtocolVersion(let requested, let supported):
       return "unsupported agent protocol version \(requested) (this helper supports \(supported))"
+    case .callerNotAuthorized:
+      return "this operation is only available to Lil Passwords itself"
     case .internal(let message):
       return message
     }

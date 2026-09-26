@@ -13,10 +13,12 @@ import Testing
   ///
   /// Builds a real `InMemoryVaultStore` with a real vault (`createVault()`), seeds it with
   /// `items`, then locks it back up before handing it to `AgentServer` — matching a real helper's
-  /// starting state. `key` is the actual `VaultCrypto.Key` that vault was created with, so tests
-  /// that need to unlock (`unlock()` below) do so with the one key `open(with:)` will actually
-  /// accept — there is no "any bytes unlock it" placeholder behavior to lean on since the
-  /// now-merged 851-2404.
+  /// starting state. The vault's key is also written into an `InMemoryVaultKeyStore` handed to the
+  /// same `AgentServer`, so `unlock()` below (which sends the real, payload-less
+  /// `AgentRequest.unlock`) can succeed exactly the way it would in production, where the helper
+  /// reads the key back from `VaultKeyStoring` rather than being handed it over the wire. `key`
+  /// itself is exposed for `createVaultThenUnlockRoundTripsOverXPC`, which instead exercises
+  /// `.createVault` end-to-end and never seeds the store directly.
   private final class Harness {
     let server: AgentServer
     let listener: NSXPCListener
@@ -24,20 +26,45 @@ import Testing
     let client: AgentClient
     let key: VaultCrypto.Key
 
+    /// This in-process test peer (the test binary itself) actually resolves to a real,
+    /// non-nil `bundleIdentifier` (the xctest tool's own code-signing identifier) — connecting
+    /// peers in an in-process `NSXPCListener.anonymous()` test are the test binary's own pid, so
+    /// `SecCodeCopyGuestWithAttributes`/`SecCodeCopySigningInformation` resolve a real identity for
+    /// it rather than `nil`. That means `AgentServer.isAppCaller`'s `nil` → `isDebugBuild` fallback
+    /// is never reached here; instead this harness resolves that same real identity up front and
+    /// hands it to `AgentServer` as `appCallerBundleIdentifier`, telling it to trust *this* peer as
+    /// "the app" — exercising the same identity-resolution and gating code paths as production
+    /// while letting the test choose which identifier counts as trusted.
     init(
       items: [PasswordItem] = [],
       accessPolicy: any AccessPolicyProviding = AlwaysAllowAccessPolicy(),
-      connectionSecurity: AgentConnectionSecurity.Requirement = .developmentFallback(reason: "test")
+      connectionSecurity: AgentConnectionSecurity.Requirement = .developmentFallback(reason: "test"),
+      preseedVault: Bool = true
     ) async throws {
       let store = InMemoryVaultStore()
-      try await store.createVault()
-      key = try await store.currentKey()
-      for item in items {
-        try await store.create(item)
+      let keyStore = InMemoryVaultKeyStore()
+      if preseedVault {
+        try await store.createVault()
+        let vaultKey = try await store.currentKey()
+        try keyStore.store(vaultKey)
+        for item in items {
+          try await store.create(item)
+        }
+        await store.lock()
+        key = vaultKey
+      } else {
+        precondition(items.isEmpty, "items are only applied when preseedVault is true")
+        key = VaultCrypto.Key.generate()
       }
-      await store.lock()
 
-      server = AgentServer(vaultStore: store, accessPolicy: accessPolicy)
+      let selfIdentity = CallerIdentityResolver.resolve(pid: ProcessInfo.processInfo.processIdentifier)
+      server = AgentServer(
+        vaultStore: store,
+        vaultKeyStore: keyStore,
+        accessPolicy: accessPolicy,
+        appCallerBundleIdentifier: selfIdentity.bundleIdentifier
+          ?? AgentConnectionSecurity.PeerIdentifier.app.rawValue
+      )
       listener = NSXPCListener.anonymous()
       delegate = AgentXPCListenerDelegate(server: server, connectionSecurity: connectionSecurity)
       listener.delegate = delegate
@@ -49,9 +76,11 @@ import Testing
       listener.invalidate()
     }
 
-    /// Unlocks with the real key this harness's vault was created under.
+    /// Sends the unlock intent. Works against a preseeded vault (the common case for these tests)
+    /// because the harness already wrote that vault's key into the shared `InMemoryVaultKeyStore`
+    /// above.
     func unlock() async throws {
-      try await client.unlock(sessionKey: key.rawData, keyId: key.id)
+      try await client.unlock()
     }
   }
 
@@ -60,6 +89,33 @@ import Testing
     let status = try await harness.client.status()
     #expect(status.locked == true)
     #expect(status.agentAccessEnabled == true)
+  }
+
+  @Test func createVaultThenUnlockRoundTripsOverXPC() async throws {
+    // Unlike every other test in this suite, this one doesn't preseed the vault directly —
+    // it's the one exercising the real first-run path: `.createVault` over XPC, then a
+    // payload-less `.unlock` reading the key back from the `VaultKeyStoring` the helper itself
+    // just wrote it to.
+    let harness = try await Harness(preseedVault: false)
+
+    let statusBeforeCreate = try await harness.client.status()
+    #expect(statusBeforeCreate.vaultExists == false)
+    #expect(statusBeforeCreate.locked == true)
+
+    let recoveryKeyDisplayString = try await harness.client.createVault()
+    #expect(!recoveryKeyDisplayString.isEmpty)
+
+    let statusAfterCreate = try await harness.client.status()
+    #expect(statusAfterCreate.vaultExists == true)
+    #expect(statusAfterCreate.locked == false)
+
+    try await harness.client.lock()
+    let statusAfterLock = try await harness.client.status()
+    #expect(statusAfterLock.locked == true)
+
+    try await harness.unlock()
+    let statusAfterUnlock = try await harness.client.status()
+    #expect(statusAfterUnlock.locked == false)
   }
 
   @Test func unlockListCreateUpdateDeleteRoundTripOverXPC() async throws {

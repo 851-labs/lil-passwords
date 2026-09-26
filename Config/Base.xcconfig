@@ -19,8 +19,21 @@ GENERATE_INFOPLIST_FILE = NO
 //   CODE_SIGN_IDENTITY = Apple Development              (day-to-day dev)
 //   CODE_SIGN_IDENTITY = Developer ID Application       (release; see docs/releasing.md)
 // Contributors on another team can also override DEVELOPMENT_TEAM there.
+//
+// Release builds (scripts/release/, 851-2436) re-sign everything inside out
+// after the fact, with an ad hoc identity today or a real Developer ID
+// identity once DEVELOPER_ID_CERT_P12/DEVELOPER_ID_CERT_PASSWORD/APPLE_TEAM_ID
+// exist as repo/org secrets — independent of these build settings, which only
+// govern this xcodebuild's own default signing. See docs/releasing.md.
 DEVELOPMENT_TEAM = WH4QW9ND3J
 CODE_SIGN_STYLE = Manual
 CODE_SIGN_IDENTITY = -
+
+// Sparkle (851-2437): EdDSA public key baked into Info.plist as
+// SUPublicEDKey. Empty placeholder until `generate_keys` produces a real
+// keypair — UpdaterController treats an empty key as "no updater configured"
+// and no-ops rather than starting Sparkle against a malformed key. See
+// docs/releasing.md.
+SPARKLE_PUBLIC_ED_KEY = X14W9JrQPEYH7UD8MUT+/bKsVkrMVpbnLAy360q6ffE=
 
 #include? "Local.xcconfig"

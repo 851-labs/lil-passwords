@@ -12,6 +12,15 @@ let package = Package(
     // SwiftPM library `swift test` can exercise directly — see `LilpwCoreTests` for the in-process
     // `AgentServer` + `InMemoryVaultStore` harness this buys.
     .library(name: "LilpwCore", targets: ["LilpwCore"]),
+    // `lilpw mcp`'s tool definitions and dispatch, built on top of `LilpwCore` the same way the CLI
+    // itself is (851-2431). Unlike ArgumentParser (kept out of this package entirely, see below),
+    // the MCP SDK dependency lives here rather than in the CLI target: the glue between MCP tool
+    // calls and `LilpwCommands` is genuine, unit-testable logic (argument extraction, error mapping
+    // to the same messages the CLI prints), not CLI-parsing plumbing.
+    .library(name: "LilpwMCP", targets: ["LilpwMCP"]),
+  ],
+  dependencies: [
+    .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.11.0")
   ],
   targets: [
     .target(
@@ -41,6 +50,27 @@ let package = Package(
       // `AgentClient(endpoint:connectionSecurity:)` initializer.
       name: "LilpwCoreTests",
       dependencies: ["LilpwCore", "LilPasswordsKit"]
+    ),
+    .target(
+      name: "LilpwMCP",
+      dependencies: [
+        "LilpwCore",
+        "LilPasswordsKit",
+        .product(name: "MCP", package: "swift-sdk"),
+      ]
+    ),
+    .testTarget(
+      // Its own `Support/Harness.swift` copy, deliberately duplicated rather than shared with
+      // `LilpwCoreTests` — see that file's doc comment (and `LilpwCoreTests`' own) for why: SwiftPM
+      // has no way for one file to belong to two test targets, and each target's copy needs
+      // `@testable import LilPasswordsKit` for the same test-only `AgentClient` initializer.
+      name: "LilpwMCPTests",
+      dependencies: [
+        "LilpwMCP",
+        "LilpwCore",
+        "LilPasswordsKit",
+        .product(name: "MCP", package: "swift-sdk"),
+      ]
     ),
   ]
 )

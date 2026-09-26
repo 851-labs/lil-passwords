@@ -223,26 +223,12 @@ final class NewPasswordSheetController: NSWindowController {
   @objc
   private func saveTapped() {
     let item = makeItem()
-    saveButton.isEnabled = false
-    let vaultViewModel = self.vaultViewModel
-    Task { [weak self] in
-      do {
-        try await vaultViewModel.save(item)
-        self?.finish(outcome: .saved(item))
-      } catch {
-        self?.saveButton.isEnabled = true
-        self?.presentSaveError(error)
-      }
-    }
-  }
-
-  private func presentSaveError(_ error: Error) {
-    guard let window else { return }
-    let alert = NSAlert()
-    alert.alertStyle = .warning
-    alert.messageText = "Couldn't Save Password"
-    alert.informativeText = "\(error)"
-    alert.beginSheetModal(for: window)
+    // `VaultViewModel.save(_:)` is synchronous/fire-and-forget (it kicks off its own `Task`
+    // against the underlying `VaultStoring`, same as an edit-mode save from the detail pane) —
+    // there's nothing to await, and no per-save error to surface here; a persistence failure
+    // there already trips `assertionFailure` rather than something this sheet could recover from.
+    vaultViewModel.save(item)
+    finish(outcome: .saved(item))
   }
 
   private func makeItem() -> PasswordItem {

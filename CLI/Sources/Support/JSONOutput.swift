@@ -16,21 +16,17 @@ struct JSONOutputOptions: ParsableArguments {
 /// rendering. Kept here (rather than in `LilpwCore`) because formatting is presentation, not
 /// logic — `LilpwCore` only ever returns plain `Codable` values.
 enum Output {
-  private static let encoder: JSONEncoder = {
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.sortedKeys]
-    encoder.dateEncodingStrategy = .iso8601
-    return encoder
-  }()
-
   /// Prints `value` as JSON if `asJSON` is `true`; otherwise calls `text` to print a
   /// command-specific human-readable rendering. `text` never runs when `asJSON` is `true`.
+  ///
+  /// Uses `LilpwCore.LilpwJSON`'s shared encoder — the same one `LilpwMCP`'s tool results use —
+  /// so `--json` output and MCP tool output serialize identically.
   static func print<T: Encodable>(_ value: T, asJSON: Bool, text: (T) -> Void) {
     guard asJSON else {
       text(value)
       return
     }
-    guard let data = try? encoder.encode(value), let string = String(data: data, encoding: .utf8) else {
+    guard let string = LilpwJSON.string(value) else {
       FileHandle.standardError.write(Data("\(LilPasswordsKit.cliName): failed to encode JSON output\n".utf8))
       exit(LilpwExitCode.generic.rawValue)
     }

@@ -9,14 +9,15 @@ final class MainSplitViewController: NSSplitViewController {
   let listViewController: ItemListViewController
   let detailViewController: DetailViewController
 
-  // Minimal, interim vault access (851-2416) — there's no real, shared `VaultViewModel` on
-  // `origin/main` yet (that's 851-2415); see `VaultModel/VaultViewModel.swift`.
-  private let vaultViewModel: any VaultViewModel = VaultStoreViewModel()
+  // The same `VaultViewModel` the list/detail panes already read from (851-2415) — 851-2416's
+  // New Password sheet saves through this rather than a second, private vault access path.
+  private let dataSource: VaultViewModel
 
-  init(store: VaultSnapshotStore) {
+  init(store: VaultSnapshotStore, dataSource: VaultViewModel) {
+    self.dataSource = dataSource
     sidebarViewController = SidebarViewController(store: store)
-    listViewController = ItemListViewController(store: store)
-    detailViewController = DetailViewController()
+    listViewController = ItemListViewController(dataSource: dataSource)
+    detailViewController = DetailViewController(vaultViewModel: dataSource)
     super.init(nibName: nil, bundle: nil)
   }
 
@@ -28,6 +29,7 @@ final class MainSplitViewController: NSSplitViewController {
   override func viewDidLoad() {
     super.viewDidLoad()
     sidebarViewController.delegate = self
+    listViewController.delegate = self
 
     splitView.autosaveName = "MainSplitView"
     splitView.identifier = NSUserInterfaceItemIdentifier("MainSplitView")
@@ -62,7 +64,7 @@ final class MainSplitViewController: NSSplitViewController {
   /// `AppDelegate`'s stub fallback without any change to `MainMenu.swift` (851-2416).
   @objc func newPassword(_ sender: Any?) {
     guard let window = view.window else { return }
-    NewPasswordSheetController.present(vaultViewModel: vaultViewModel, from: window) { [weak self] outcome in
+    NewPasswordSheetController.present(vaultViewModel: dataSource, from: window) { [weak self] outcome in
       guard case .saved(let item) = outcome else { return }
       self?.detailViewController.show(item: item)
     }
@@ -73,5 +75,18 @@ extension MainSplitViewController: SidebarViewControllerDelegate {
   func sidebarViewController(_ controller: SidebarViewController, didSelect category: SidebarCategory) {
     listViewController.select(category: category)
     detailViewController.showNoSelection(for: category)
+  }
+}
+
+extension MainSplitViewController: ItemListViewControllerDelegate {
+  func itemListViewController(_ controller: ItemListViewController, didChangeSelection items: [PasswordItem]) {
+    switch items.count {
+    case 0:
+      detailViewController.showNoSelection(for: listViewController.currentCategory)
+    case 1:
+      detailViewController.show(item: items[0])
+    default:
+      detailViewController.showMultipleSelection(count: items.count)
+    }
   }
 }

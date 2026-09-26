@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, sign, and publish release
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Ad hoc signed and unnotarized until a Developer ID certificate exists
+      # — every secret below is optional today. See docs/releasing.md and
+      # 851-2436/851-2437: once DEVELOPER_ID_CERT_P12/DEVELOPER_ID_CERT_PASSWORD
+      # (and notary credentials) exist in the repo/org secrets, this workflow
+      # switches to Developer ID signing + notarization + stapling
+      # automatically, with no code changes needed. APPLE_TEAM_ID defaults to
+      # Alexandru Turcanu's team (WH4QW9ND3J, 851-2400/PR #16), which is who
+      # lil passwords ships under until the 851 Labs org has its own team —
+      # only set this secret to override that default.
+      DEVELOPER_ID_CERT_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+      DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+      NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+      NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+      NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
+      NOTARY_API_KEY_P8: ${{ secrets.NOTARY_API_KEY_P8 }}
+      SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest stable Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Tool versions
+        run: |
+          xcodebuild -version
+          swift --version
+
+      # Same method as .github/workflows/ci.yml, so both workflows install
+      # whatever XcodeGen version Homebrew currently serves.
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Cache SwiftPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            Packages/LilPasswordsKit/.build
+            build/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('**/Package.resolved', '**/Package.swift') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Build, sign, package, notarize, and generate appcast
+        run: scripts/release/release.sh
+
+      - name: Publish GitHub Release
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes
+          fi
+
+          ASSETS=(dist/*.dmg)
+          if [[ -f dist/appcast.xml ]]; then
+            ASSETS+=(dist/appcast.xml)
+          else
+            echo "::warning::dist/appcast.xml was not generated (SPARKLE_ED_PRIVATE_KEY unset?) — Sparkle feed not updated for $TAG."
+          fi
+          gh release upload "$TAG" "${ASSETS[@]}" --repo "$GITHUB_REPOSITORY" --clobber
