@@ -52,20 +52,95 @@ public enum CallerIdentityResolver {
       pid: pid,
       processPath: processPath(of: pid),
       parentProcessName: parentProcessName(of: pid),
-      bundleIdentifier: bundleIdentifier(of: pid)
+      bundleIdentifier: bundleIdentifier(attributes: [kSecGuestAttributePid as String: pid])
     )
   }
 
-  /// Reads the connecting process's own code-signing identifier via `SecCode`, the same
-  /// `Security` framework machinery `AgentConnectionSecurity.currentProcessTeamIdentifier()` uses
-  /// for its own process — best-effort, `nil` on any failure (unsigned/ad-hoc build, the process
-  /// already exited, etc.) rather than throwing.
-  private static func bundleIdentifier(of pid: pid_t) -> String? {
+  /// Resolves an XPC peer from its connection's audit token rather than its bare pid. Preferred
+  /// over ``resolve(pid:)`` for anything security-relevant: a pid can be reused by a completely
+  /// different process between the moment `NSXPCListenerDelegate` accepts a connection and the
+  /// moment this code asks the kernel "whose code signature is this?", which would let that new
+  /// process inherit trust meant for whichever process actually held the connection. An audit
+  /// token has no such reuse window — it identifies the exact process instance the kernel vended
+  /// the connection for, not just a numeric slot that process happened to occupy.
+  ///
+  /// `pid` is threaded through unchanged for `processPath`/`parentProcessName` and the access
+  /// log's display — those are diagnostic/cosmetic, not what any authorization decision reads.
+  /// `AgentServer.isAppCaller(_:)` only ever reads `bundleIdentifier`, resolved here from the
+  /// audit token, never from `pid` — so the pid-reuse race `processPath`/`parentProcessName`
+  /// could theoretically still be subject to isn't security-relevant the way `bundleIdentifier`
+  /// resolution is.
+  public static func resolve(auditToken: audit_token_t, pid: pid_t) -> CallerIdentity {
+    var token = auditToken
+    let tokenData = withUnsafeBytes(of: &token) { Data($0) }
+    return CallerIdentity(
+      pid: pid,
+      processPath: processPath(of: pid),
+      parentProcessName: parentProcessName(of: pid),
+      bundleIdentifier: bundleIdentifier(attributes: [kSecGuestAttributeAudit as String: tokenData])
+    )
+  }
+
+  /// Resolves `connection`'s peer, preferring its audit token (``resolve(auditToken:pid:)``) and
+  /// falling back to its bare pid only if the token can't be read at all — see ``auditToken(of:)``
+  /// for when that's expected (never, on any macOS release this app has actually shipped or
+  /// tested on) versus merely possible (a future OS quietly renaming the private storage it reads).
+  public static func resolve(connection: NSXPCConnection) -> CallerIdentity {
+    guard let token = auditToken(of: connection) else {
+      FileHandle.standardError.write(
+        Data(
+          ("LilPasswordsAgent: couldn't read an XPC connection's audit token; falling back to its pid, "
+            + "which is reusable and less trustworthy for caller identity\n").utf8
+        )
+      )
+      return resolve(pid: connection.processIdentifier)
+    }
+    return resolve(auditToken: token, pid: connection.processIdentifier)
+  }
+
+  /// Reads `connection`'s underlying `audit_token_t` via the same private KVC key Apple's own
+  /// `NSXPCConnection` stores it under (`"auditToken"`, an ivar of exactly `audit_token_t`'s size
+  /// boxed in an `NSValue`) — there is no public API for this. `NSXPCConnection` publicly exposes
+  /// `processIdentifier` (a bare, reusable pid) and `auditSessionIdentifier` (an *audit session*
+  /// id shared by every process in one login session, not a per-connection audit token), but
+  /// nothing that reaches an actual `audit_token_t`. This exact private-KVC technique is widely
+  /// used by XPC-security-conscious code for precisely this "authenticate my XPC peer without a
+  /// pid-reuse race" problem, in the absence of a public alternative.
+  ///
+  /// Verified directly against this codebase's own dev toolchain before relying on it here: a
+  /// throwaway `NSXPCListener.anonymous()`/`NSXPCConnection` pair, probed on both the listener and
+  /// client side after a real round-trip call, both returned an `NSValue` decoding to the
+  /// process's own real pid at the expected `audit_token_t` offset — not `nil`, not garbage.
+  ///
+  /// Returns `nil` (rather than trapping) if the key is ever missing or its value isn't an
+  /// `NSValue`, so a future SDK silently changing this falls back to pid-based resolution instead
+  /// of crashing every XPC accept.
+  private static func auditToken(of connection: NSXPCConnection) -> audit_token_t? {
+    guard let value = connection.value(forKey: "auditToken") as? NSValue else { return nil }
+    var token = audit_token_t()
+    withUnsafeMutableBytes(of: &token) { buffer in
+      value.getValue(buffer.baseAddress!)
+    }
+    return token
+  }
+
+  /// Shared by every `resolve` overload above: looks up the guest identified by `attributes`
+  /// (either a `kSecGuestAttributePid` or `kSecGuestAttributeAudit` entry) and — critically —
+  /// calls `SecCodeCheckValidity` on it before reading anything back. `SecCodeCopyGuestWithAttributes`
+  /// succeeding only means "these attributes identify some running code guest"; it doesn't itself
+  /// verify that guest's on-disk signature is still intact right now. Skipping
+  /// `SecCodeCheckValidity` would mean trusting whatever `kSecCodeInfoIdentifier` a guest reports
+  /// even if its signature had been invalidated since — validating first closes that gap. Ad-hoc
+  /// signed builds (every local/CI build here — see `AgentConnectionSecurity`) still pass:
+  /// `SecCodeCheckValidity` checks internal signature consistency, which an ad-hoc signature has,
+  /// not the presence of a certificate chain.
+  private static func bundleIdentifier(attributes: [String: Any]) -> String? {
     var codeRef: SecCode?
-    let attributes = [kSecGuestAttributePid as String: pid] as CFDictionary
-    guard SecCodeCopyGuestWithAttributes(nil, attributes, SecCSFlags(), &codeRef) == errSecSuccess,
+    guard SecCodeCopyGuestWithAttributes(nil, attributes as CFDictionary, SecCSFlags(), &codeRef) == errSecSuccess,
       let code = codeRef
     else { return nil }
+
+    guard SecCodeCheckValidity(code, SecCSFlags(), nil) == errSecSuccess else { return nil }
 
     var infoRef: CFDictionary?
     // `SecCodeCopySigningInformation` takes a `SecStaticCode`; `SecCode` (a running guest, here)
