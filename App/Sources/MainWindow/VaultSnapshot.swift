@@ -28,15 +28,18 @@ struct VaultSnapshot: Hashable, Sendable {
 }
 
 extension VaultSnapshot {
-  /// Builds a snapshot from real items (851-2414/851-2417), computing sidebar counts for the
-  /// categories `PasswordItem` currently models. `passkeys`, `wifi`, and `security` aren't
-  /// represented by `PasswordItem` yet, so they're left at their default zero count.
+  /// Builds a snapshot from real items (851-2414/851-2417/851-2419), computing sidebar counts for
+  /// the categories `PasswordItem` currently models. `passkeys` and `wifi` aren't represented by
+  /// `PasswordItem` yet, so they're left at their default zero count.
   init(items: [PasswordItem]) {
     self.init(
       counts: [
-        .all: items.filter { $0.deletedAt == nil }.count,
-        .codes: items.filter { $0.deletedAt == nil && $0.totpURI != nil }.count,
-        .deleted: items.filter { $0.deletedAt != nil }.count,
+        .all: items.nonDeleted().count,
+        .codes: items.withVerificationCode().count,
+        // The Security badge (851-2419) counts distinct flagged items, not distinct findings —
+        // one item flagged as both reused and weak still only counts once.
+        .security: SecurityFindings.build(from: items).uniqueItemIDs.count,
+        .deleted: items.recentlyDeleted().count,
       ],
       sharedGroups: []
     )

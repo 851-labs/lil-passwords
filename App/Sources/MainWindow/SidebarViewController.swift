@@ -126,6 +126,18 @@ final class SidebarViewController: NSViewController {
     outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
   }
 
+  /// Programmatically selects `category`, exactly as if the user had clicked its row — unlike a
+  /// real click, this notifies the delegate unconditionally, even if the outline view hasn't laid
+  /// out rows yet (see `restoreState(with:)` above for the same pattern). Used by the DEBUG-only
+  /// `-InitialSidebarCategory` launch argument (`MainWindowController`) so tophat/manual-QA
+  /// captures of the full-width Codes/Security/Deleted views don't depend on a live click.
+  func selectCategory(_ category: SidebarCategory) {
+    selectedCategory = category
+    selectRow(for: category)
+    invalidateRestorableState()
+    delegate?.sidebarViewController(self, didSelect: category)
+  }
+
   // MARK: State restoration
 
   override func encodeRestorableState(with coder: NSCoder) {

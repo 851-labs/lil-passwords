@@ -25,6 +25,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private let helperAgentRegistrar: any HelperAgentRegistering = SMAppServiceHelperAgent()
 
   func applicationDidFinishLaunching(_ notification: Notification) {
+    #if DEBUG
+      applyForcedAppearanceOverrideIfNeeded()
+    #endif
     NSApp.mainMenu = MainMenu.make()
     let controller = MainWindowController(agentClient: agentClient)
     controller.showWindow(nil)
@@ -120,4 +123,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     _ = semaphore.wait(timeout: .now() + lockOnQuitTimeout)
   }
+
+  #if DEBUG
+    /// `-ForceAppearance light|dark` overrides `NSApp.appearance` before any window/menu is built,
+    /// DEBUG-only. Exists (alongside `MainWindowController`'s `-InitialSidebarCategory` and
+    /// `SampleData`'s `-SeedSampleData`) so tophat/manual-QA screenshots can capture both
+    /// appearances deterministically from self-contained launch arguments, without touching the
+    /// shared, machine-wide System Settings appearance toggle — which would also affect every other
+    /// app on this shared machine, including any other worktree's concurrently-running build. Never
+    /// compiled into Release builds.
+    private func applyForcedAppearanceOverrideIfNeeded() {
+      guard let raw = UserDefaults.standard.string(forKey: "ForceAppearance") else { return }
+      switch raw {
+      case "light": NSApp.appearance = NSAppearance(named: .aqua)
+      case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
+      default: break
+      }
+    }
+  #endif
 }
