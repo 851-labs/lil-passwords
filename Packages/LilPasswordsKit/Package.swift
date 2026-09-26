@@ -9,6 +9,10 @@ let package = Package(
   ],
   targets: [
     .target(name: "LilPasswordsKit"),
-    .testTarget(name: "LilPasswordsKitTests", dependencies: ["LilPasswordsKit"]),
+    .testTarget(
+      name: "LilPasswordsKitTests",
+      dependencies: ["LilPasswordsKit"],
+      resources: [.copy("Fixtures")]
+    ),
   ]
 )
