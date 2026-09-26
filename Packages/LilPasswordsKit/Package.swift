@@ -8,7 +8,10 @@ let package = Package(
     .library(name: "LilPasswordsKit", targets: ["LilPasswordsKit"])
   ],
   targets: [
-    .target(name: "LilPasswordsKit"),
+    .target(
+      name: "LilPasswordsKit",
+      resources: [.copy("Resources/common-passwords.txt")]
+    ),
     .testTarget(
       name: "LilPasswordsKitTests",
       dependencies: ["LilPasswordsKit"],
