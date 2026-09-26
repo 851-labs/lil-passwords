@@ -100,6 +100,14 @@ final class VaultStoreCore {
     return vaultKey
   }
 
+  /// Whether this database already has a vault (`meta` row), regardless of lock state. Lets a
+  /// caller (`AgentServer.status`) distinguish "no vault yet — first run" from "vault exists but
+  /// is locked" without attempting (and failing) an `open(with:)` first.
+  func vaultExists() throws -> Bool {
+    try storage.ensureSchema()
+    return try storage.loadMeta() != nil
+  }
+
   func lock() {
     vaultKey = nil
     decryptedItems.removeAll()

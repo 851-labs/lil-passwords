@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import Security
 
 /// Identifies the process on the other end of an accepted `NSXPCConnection`.
 ///
@@ -21,10 +22,24 @@ public struct CallerIdentity: Sendable, Equatable {
   /// app itself if it launched `lilpw` directly), or `nil` if it couldn't be resolved.
   public var parentProcessName: String?
 
-  public init(pid: pid_t, processPath: String?, parentProcessName: String?) {
+  /// The connecting process's own code-signing identifier (`CFBundleIdentifier` for an app/tool
+  /// built by this project, e.g. `com.851labs.lilpasswords`), or `nil` if it couldn't be resolved
+  /// — unsigned/ad-hoc-signed processes (the default for local/CI builds) have no identifier to
+  /// read. `AgentServer` uses this, not `processPath` (a spoofable string), to restrict
+  /// `.unlock`/`.createVault` to the app specifically — see `AgentConnectionSecurity` for the
+  /// same code-signing-based philosophy applied at the whole-connection level.
+  public var bundleIdentifier: String?
+
+  public init(
+    pid: pid_t,
+    processPath: String?,
+    parentProcessName: String?,
+    bundleIdentifier: String? = nil
+  ) {
     self.pid = pid
     self.processPath = processPath
     self.parentProcessName = parentProcessName
+    self.bundleIdentifier = bundleIdentifier
   }
 }
 
@@ -33,7 +48,36 @@ public struct CallerIdentity: Sendable, Equatable {
 /// identity that's harder to attribute is still more useful to the access log than none at all.
 public enum CallerIdentityResolver {
   public static func resolve(pid: pid_t) -> CallerIdentity {
-    CallerIdentity(pid: pid, processPath: processPath(of: pid), parentProcessName: parentProcessName(of: pid))
+    CallerIdentity(
+      pid: pid,
+      processPath: processPath(of: pid),
+      parentProcessName: parentProcessName(of: pid),
+      bundleIdentifier: bundleIdentifier(of: pid)
+    )
+  }
+
+  /// Reads the connecting process's own code-signing identifier via `SecCode`, the same
+  /// `Security` framework machinery `AgentConnectionSecurity.currentProcessTeamIdentifier()` uses
+  /// for its own process — best-effort, `nil` on any failure (unsigned/ad-hoc build, the process
+  /// already exited, etc.) rather than throwing.
+  private static func bundleIdentifier(of pid: pid_t) -> String? {
+    var codeRef: SecCode?
+    let attributes = [kSecGuestAttributePid as String: pid] as CFDictionary
+    guard SecCodeCopyGuestWithAttributes(nil, attributes, SecCSFlags(), &codeRef) == errSecSuccess,
+      let code = codeRef
+    else { return nil }
+
+    var infoRef: CFDictionary?
+    // `SecCodeCopySigningInformation` takes a `SecStaticCode`; `SecCode` (a running guest, here)
+    // is toll-free bridgeable to it, hence the forced cast rather than a public conversion API —
+    // the same pattern `AgentConnectionSecurity.currentProcessTeamIdentifier()` uses.
+    guard
+      SecCodeCopySigningInformation(code as! SecStaticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &infoRef)
+        == errSecSuccess,
+      let info = infoRef as? [String: Any]
+    else { return nil }
+
+    return info[kSecCodeInfoIdentifier as String] as? String
   }
 
   private static func processPath(of pid: pid_t) -> String? {

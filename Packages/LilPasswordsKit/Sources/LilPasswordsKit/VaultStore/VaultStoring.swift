@@ -53,6 +53,12 @@ public protocol VaultStoring: Actor {
   /// Throws `VaultStoreError.locked` if the store isn't currently unlocked.
   func currentKey() async throws -> VaultCrypto.Key
 
+  /// Whether this store's database already has a vault, regardless of lock state. Lets a caller
+  /// distinguish "no vault yet — first run, offer to create one" from "vault exists but is
+  /// currently locked — show the lock screen" without attempting an `open(with:)` just to find
+  /// out which situation it's in.
+  func vaultExists() async throws -> Bool
+
   /// Drops the in-memory vault key and the decrypted item index. Every CRUD/search call throws
   /// `VaultStoreError.locked` until `open(with:)` (or `createVault()`) succeeds again.
   func lock() async

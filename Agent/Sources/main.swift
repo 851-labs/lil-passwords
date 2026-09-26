@@ -1,3 +1,5 @@
+import AppKit
+import CoreGraphics
 import Foundation
 import LilPasswordsKit
 
@@ -12,6 +14,11 @@ import LilPasswordsKit
 // calls `open(with:)`/`lock()` on whatever it's handed — so swapping this line is the only thing
 // a future change to where/how the vault lives should ever require here.
 let sharedVaultStore = try VaultStore()
+
+// The real, Keychain-backed `VaultKeyStoring` (851-2411): the vault key this process reads back
+// on `.unlock` and persists on `.createVault`. See that protocol's documentation for why this is
+// the legacy, file-based Keychain rather than the Data Protection Keychain.
+let vaultKeyStore = KeychainVaultKeyStore()
 
 // Agent access starts disabled and stays that way until a user explicitly turns it on (during
 // onboarding or in Settings) — never hardcode `true` here. `AlwaysDenyAccessPolicy` is wired in
@@ -47,7 +54,11 @@ let sharedVaultStore = try VaultStore()
   let accessPolicy: any AccessPolicyProviding = AlwaysDenyAccessPolicy()
 #endif
 
-let server = AgentServer(vaultStore: sharedVaultStore, accessPolicy: accessPolicy)
+let server = AgentServer(
+  vaultStore: sharedVaultStore,
+  vaultKeyStore: vaultKeyStore,
+  accessPolicy: accessPolicy
+)
 
 // TODO(851-2429): supply the real `AccessLogging` conformer once it exists; `AgentServer`'s default
 // (`NoOpAccessLog`) is used above until then.
@@ -62,5 +73,75 @@ let listenerDelegate = AgentXPCListenerDelegate(server: server, connectionSecuri
 let listener = NSXPCListener(machServiceName: AgentXPC.machServiceName)
 listener.delegate = listenerDelegate
 listener.resume()
+
+// MARK: - Auto-lock (851-2411)
+//
+// Three of this ticket's four auto-lock triggers live here, in the helper, because they're
+// system-wide signals this process can observe for as long as it's alive (which, per the Mach
+// service comment above, is for as long as the app holds a connection open) — see
+// `AutoLockEngine`'s documentation for why the fourth (quit) instead lives in the app's
+// `AppDelegate`: quitting is specifically the *app* quitting, not this helper.
+
+/// Wraps `CGEventSourceSecondsSinceLastEventType`, using the `~0` ("any input event type")
+/// sentinel documented in `CGEventSource.h` (not exposed as a named Swift constant) so idle time
+/// reflects keyboard, mouse, and every other HID input, not just one event type.
+struct SystemIdleTimeProvider: IdleTimeProviding {
+  func idleInterval() -> TimeInterval {
+    // `CGEventType(rawValue:)` is failable in its Swift import, but `~0` is the documented
+    // "any event type" sentinel and is always a valid raw value — force-unwrapping is safe here.
+    // The free-function form (`CGEventSourceSecondsSinceLastEventType`) is obsoleted in Swift;
+    // this is its replacement per the SDK's availability diagnostic.
+    CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
+  }
+}
+
+// TODO(851-2424): replace `FixedAutoLockPolicy()` with the real, `AppSettings`-backed "Lock
+// after" policy once it exists; this ticket's own default (5 minutes) is `FixedAutoLockPolicy`'s
+// default, so behavior is unaffected until then.
+let autoLockEngine = AutoLockEngine(policy: FixedAutoLockPolicy(), idleProvider: SystemIdleTimeProvider())
+
+/// Locks the vault (if it isn't already) and tells every observer (the app's 851-2422 lock
+/// screen) that lock state changed. Idempotent: `VaultStoring.lock()` on an already-locked store
+/// is a no-op, so every trigger below can call this unconditionally without first checking
+/// `isUnlocked`.
+func lockVaultNow() async {
+  await sharedVaultStore.lock()
+  LockStateNotifications.post()
+}
+
+// Idle timeout: polled rather than scheduled for the exact remaining interval, since the idle
+// clock resets on every input and there's no notification for "input happened" to reschedule
+// against — a short poll interval approximates a live timer closely enough that a user can't
+// perceive the difference, at negligible cost for a timer this infrequent.
+let idleCheckInterval: TimeInterval = 5
+let idleTimer = Timer(timeInterval: idleCheckInterval, repeats: true) { _ in
+  Task {
+    if await autoLockEngine.shouldLockForIdleTimeout() {
+      await lockVaultNow()
+    }
+  }
+}
+RunLoop.main.add(idleTimer, forMode: .common)
+
+// Sleep: lock unconditionally the moment the system starts sleeping, regardless of the idle
+// timeout policy. `NSWorkspace`'s notification center works from any process with a running
+// `CFRunLoop` (this one, via `RunLoop.main.run()` below) — it doesn't require `NSApplication`.
+NSWorkspace.shared.notificationCenter.addObserver(
+  forName: NSWorkspace.willSleepNotification,
+  object: nil,
+  queue: nil
+) { _ in
+  Task { await lockVaultNow() }
+}
+
+// Screen lock: also unconditional, and distinct from sleep (fast user switching or a manual
+// "Lock Screen" both post this without the system actually sleeping).
+DistributedNotificationCenter.default().addObserver(
+  forName: Notification.Name("com.apple.screenIsLocked"),
+  object: nil,
+  queue: nil
+) { _ in
+  Task { await lockVaultNow() }
+}
 
 RunLoop.main.run()
