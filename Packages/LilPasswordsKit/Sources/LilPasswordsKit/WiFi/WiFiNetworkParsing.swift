@@ -3,7 +3,7 @@ import Foundation
 /// Pure parsing over the text/JSON `networksetup`/`system_profiler` already print — no process
 /// spawning here, so every case (including the OS quirks noted below) is a plain unit test. See
 /// ``SystemWiFiNetworkListing`` for what actually shells out to these tools, and
-/// `docs/adr/0005-wifi-passwords.md` for why this app uses them instead of CoreWLAN.
+/// `docs/adr/0006-wifi-passwords.md` for why this app uses them instead of CoreWLAN.
 ///
 /// Every string handled anywhere in this file — an SSID, a security mode, a stray line of
 /// output — is untrusted display/data content, nothing more. Real Wi-Fi network names include

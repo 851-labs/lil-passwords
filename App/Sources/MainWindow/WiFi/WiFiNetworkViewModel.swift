@@ -12,7 +12,7 @@ import LilPasswordsKit
 ///
 /// A revealed password is handed back to the caller and published nowhere by this class — it's
 /// held only by whichever `WiFiPasswordRowView` requested it, for exactly as long as that row
-/// shows it on screen. See `docs/adr/0005-wifi-passwords.md`.
+/// shows it on screen. See `docs/adr/0006-wifi-passwords.md`.
 @MainActor
 final class WiFiNetworkViewModel: ObservableObject {
   @Published private(set) var networks: [WiFiNetwork] = []

@@ -5,7 +5,7 @@ import LilPasswordsKit
 /// reveal-to-see password row, and a "Show Network QR Code" row — matching Apple Passwords' Wi-Fi
 /// detail card. Non-editable throughout (`DetailIdentityView.configure(isEditing: false)` always):
 /// unlike a saved password item, a Wi-Fi network's name/security/password all come from macOS
-/// itself (see `docs/adr/0005-wifi-passwords.md`), so there's nothing here for a person to type in
+/// itself (see `docs/adr/0006-wifi-passwords.md`), so there's nothing here for a person to type in
 /// and save back.
 ///
 /// Top-aligned under the toolbar, like `DetailViewController` (851-2444's rework to match

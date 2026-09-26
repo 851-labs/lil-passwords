@@ -14,7 +14,7 @@ public protocol WiFiNetworkListing: Sendable {
 }
 
 /// The real conformer: shells out to `networksetup` and `system_profiler`, both usable without
-/// admin rights or any restricted entitlement. See `docs/adr/0005-wifi-passwords.md` for why this
+/// admin rights or any restricted entitlement. See `docs/adr/0006-wifi-passwords.md` for why this
 /// app uses these CLI tools rather than CoreWLAN.
 public struct SystemWiFiNetworkListing: WiFiNetworkListing {
   private let runner: any WiFiSystemCommandRunning

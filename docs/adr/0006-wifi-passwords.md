@@ -1,4 +1,4 @@
-# 0005. Wi-Fi passwords
+# 0006. Wi-Fi passwords
 
 - Status: Accepted
 - Related: [851-2444](https://linear.app/851/issue/851-2444)

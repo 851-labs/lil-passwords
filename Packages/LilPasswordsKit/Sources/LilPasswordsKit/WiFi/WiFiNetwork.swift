@@ -1,6 +1,6 @@
 import Foundation
 
-/// A Wi-Fi network this Mac already knows about, per `docs/adr/0005-wifi-passwords.md` — either
+/// A Wi-Fi network this Mac already knows about, per `docs/adr/0006-wifi-passwords.md` — either
 /// because it's one of the networks macOS remembers joining (`networksetup
 /// -listpreferredwirelessnetworks`), or the one it's currently associated with
 /// (`system_profiler SPAirPortDataType`, when that's reliably available).

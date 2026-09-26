@@ -8,7 +8,7 @@ protocol WiFiListViewControllerDelegate: AnyObject {
 }
 
 /// The Wi-Fi category's list column: known networks reported by macOS (see
-/// `docs/adr/0005-wifi-passwords.md` for where that list comes from), each showing its security
+/// `docs/adr/0006-wifi-passwords.md` for where that list comes from), each showing its security
 /// type and whether it's the network this Mac is presently on. There's deliberately no "+" add
 /// button here the way ``CodesViewController``'s header bar has one — this list only ever reflects
 /// networks macOS itself already knows about, not ones a person adds inside this app.

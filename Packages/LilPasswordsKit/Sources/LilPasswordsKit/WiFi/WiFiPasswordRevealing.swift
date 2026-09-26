@@ -4,7 +4,7 @@ import Foundation
 public enum WiFiPasswordRevealError: Error, Sendable, Equatable {
   /// No saved password for this SSID in the System keychain. Maps `security
   /// find-generic-password`'s exit code 44, confirmed empirically against a real Mac — see
-  /// `docs/adr/0005-wifi-passwords.md`.
+  /// `docs/adr/0006-wifi-passwords.md`.
   case notFound
 
   /// The admin-authentication prompt was cancelled or denied, or `security` failed for any other
@@ -34,7 +34,7 @@ public protocol WiFiPasswordRevealing: Sendable {
 
 /// The real conformer: shells out to `security find-generic-password`, scoped explicitly to the
 /// System keychain, which is what triggers macOS's own admin-authentication dialog for an
-/// `"AirPort network password"` item. See `docs/adr/0005-wifi-passwords.md` for why this app uses
+/// `"AirPort network password"` item. See `docs/adr/0006-wifi-passwords.md` for why this app uses
 /// the `security` CLI (Authorization Services under the hood) rather than calling `SecItemCopyMatching`
 /// directly.
 public struct SystemWiFiPasswordRevealing: WiFiPasswordRevealing {

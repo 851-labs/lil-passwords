@@ -9,7 +9,7 @@ import LilPasswordsKit
 ///
 /// The revealed password is held only by this view, only in memory, for exactly as long as it's
 /// displayed — never written to the vault, a log, or disk, and re-masking (tapping reveal again)
-/// discards it outright rather than caching it for next time. See `docs/adr/0005-wifi-passwords.md`.
+/// discards it outright rather than caching it for next time. See `docs/adr/0006-wifi-passwords.md`.
 @MainActor
 final class WiFiPasswordRowView: NSView {
   /// Set by the owning view controller to `{ try await viewModel.revealPassword(for: network) }`.
