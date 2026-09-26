@@ -1,12 +1,11 @@
 import AppKit
 import LilPasswordsKit
 
-/// The entry point for "Generate New Recovery Key…": authenticate, confirm that the current
-/// recovery key will stop working, ask the helper to rotate it, then show the same "save your
-/// recovery key" sheet `RecoveryKitFlow` shows right after vault creation.
-///
-/// TODO(851-2462): this lives in the File menu for now, not Settings → Security, because PR #23
-/// (rebuilding Settings as grouped forms) is still open. Move it there once that lands.
+/// The entry point for "Generate New Recovery Key…" (a row in Settings → Security, since PR #23's
+/// grouped-forms Settings rewrite landed — see `SecuritySettingsViewController`): authenticate,
+/// confirm that the current recovery key will stop working, ask the helper to rotate it, then
+/// show the same "save your recovery key" sheet `RecoveryKitFlow` shows right after vault
+/// creation.
 ///
 /// Mirrors `ExportFlow`'s shape — authenticate before anything else is even visible, confirm the
 /// consequence, then act — and, like `ExportFlow`, authenticates via `DeviceAuthenticating` (a

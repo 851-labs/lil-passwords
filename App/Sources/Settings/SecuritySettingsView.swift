@@ -1,12 +1,20 @@
 import LilPasswordsKit
 import SwiftUI
 
-/// Settings → Security: auto-lock timing and clipboard-clearing timing.
+/// Settings → Security: auto-lock timing, clipboard-clearing timing, and recovery-key rotation.
 ///
-/// This tab only edits the stored preference; the actual lock timer (851-2411) and clipboard
-/// clearing (851-2423) read `AppSettings` themselves and aren't implemented yet.
+/// The auto-lock/clipboard sections only edit the stored preference; the actual lock timer
+/// (851-2411) and clipboard clearing (851-2423) read `AppSettings` themselves and aren't
+/// implemented yet.
 struct SecuritySettingsView: View {
   @ObservedObject var settings: ObservableAppSettings
+
+  /// 851-2462: generating a new recovery key needs an `LAContext` authentication prompt and a
+  /// couple of AppKit sheets (`RegenerateRecoveryKeyFlow.present(agentClient:over:)`) — neither of
+  /// which this SwiftUI view has any business owning itself. `SecuritySettingsViewController`
+  /// supplies this closure and drives the actual flow, the same way it owns the `AgentClient`/
+  /// `NSWindow` that flow needs.
+  var onGenerateNewRecoveryKey: () -> Void
 
   var body: some View {
     Form {
@@ -30,6 +38,15 @@ struct SecuritySettingsView: View {
         }
       } footer: {
         Text("Copied passwords and verification codes are removed from the clipboard automatically.")
+      }
+
+      Section {
+        Button("Generate New Recovery Key…", action: onGenerateNewRecoveryKey)
+      } footer: {
+        Text(
+          "Your current recovery key will stop working immediately, and you'll be shown a new one to save. "
+            + "Do this if you ever suspect someone else has seen your existing key."
+        )
       }
     }
     .formStyle(.grouped)

@@ -94,15 +94,6 @@ enum MainMenu {
       keyEquivalent: ""
     )
     menu.addItem(.separator())
-    // TODO(851-2462): move this to Settings → Security once PR #23 (rebuilding Settings as
-    // grouped forms) lands — it lives here in the File menu only until that Settings surface
-    // exists to host it.
-    menu.addItem(
-      withTitle: "Generate New Recovery Key…",
-      action: #selector(AppDelegate.generateNewRecoveryKey(_:)),
-      keyEquivalent: ""
-    )
-    menu.addItem(.separator())
     menu.addItem(withTitle: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
 
     return menu

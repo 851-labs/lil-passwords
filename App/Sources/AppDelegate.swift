@@ -14,9 +14,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   // there's no correctness requirement that it be the same `AgentClient` (a second connection to
   // the same Mach service works fine), but reusing one avoids the helper seeing a bursty extra
   // connect/disconnect on every quit.
-  // Not `private`: `AppDelegate+MenuActions.swift` (851-2410's CSV import/export actions, and
-  // 851-2462's recovery-key regeneration) reads this from a separate file in the same module —
-  // `internal` (the default) is as narrow as access control gets for a `let` and still allow that.
+  // Not `private`: `AppDelegate+MenuActions.swift` (851-2410's CSV import/export actions) reads
+  // this from a separate file in the same module — `internal` (the default) is as narrow as
+  // access control gets for a `let` and still allow that. (851-2462's recovery-key regeneration
+  // used to read it too, back when it lived in the File menu; it's since moved to Settings →
+  // Security, which constructs its own `AgentClient` instead — see
+  // `SecuritySettingsViewController`.)
   let agentClient = AgentClient()
   private(set) var mainWindowController: MainWindowController?
   private var menuBarExtraController: MenuBarExtraController?
