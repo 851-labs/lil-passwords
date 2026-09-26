@@ -77,9 +77,18 @@ struct AgentsSettingsView: View {
             )
               + String(localized: "to be able to add, change, or delete passwords, not just read them.")
           )
+          // Same `String(localized:)`-per-fragment pattern as the footer text above (851-2466) —
+          // `Text("a" + "b")` type-infers the concatenation to `String`, not `LocalizedStringKey`,
+          // so it would silently stop auto-localizing despite looking identical on screen.
           Text(
-            "\"Only Selected Passwords\" limits agents to items allowed individually (from the item list's "
-              + "context menu) or by group, below. \"Ask Every Time\" requires Touch ID approval for every request."
+            String(
+              localized:
+                "\"Only Selected Passwords\" limits agents to items allowed individually (from the item list's "
+            )
+              + String(
+                localized:
+                  "context menu) or by group, below. \"Ask Every Time\" requires Touch ID approval for every request."
+              )
           )
         }
       }
@@ -90,9 +99,13 @@ struct AgentsSettingsView: View {
         } header: {
           Text("Allowed Passwords")
         } footer: {
+          // Same `String(localized:)`-per-fragment pattern as above (851-2466).
           Text(
-            "Allow an individual password from its context menu in the main list. A group allowed here covers "
-              + "every password in it, now and in the future."
+            String(
+              localized:
+                "Allow an individual password from its context menu in the main list. A group allowed here covers "
+            )
+              + String(localized: "every password in it, now and in the future.")
           )
         }
       }
