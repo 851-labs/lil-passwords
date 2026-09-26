@@ -32,7 +32,7 @@ jobs:
 
       - name: Check generated project is up to date
         run: |
-          xcodegen generate
+          make project
           git diff --exit-code -- LilPasswords.xcodeproj || {
             echo "::error::LilPasswords.xcodeproj is out of date. Run 'make project' and commit the result."
             exit 1
