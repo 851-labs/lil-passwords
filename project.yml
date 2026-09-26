@@ -45,7 +45,7 @@ targets:
       - package: Sparkle
       # Both the agent and the CLI are secondary tools, not the app's own
       # executable, so both embed under Contents/Helpers rather than
-      # alongside "Lil Passwords" in Contents/MacOS. They share one
+      # alongside "lil passwords" in Contents/MacOS. They share one
       # destination/subpath deliberately: XcodeGen groups embedded
       # dependencies into one PBXCopyFilesBuildPhase per unique
       # (destination, subpath) pair, and two phases both named "Embed
@@ -67,8 +67,8 @@ targets:
     info:
       path: App/Info.plist
       properties:
-        CFBundleDisplayName: Lil Passwords
-        CFBundleName: Lil Passwords
+        CFBundleDisplayName: lil passwords
+        CFBundleName: lil passwords
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.utilities
@@ -84,7 +84,7 @@ targets:
         SUScheduledCheckInterval: 86400
     settings:
       base:
-        PRODUCT_NAME: Lil Passwords
+        PRODUCT_NAME: lil passwords
         PRODUCT_BUNDLE_IDENTIFIER: com.851labs.lilpasswords
         CODE_SIGN_ENTITLEMENTS: Config/Entitlements/App.entitlements
   LilPasswordsAgent:

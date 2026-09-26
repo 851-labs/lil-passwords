@@ -24,7 +24,7 @@ private let testCaller = CallerIdentity(pid: 1, processPath: "/usr/bin/test", pa
 /// `testCaller`, with no `bundleIdentifier` at all, relies on instead).
 private let appCaller = CallerIdentity(
   pid: 2,
-  processPath: "/Applications/Lil Passwords.app/Contents/MacOS/Lil Passwords",
+  processPath: "/Applications/lil passwords.app/Contents/MacOS/lil passwords",
   parentProcessName: nil,
   bundleIdentifier: AgentConnectionSecurity.PeerIdentifier.app.rawValue
 )

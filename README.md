@@ -12,7 +12,7 @@ A lil clone of Apple Passwords for macOS. It includes a local CLI (`lilpw`) and 
 
 | Path | What |
 | --- | --- |
-| `App/` | Lil Passwords.app (AppKit) |
+| `App/` | lil passwords.app (AppKit) |
 | `Agent/` | `LilPasswordsAgent`, the login-item helper that owns the unlocked vault and serves XPC |
 | `CLI/` | `lilpw`, the command-line tool and MCP server |
 | `Packages/LilPasswordsKit/` | Shared core: model, vault, crypto, TOTP, generator |

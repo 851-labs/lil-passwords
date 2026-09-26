@@ -180,7 +180,7 @@ public enum AgentError: Error, Sendable, Codable, Equatable, CustomStringConvert
     case .unsupportedProtocolVersion(let requested, let supported):
       return "unsupported agent protocol version \(requested) (this helper supports \(supported))"
     case .callerNotAuthorized:
-      return "this operation is only available to Lil Passwords itself"
+      return "this operation is only available to lil passwords itself"
     case .internal(let message):
       return message
     }

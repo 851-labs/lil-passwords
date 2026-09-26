@@ -72,7 +72,7 @@ enum SidebarCategory: String, CaseIterable, Identifiable, Hashable, Sendable {
     case .passkeys: "Passkeys you save will appear here."
     case .codes: "Verification codes you save will appear here."
     case .wifi: "Wi-Fi networks you save will appear here."
-    case .security: "Lil Passwords will let you know about weak, reused, or leaked passwords."
+    case .security: "lil passwords will let you know about weak, reused, or leaked passwords."
     case .deleted: "Items you delete will appear here for 30 days."
     }
   }

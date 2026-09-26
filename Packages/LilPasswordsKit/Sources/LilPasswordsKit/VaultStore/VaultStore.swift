@@ -12,7 +12,7 @@ public actor VaultStore: VaultStoring {
   private let darwinNotificationName: String
   private var darwinObserver: DarwinNotificationObserver?
 
-  /// The default database location: `~/Library/Application Support/Lil Passwords/vault.sqlite`,
+  /// The default database location: `~/Library/Application Support/lil passwords/vault.sqlite`,
   /// as the ticket specifies. Once the app-group container exists (851-2402/851-2427), the app
   /// and `LilPasswordsAgent` are expected to pass an app-group URL here instead — this default is
   /// only reached when no explicit `databaseURL` is given.
@@ -25,7 +25,7 @@ public actor VaultStore: VaultStoring {
     )
     return
       appSupport
-      .appendingPathComponent("Lil Passwords", isDirectory: true)
+      .appendingPathComponent("lil passwords", isDirectory: true)
       .appendingPathComponent("vault.sqlite", isDirectory: false)
   }
 

@@ -7,7 +7,7 @@ import Testing
 
 @Suite struct RecoveryKitDocumentTests {
   private func makeContent(
-    appName: String = "Lil Passwords",
+    appName: String = "lil passwords",
     displayKey: String = VaultCrypto.RecoveryKey.generate().displayString,
     createdAt: Date = Date(timeIntervalSince1970: 1_700_000_000)
   ) -> RecoveryKitDocument.Content {
@@ -24,14 +24,14 @@ import Testing
   }
 
   @Test func renderedPageIncludesTheAppNameAndRecoveryKey() throws {
-    let content = makeContent(appName: "Lil Passwords", displayKey: "4S9K-D2XQ-7RTN-VBWC-XM3P")
+    let content = makeContent(appName: "lil passwords", displayKey: "4S9K-D2XQ-7RTN-VBWC-XM3P")
     let data = RecoveryKitDocument.renderPDF(content)
 
     let document = try #require(PDFDocument(data: data))
     let page = try #require(document.page(at: 0))
     let text = try #require(page.string)
 
-    #expect(text.contains("Lil Passwords"))
+    #expect(text.contains("lil passwords"))
     #expect(text.contains("4S9K-D2XQ-7RTN-VBWC-XM3P"))
     // The plain-English "anyone with this key and your vault file" warning the ticket asks for.
     #expect(text.localizedCaseInsensitiveContains("vault file"))

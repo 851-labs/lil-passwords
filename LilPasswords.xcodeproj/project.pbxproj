@@ -496,7 +496,7 @@
 					"@executable_path/../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.851labs.lilpasswords;
-				PRODUCT_NAME = "Lil Passwords";
+				PRODUCT_NAME = "lil passwords";
 				SDKROOT = macosx;
 			};
 			name = Release;
@@ -591,7 +591,7 @@
 					"@executable_path/../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.851labs.lilpasswords;
-				PRODUCT_NAME = "Lil Passwords";
+				PRODUCT_NAME = "lil passwords";
 				SDKROOT = macosx;
 			};
 			name = Debug;

@@ -16,7 +16,7 @@ cd "$RELEASE_ROOT"
 
 PROJECT_FILE="LilPasswords.xcodeproj"
 SCHEME="LilPasswords"
-APP_NAME="Lil Passwords"
+APP_NAME="lil passwords"
 
 # Reuses the same derived data root as `make build` (see Makefile) so a
 # release build benefits from the same module cache; Debug and Release

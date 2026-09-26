@@ -59,8 +59,8 @@ without any of this).
 
 ```sh
 make project && make build
-"build/Build/Products/Debug/Lil Passwords.app/Contents/Helpers/lilpw" status
-"build/Build/Products/Debug/Lil Passwords.app/Contents/Helpers/lilpw" list --json
+"build/Build/Products/Debug/lil passwords.app/Contents/Helpers/lilpw" status
+"build/Build/Products/Debug/lil passwords.app/Contents/Helpers/lilpw" list --json
 ```
 
 **Caveat as of 851-2430/851-2431**: `AppDelegate` doesn't call

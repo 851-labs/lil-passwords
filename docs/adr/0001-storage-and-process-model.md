@@ -177,7 +177,7 @@ sandboxed app shares files with its sandboxed extensions, each normally
 isolated in its own container). We're not sandboxing (see Context), so it buys
 nothing here and would cost another restricted, profile-gated entitlement
 (`com.apple.security.application-groups`) for no benefit. **Recommendation:**
-a plain directory, `~/Library/Application Support/Lil Passwords/`, holding
+a plain directory, `~/Library/Application Support/lil passwords/`, holding
 `vault.sqlite`. The app and the helper both run as the same local user, so
 normal POSIX file permissions are sufficient — no entitlement, no profile, and
 it works from an ad-hoc/unsigned dev build too (matters for the "local dev
@@ -216,7 +216,7 @@ design there's exactly one writer (the helper) and N read-only observers.
 3. **`lilpw` (and `lilpw mcp`) always go through XPC to the helper.** It never
    touches the Keychain or the vault DB file directly — structurally, not just
    by convention, since it can never hold a restricted entitlement.
-4. **The vault DB lives at `~/Library/Application Support/Lil Passwords/vault.sqlite`,**
+4. **The vault DB lives at `~/Library/Application Support/lil passwords/vault.sqlite`,**
    no app group container, no App Sandbox.
 5. **Cross-process change notification uses Darwin notify**
    (`com.851labs.lilpasswords.vaultChanged`), posted by the helper after every
