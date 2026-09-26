@@ -11,6 +11,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     controller.showWindow(nil)
     mainWindowController = controller
     NSApp.activate(ignoringOtherApps: true)
+
+    #if DEBUG
+      RecoveryKitDebugMenu.install { [weak self] in self?.mainWindowController?.window }
+      if let tophatDir = ProcessInfo.processInfo.environment["LIL_PASSWORDS_TOPHAT_DIR"] {
+        RecoveryKitDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
+      }
+    #endif
   }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
