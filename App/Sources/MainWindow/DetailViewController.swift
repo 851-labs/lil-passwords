@@ -114,6 +114,19 @@ final class DetailViewController: NSViewController {
     reloadContent()
   }
 
+  /// Called by `MainSplitViewController` when the item list's selection contains more than one
+  /// item — the detail pane has nothing per-item to show, so it falls back to the empty state.
+  func showMultipleSelection(count: Int) {
+    itemID = nil
+    draft = nil
+    websiteDrafts = []
+    isEditing = false
+
+    emptyStateView.configure(symbolName: "checkmark.circle.fill", title: "\(count) Items Selected", message: nil)
+    emptyStateView.isHidden = false
+    contentContainer.isHidden = true
+  }
+
   private func handleItemsChanged() {
     guard itemID != nil else { return }
     if item == nil {
