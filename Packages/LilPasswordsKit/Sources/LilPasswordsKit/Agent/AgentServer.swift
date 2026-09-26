@@ -138,7 +138,11 @@ public actor AgentServer {
     case .status, .unlock, .lock, .autoFillIdentities, .autoFillCredential:
       return true
     case .createVault, .rotateRecoveryKey, .getAgentSettings, .setAgentSettings, .list, .search, .getItem,
-      .createItem, .updateItem, .deleteItem, .generatePassword, .totpCode:
+      .createItem, .updateItem, .deleteItem, .generatePassword, .totpCode,
+      .pendingApprovals, .resolveApproval:
+      // 851-2445: approval management is an app-only concern (see `isAppCaller` gating elsewhere in
+      // this file) — AutoFill has no business seeing or resolving another caller's pending
+      // approvals, so it's refused here alongside the rest of the general vault surface.
       return false
     }
   }
@@ -375,7 +379,7 @@ public actor AgentServer {
     guard await vaultStore.isUnlocked else { throw AgentError.locked }
 
     // Both scope filtering and approval gating exempt the app's own connection — see
-    // `isAppCaller(_:)`'s documentation and docs/adr/0005-scoped-agent-access.md.
+    // `isAppCaller(_:)`'s documentation and docs/adr/0007-scoped-agent-access.md.
     let scoped = !isAppCaller(caller)
 
     if scoped, settings.accessScope == .askEveryTime, !request.isGeneratePassword {
@@ -401,7 +405,7 @@ public actor AgentServer {
     case .createItem(let item):
       try requireWriteAccess(for: caller)
       // Deliberately not auto-added to `allowedItemIDs` under `.selected` — see
-      // docs/adr/0005-scoped-agent-access.md's "No existence leak" section for why a write-capable
+      // docs/adr/0007-scoped-agent-access.md's "No existence leak" section for why a write-capable
       // agent must not be able to silently expand its own read scope.
       try await vaultStore.create(item)
       return .created(item)
@@ -498,7 +502,7 @@ public actor AgentServer {
   /// the `.ambiguous` check: a query matching two items where only one is allowed is resolved as a
   /// single unambiguous match (or `.notFound`, if the allowed one isn't among the matches), never
   /// `.ambiguous` — reporting "more than one item matched" would itself leak that a second,
-  /// invisible item exists. See docs/adr/0005-scoped-agent-access.md's "No existence leak" section.
+  /// invisible item exists. See docs/adr/0007-scoped-agent-access.md's "No existence leak" section.
   private func resolveVisible(_ reference: ItemReference, settings: AgentSettings, scoped: Bool) async throws
     -> PasswordItem
   {
@@ -526,7 +530,7 @@ public actor AgentServer {
   /// a failure here block the prompt — an unresolvable title just means a less specific dialog, not
   /// a denied request), and asks `approvalCenter` for a decision.
   ///
-  /// See docs/adr/0005-scoped-agent-access.md's "Approval flow" section for the full design.
+  /// See docs/adr/0007-scoped-agent-access.md's "Approval flow" section for the full design.
   private func requestApproval(for request: AgentRequest, caller: CallerIdentity) async -> ApprovalOutcome {
     let identity = CallerIdentityResolver.resolveTopLevelAgentIdentity(pid: caller.pid)
     let agentDescription = (identity.executablePath as NSString).lastPathComponent
@@ -552,6 +556,8 @@ public actor AgentServer {
     case .updateItem: return "wants to edit the password for"
     case .deleteItem: return "wants to delete the password for"
     case .totpCode: return "wants to read the verification code for"
+    case .autoFillIdentities: return "wants to list your passwords"
+    case .autoFillCredential: return "wants to read the password for"
     case .generatePassword, .status, .createVault, .unlock, .lock, .getAgentSettings, .setAgentSettings,
       .rotateRecoveryKey, .pendingApprovals, .resolveApproval:
       return "wants access to your passwords"

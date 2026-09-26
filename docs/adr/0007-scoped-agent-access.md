@@ -1,4 +1,4 @@
-# 0005. Scoped agent access + Touch ID approvals
+# 0007. Scoped agent access + Touch ID approvals
 
 - Status: Accepted
 - Related: [851-2445](https://linear.app/851/issue/851-2445) (this ticket), [851-2428](https://linear.app/851/issue/851-2428) (agent access toggle, `AgentSettings`), [851-2429](https://linear.app/851/issue/851-2429) (access log), [851-2433](https://linear.app/851/issue/851-2433) (write-access toggle), [851-2430](https://linear.app/851/issue/851-2430) (`lilpass` exit codes), `docs/adr/0001-storage-and-process-model.md` (storage/process model, especially section (e) on why `AgentSettings` lives in a helper-owned Keychain item)

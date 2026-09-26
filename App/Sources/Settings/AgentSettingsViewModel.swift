@@ -43,7 +43,7 @@ final class AgentSettingsViewModel: ObservableObject {
   }
 
   /// Settings → Agents → the "All passwords" / "Only selected passwords" / "Ask every time" picker
-  /// (851-2445) — see `AgentAccessScope`'s documentation and `docs/adr/0005-scoped-agent-access.md`
+  /// (851-2445) — see `AgentAccessScope`'s documentation and `docs/adr/0007-scoped-agent-access.md`
   /// for the three modes' semantics. Mutually exclusive, not stackable with the toggles above.
   @Published var accessScope: AgentAccessScope = .allPasswords {
     didSet {

@@ -1117,7 +1117,7 @@ private let autoFillCaller = CallerIdentity(
 
   /// `.createItem` is never auto-added to the allowlist — a write-capable, `.selected`-scoped agent
   /// must not be able to silently expand its own read scope by creating a new item and expecting to
-  /// see it again later. See docs/adr/0005-scoped-agent-access.md.
+  /// see it again later. See docs/adr/0007-scoped-agent-access.md.
   @Test func selectedScopeCreatedItemIsNotAutomaticallyReadableByTheCreatingAgent() async throws {
     let settingsStore = scopedSettingsStore(accessScope: .selected, allowedItemIDs: [])
     let (server, _) = try await makeServer(agentSettingsStore: settingsStore)

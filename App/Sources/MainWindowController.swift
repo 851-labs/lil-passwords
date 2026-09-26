@@ -219,7 +219,7 @@ final class MainWindowController: NSWindowController {
   ///
   /// Not `private`: `AppDelegate` (851-2445) reuses this exact seam for `AgentApprovalController`'s
   /// Touch ID-gated approval dialog, rather than duplicating the `#if DEBUG`/`LILPASSWORDS_FAKE_AUTH`
-  /// check a second time — see `docs/adr/0005-scoped-agent-access.md`'s "Approval flow" section,
+  /// check a second time — see `docs/adr/0007-scoped-agent-access.md`'s "Approval flow" section,
   /// which explicitly calls for reusing this seam.
   static func makeAuthenticator() -> any VaultAuthenticating {
     #if DEBUG

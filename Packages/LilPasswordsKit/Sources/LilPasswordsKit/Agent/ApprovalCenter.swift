@@ -25,7 +25,7 @@ public enum ApprovalOutcome: Sendable, Codable, Equatable {
 ///
 /// Deliberately cheap and idempotent to call even when the app is already running: bringing it to
 /// the foreground is the desired outcome of a Touch ID-style prompt either way (see
-/// docs/adr/0005-scoped-agent-access.md's "Approval flow" section for why this avoids needing any
+/// docs/adr/0007-scoped-agent-access.md's "Approval flow" section for why this avoids needing any
 /// "is a connection already open" tracking).
 public protocol ApprovalAppLaunching: Sendable {
   func launchAppIfNeeded()
@@ -63,7 +63,7 @@ public struct NoOpApprovalAppLauncher: ApprovalAppLaunching {
 /// and suspends at the `await`, but that suspension never blocks this actor as a whole — actors are
 /// reentrant across `await` — so the app's own, concurrent ``pendingApprovals()``/``resolve(id:decision:)``
 /// calls (arriving as ordinary forward XPC requests on the very same `AgentServer`) are serviced
-/// while the original request is still parked. See docs/adr/0005-scoped-agent-access.md's
+/// while the original request is still parked. See docs/adr/0007-scoped-agent-access.md's
 /// "Approval flow" section for the full design, including why this reuses the existing XPC channel
 /// instead of a new reverse connection.
 public actor ApprovalCenter {

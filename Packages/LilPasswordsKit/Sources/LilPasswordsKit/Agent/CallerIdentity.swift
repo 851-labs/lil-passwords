@@ -75,7 +75,7 @@ extension CallerIdentity {
 /// top-level agent in a caller's process chain, not its pid (pids are reused, and a single agent
 /// invocation is usually a fresh short-lived process per call — see
 /// `CallerIdentityResolver.resolveTopLevelAgentIdentity(pid:maxDepth:)` and
-/// docs/adr/0005-scoped-agent-access.md for why).
+/// docs/adr/0007-scoped-agent-access.md for why).
 public struct AgentGrantIdentity: Sendable, Equatable, Hashable {
   /// The top-level agent's own executable path, or a best-effort `"name:..."`/`"pid:..."`
   /// placeholder if even that couldn't be resolved (the process had already exited).
@@ -83,7 +83,7 @@ public struct AgentGrantIdentity: Sendable, Equatable, Hashable {
 
   /// The top-level agent's code-signing identifier, if it has one — `nil` for unsigned/ad-hoc
   /// local scripts and most MCP servers, the common case. See ``executablePath``'s documentation
-  /// and docs/adr/0005-scoped-agent-access.md for why an absent identifier here is where this
+  /// and docs/adr/0007-scoped-agent-access.md for why an absent identifier here is where this
   /// mechanism's spoofing risk concentrates.
   public var codeSigningIdentifier: String?
 
@@ -245,7 +245,7 @@ public enum CallerIdentityResolver {
   /// display name.
   ///
   /// **This is an attribution/UX mechanism, not a hard security boundary** — see
-  /// docs/adr/0005-scoped-agent-access.md's "Agent identity for grants" section for the full
+  /// docs/adr/0007-scoped-agent-access.md's "Agent identity for grants" section for the full
   /// write-up of what a same-user process can and can't spoof by mimicking a path or chain shape.
   /// `ApprovalCenter` must never use this as the sole gate on anything more consequential than
   /// skipping a redundant approval prompt for 15 minutes.

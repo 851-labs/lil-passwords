@@ -8,7 +8,7 @@ import LilPasswordsKit
 /// Wired the same way `MainWindowController.startObservingLockState()` wires up `LockStateObserver`:
 /// a payload-less Darwin notification (`AgentApprovalNotifications`) wakes this controller, which
 /// then makes an ordinary forward XPC call (`AgentClient.pendingApprovals()`) to find out what's
-/// actually waiting — see docs/adr/0005-scoped-agent-access.md's "Approval flow" section for why the
+/// actually waiting — see docs/adr/0007-scoped-agent-access.md's "Approval flow" section for why the
 /// notification itself carries no payload.
 @MainActor
 final class AgentApprovalController {

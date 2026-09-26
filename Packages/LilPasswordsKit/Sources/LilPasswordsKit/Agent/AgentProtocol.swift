@@ -124,7 +124,7 @@ public enum AgentRequest: Sendable, Codable, Equatable {
   /// The 851-2445 "ask every time" approval queue: every request currently parked in
   /// `ApprovalCenter` awaiting a decision. Restricted to the app itself, same as
   /// ``getAgentSettings``/``setAgentSettings``, and — like those two — never reaches the access
-  /// log; see docs/adr/0005-scoped-agent-access.md.
+  /// log; see docs/adr/0007-scoped-agent-access.md.
   case pendingApprovals
 
   /// Answers one pending approval (by the id `PendingApprovalSummary.id` handed back from
@@ -136,7 +136,7 @@ public enum AgentRequest: Sendable, Codable, Equatable {
   /// from 851-2445's `AgentAccessScope.askEveryTime` approval gate, since it never reads or writes
   /// any existing item and so has nothing an approval dialog could meaningfully describe (there's
   /// no item title, and "wants to generate a password" isn't a decision worth interrupting someone
-  /// for). See docs/adr/0005-scoped-agent-access.md.
+  /// for). See docs/adr/0007-scoped-agent-access.md.
   public var isGeneratePassword: Bool {
     if case .generatePassword = self { return true }
     return false
@@ -165,7 +165,7 @@ public struct CredentialIdentity: Sendable, Codable, Equatable, Identifiable {
 /// How Settings → Agents' 851-2445 access-mode picker currently gates non-app callers
 /// (`lilpass`/MCP) — mutually exclusive, unlike ``AgentSettings/agentAccessEnabled``/
 /// ``AgentSettings/agentWriteAccessEnabled``, which are independent flags. See
-/// docs/adr/0005-scoped-agent-access.md for the full design, including why `.selected` and
+/// docs/adr/0007-scoped-agent-access.md for the full design, including why `.selected` and
 /// `.askEveryTime` are alternatives rather than stackable.
 public enum AgentAccessScope: String, Sendable, Codable, Equatable, CaseIterable {
   /// Today's (pre-851-2445) behavior: every non-app caller with ``AgentSettings/agentAccessEnabled``
@@ -176,12 +176,12 @@ public enum AgentAccessScope: String, Sendable, Codable, Equatable, CaseIterable
   /// Only items whose id is in ``AgentSettings/allowedItemIDs`` or whose group is in
   /// ``AgentSettings/allowedGroups`` are visible to a non-app caller; everything else behaves as
   /// `AgentError.notFound`, never a distinguishable "forbidden" — see
-  /// docs/adr/0005-scoped-agent-access.md's "No existence leak" section.
+  /// docs/adr/0007-scoped-agent-access.md's "No existence leak" section.
   case selected
 
   /// Every vault operation except ``AgentRequest/generatePassword(_:)`` blocks on a live,
   /// `LAContext`-gated approval from the app before proceeding — see ``ApprovalDecision``,
-  /// ``PendingApprovalSummary``, and docs/adr/0005-scoped-agent-access.md's "Approval flow"
+  /// ``PendingApprovalSummary``, and docs/adr/0007-scoped-agent-access.md's "Approval flow"
   /// section.
   case askEveryTime
 
@@ -206,7 +206,7 @@ public enum ApprovalDecision: Sendable, Codable, Equatable {
   /// Allow just the one request that's currently parked awaiting this decision.
   case allowOnce
 
-  /// Allow this request, and — per docs/adr/0005-scoped-agent-access.md's "Agent identity for
+  /// Allow this request, and — per docs/adr/0007-scoped-agent-access.md's "Agent identity for
   /// grants" — skip the prompt for any further request from the same top-level agent
   /// (`AgentGrantIdentity`) for the next 15 minutes.
   case allowFor15Minutes
@@ -299,7 +299,7 @@ public struct AgentSettings: Sendable, Codable, Equatable {
   public var accessScope: AgentAccessScope
 
   /// The allowlist ``AgentAccessScope/selected`` filters against, by item id. Ignored by the other
-  /// two scopes. See docs/adr/0005-scoped-agent-access.md's "No existence leak" section.
+  /// two scopes. See docs/adr/0007-scoped-agent-access.md's "No existence leak" section.
   public var allowedItemIDs: Set<UUID>
 
   /// The allowlist ``AgentAccessScope/selected`` filters against, by `PasswordItem.group`. Ignored
@@ -481,7 +481,7 @@ public enum AgentError: Error, Sendable, Codable, Equatable, CustomStringConvert
 
   /// The caller was subject to ``AgentAccessScope/askEveryTime`` and either the person explicitly
   /// denied the request, or nobody responded to the approval prompt within the ~60 second timeout
-  /// — the two are indistinguishable by design; see docs/adr/0005-scoped-agent-access.md's
+  /// — the two are indistinguishable by design; see docs/adr/0007-scoped-agent-access.md's
   /// "Approval flow" section. Maps to `LilpassExitCode.approvalDeniedOrTimedOut` (9).
   case approvalDeniedOrTimedOut
 
