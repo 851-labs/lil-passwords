@@ -13,7 +13,7 @@ protocol MenuBarListViewControllerDelegate: AnyObject {
 /// then fuzzy search results — matching Apple Passwords' own menu bar extra. Built the same way
 /// as `ItemListViewController` (851-2417): an `NSTableView` over a small `Row` enum recomputed on
 /// every relevant change, section headers reusing `SectionHeaderCellView`, item rows reusing
-/// `ItemRowCellView` and `PasswordItem.searchScore(for:)` for ranking.
+/// `CredentialRowView` and `PasswordItem.searchScore(for:)` for ranking.
 @MainActor
 final class MenuBarListViewController: NSViewController {
   private enum Row {
@@ -256,7 +256,7 @@ extension MenuBarListViewController: NSTableViewDelegate {
       cell.configure(title: title)
       return cell
     case .item(let item):
-      let cell = ItemRowCellView.dequeue(from: tableView, owner: self)
+      let cell = CredentialRowView.dequeue(from: tableView, owner: self)
       // The menu bar extra's list doesn't hide separators around the selection the way the main
       // window's item list does (851-2463) — it always shows them.
       cell.configure(with: item, hidesSeparator: false)

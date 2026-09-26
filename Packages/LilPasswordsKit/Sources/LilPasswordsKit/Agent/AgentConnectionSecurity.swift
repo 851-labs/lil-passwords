@@ -19,6 +19,10 @@ public enum AgentConnectionSecurity {
     case app = "com.851labs.lilpasswords"
     case cli = "com.851labs.lilpasswords.cli"
     case agent = "com.851labs.lilpasswords.agent"
+    /// 851-2441: the AutoFill credential provider extension (`AutoFillExtension` in `project.yml`,
+    /// embedded at `Contents/PlugIns`). A third, narrower peer — see `AgentServer.isAutoFillCaller(_:)`
+    /// and its `isRequestPermitted(_:for:)` gate for exactly what this identifier is trusted for.
+    case autoFill = "com.851labs.lilpasswords.autofill"
   }
 
   /// The validation `NSXPCListenerDelegate`/`AgentClient` should apply to a connection.

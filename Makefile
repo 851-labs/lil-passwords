@@ -10,7 +10,7 @@ test:
 	swift test --package-path Packages/LilPasswordsKit
 
 format:
-	xcrun swift-format format --in-place --recursive App Agent CLI Packages
+	xcrun swift-format format --in-place --recursive App Agent CLI AutoFillExtension Packages
 
 lint:
-	xcrun swift-format lint --strict --recursive App Agent CLI Packages
+	xcrun swift-format lint --strict --recursive App Agent CLI AutoFillExtension Packages

@@ -16,6 +16,12 @@ import Testing
     parentProcessName: "zsh",
     bundleIdentifier: AgentConnectionSecurity.PeerIdentifier.cli.rawValue
   )
+  private let autoFillCaller = CallerIdentity(
+    pid: 5,
+    processPath: "/Applications/lil passwords.app/Contents/PlugIns/AutoFill.appex/Contents/MacOS/AutoFill",
+    parentProcessName: nil,
+    bundleIdentifier: AgentConnectionSecurity.PeerIdentifier.autoFill.rawValue
+  )
 
   @Test func isAgentAccessEnabledReflectsTheSettingLive() async {
     let store = InMemoryAgentSettingsStore()
@@ -48,6 +54,27 @@ import Testing
 
     try? store.store(AgentSettings(agentAccessEnabled: true, keepAgentAccessAvailableWhileMacUnlocked: false))
     #expect(await policy.isAccessAllowed(for: appCaller) == true)
+  }
+
+  /// 851-2441: "treat it like the app for read access" — the AutoFill extension's own connection
+  /// is exempt from the 851-2428 toggle the same way the app's is, via a second, independent
+  /// closure parameter (not by folding it into `isAppCaller`, which would blur the two callers'
+  /// otherwise-distinct identities everywhere else `isAppCaller` is used).
+  @Test func autoFillCallerIsAlwaysExemptFromTheToggle() async {
+    let store = InMemoryAgentSettingsStore()
+    let policy = AgentSettingsAccessPolicy(store: store, isAppCaller: { _ in false }, isAutoFillCaller: { _ in true })
+
+    #expect(await policy.isAgentAccessEnabled() == false)
+    #expect(await policy.isAccessAllowed(for: autoFillCaller) == true)
+
+    try? store.store(AgentSettings(agentAccessEnabled: true, keepAgentAccessAvailableWhileMacUnlocked: false))
+    #expect(await policy.isAccessAllowed(for: autoFillCaller) == true)
+  }
+
+  @Test func defaultIsAutoFillCallerMatchesTheExtensionsVerifiedBundleIdentifierOnly() {
+    #expect(AgentSettingsAccessPolicy.defaultIsAutoFillCaller(autoFillCaller) == true)
+    #expect(AgentSettingsAccessPolicy.defaultIsAutoFillCaller(appCaller) == false)
+    #expect(AgentSettingsAccessPolicy.defaultIsAutoFillCaller(cliCaller) == false)
   }
 
   @Test func keepAgentAccessAvailableWhileMacUnlockedReflectsTheSettingLive() {

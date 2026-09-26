@@ -71,6 +71,14 @@ targets:
         copy:
           destination: wrapper
           subpath: Contents/Helpers
+      # 851-2441: an app extension embeds into Contents/PlugIns, not Contents/Helpers —
+      # `destination: plugins` is XcodeGen's name for that PBXCopyFilesBuildPhase dstSubfolderSpec,
+      # distinct from the `wrapper`/`Contents/Helpers` pair the two tool targets above share.
+      - target: AutoFillExtension
+        embed: true
+        codeSign: true
+        copy:
+          destination: plugins
     # 851-2465: `codeSign: true` above re-signs each embedded helper tool right after copying it
     # into Contents/Helpers, but that re-sign doesn't know about (and so discards) the `-i`
     # identifier `LilPasswordsAgent`/`lilpass`'s own `OTHER_CODE_SIGN_FLAGS` gave it — both bare
@@ -97,6 +105,22 @@ targets:
             --sign "$IDENTITY" --identifier com.851labs.lilpasswords.cli \
             --entitlements "$SRCROOT/Config/Entitlements/CLI.entitlements" \
             "$HELPERS/lilpass"
+          # 851-2441: the embed step's own "Code Sign On Copy" re-signs AutoFill.appex with a bare
+          # `codesign --sign -`, ad hoc and with no entitlements at all (confirmed: `codesign -dvv
+          # --entitlements :-` on the copied bundle showed none) — the same gap the two re-signs
+          # above exist to fix, just for an app extension instead of a bare tool. Re-sign it here,
+          # explicitly, with its real entitlements (Config/Entitlements/AutoFillExtension.entitlements)
+          # so a real Apple Development/Developer ID identity (once 851-2400 lands a provisioning
+          # profile) would seal them the same way this whole app is sealed — without this, even a
+          # correctly-provisioned build would silently ship an extension with no
+          # autofill-credential-provider/app-sandbox entitlements at all. `codesign` itself has no
+          # provisioning-profile check (that's an Xcode build-system/AMFI concern, not this tool's),
+          # so this succeeds today under ad-hoc signing exactly like the two re-signs above.
+          PLUGINS="$TARGET_BUILD_DIR/$WRAPPER_NAME/Contents/PlugIns"
+          codesign --force -o runtime --timestamp=none \
+            --sign "$IDENTITY" --identifier com.851labs.lilpasswords.autofill \
+            --entitlements "$SRCROOT/Config/Entitlements/AutoFillExtension.entitlements" \
+            "$PLUGINS/AutoFill.appex"
         basedOnDependencyAnalysis: false
     info:
       path: App/Info.plist
@@ -225,6 +249,56 @@ targets:
         # apply to it directly, but it gets the same treatment for consistency and so its identifier
         # doesn't depend solely on `OTHER_CODE_SIGN_FLAGS -i`.
         OTHER_LDFLAGS: -Wl,-sectcreate,__TEXT,__info_plist,$(SRCROOT)/CLI/Support/Info.plist
+  # 851-2441: the AutoFill credential provider extension. See
+  # docs/adr/0005-autofill-credential-provider.md and Config/Entitlements/AutoFillExtension.entitlements's
+  # own comments for the trust model and the provisioning-profile blocker (this target builds and
+  # embeds fine for CI, but can't actually register as a provider locally without a real profile).
+  AutoFillExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: AutoFillExtension/Sources
+        type: syncedFolder
+    dependencies:
+      - package: LilPasswordsKit
+    info:
+      path: AutoFillExtension/Support/Info.plist
+      properties:
+        CFBundleDisplayName: AutoFill
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.authentication-services-credential-provider-ui
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).CredentialProviderViewController
+    settings:
+      base:
+        # Deliberately "AutoFill", not e.g. "LilPasswordsAutoFill" — this is also what makes the
+        # access log's process-chain resolution (`CallerIdentityResolver`) render this caller as
+        # "AutoFill" for free, matching the ticket's "log it in the access log as AutoFill"
+        # requirement with no code of its own.
+        PRODUCT_NAME: AutoFill
+        PRODUCT_BUNDLE_IDENTIFIER: com.851labs.lilpasswords.autofill
+        CODE_SIGN_ENTITLEMENTS: Config/Entitlements/AutoFillExtension.entitlements
+        SKIP_INSTALL: YES
+        # 851-2441: Xcode's build system refuses to build ANY app extension target under
+        # CODE_SIGN_STYLE = Manual (Config/Base.xcconfig, shared by every target) without an
+        # embedded provisioning profile — "requires a provisioning profile. Enable development
+        # signing..." — regardless of identity, because
+        # `com.apple.developer.authentication-services.autofill-credential-provider` is a
+        # *restricted* entitlement (confirmed empirically; see
+        # Config/Entitlements/AutoFillExtension.entitlements and
+        # docs/adr/0005-autofill-credential-provider.md). No such profile exists until 851 Labs'
+        # Apple Developer Program team is set up (851-2400), so — per that ADR and the ticket's
+        # explicit "document rather than silently skip" instruction — this disables Xcode's own
+        # codesign step for just this one target's build, rather than dropping the entitlement.
+        # The plain `codesign` CLI invoked afterward (this target's `copy: destination: plugins,
+        # codeSign: true` embed step in the LilPasswords target, and the "re-sign embedded
+        # helpers" postBuildScript pattern already used for LilPasswordsAgent/lilpass) has no such
+        # profile requirement — it ad-hoc-signs the entitlements plist directly, same as every
+        # other target here — so `make build`/CI still produce a fully-embedded .appex. AMFI will
+        # still refuse to actually *load* it as a credential provider without a real profile; see
+        # the ADR for what that means for local tophat verification.
+        CODE_SIGNING_ALLOWED: NO
 schemes:
   LilPasswords:
     build:
@@ -232,6 +306,7 @@ schemes:
         LilPasswords: all
         LilPasswordsAgent: all
         lilpass: all
+        AutoFillExtension: all
     run:
       config: Debug
     test:

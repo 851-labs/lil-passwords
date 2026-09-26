@@ -36,6 +36,12 @@ final class MainWindowController: NSWindowController {
   /// of sync with each other.
   let lockCoordinator: LockCoordinator
   private var lockStateObserver: LockStateObserver?
+  // 851-2441: keeps `ASCredentialIdentityStore` in sync with the real, XPC-backed vault (not
+  // `dataSource`/`vaultStore` above, which is still the `InMemoryVaultStore` placeholder pending
+  // the item list's own move to the real agent connection — see that property's own comment) so
+  // Safari/system AutoFill can offer "lil passwords" as a source. See
+  // `CredentialIdentityStoreSyncCoordinator`'s own documentation for the full rationale.
+  private let credentialIdentitySyncCoordinator: CredentialIdentityStoreSyncCoordinator
   // 851-2465: consulted (never registered again here — `AppDelegate` already did that once at
   // launch) only to decide whether a helper-unreachable `UnlockFailure` should show the Login
   // Items hint, i.e. whether `.status` is currently `.requiresApproval`. Shared with `AppDelegate`
@@ -75,6 +81,7 @@ final class MainWindowController: NSWindowController {
       agent: MainWindowController.makeAgent(real: agentClient),
       authenticator: MainWindowController.makeAuthenticator()
     )
+    self.credentialIdentitySyncCoordinator = CredentialIdentityStoreSyncCoordinator(agentClient: agentClient)
 
     // `InMemoryVaultStore` is a real `VaultStoring` conformance (851-2404) — real crypto, real
     // CRUD/change-log semantics — just without a SQLite file or cross-process Darwin
@@ -172,6 +179,7 @@ final class MainWindowController: NSWindowController {
     }
 
     startObservingLockState()
+    credentialIdentitySyncCoordinator.start()
   }
 
   @available(*, unavailable)
@@ -305,6 +313,15 @@ final class MainWindowController: NSWindowController {
   }
 
   private func presentUnlockedContent() {
+    // 851-2441: unlocking doesn't itself rewrite the vault database, so it never posts the vault's
+    // own change notification — this is the "initial post-unlock load" trigger
+    // `CredentialIdentityStoreSyncCoordinator`'s own documentation describes, run unconditionally
+    // (not just the first time) since a re-lock/unlock cycle is exactly when the identity store
+    // could otherwise go stale relative to changes made while this process wasn't running.
+    Task { [credentialIdentitySyncCoordinator] in
+      await credentialIdentitySyncCoordinator.refresh()
+    }
+
     guard window?.contentViewController !== splitViewController else { return }
     window?.contentViewController = splitViewController
     window?.toolbar?.isVisible = true

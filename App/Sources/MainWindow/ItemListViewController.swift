@@ -471,7 +471,12 @@ extension ItemListViewController: NSTableViewDataSource {
 
 extension ItemListViewController: NSTableViewDelegate {
   func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-    let cell = ItemRowCellView.dequeue(from: tableView, owner: self)
+    let cell = CredentialRowView.dequeue(from: tableView, owner: self)
+    // 851-2459: the main item list is one of the "4 places" real website icons show up in; wired
+    // as an injected closure (rather than CredentialRowView calling WebsiteIconLoader itself)
+    // because CredentialRowView is shared with the sandboxed AutoFill extension, which has no
+    // "Show website icons" setting and shouldn't be reaching out to the network from its picker UI.
+    cell.iconLoader = WebsiteIconLoader.loadIcon
     cell.configure(with: rows[row], hidesSeparator: hidesSeparator(atRow: row))
     return cell
   }
@@ -506,7 +511,7 @@ extension ItemListViewController: NSTableViewDelegate {
   /// neighbor's selection state changed.
   private func updateSeparatorVisibility() {
     for row in rows.indices {
-      guard let cell = tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? ItemRowCellView else {
+      guard let cell = tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? CredentialRowView else {
         continue
       }
       cell.setSeparatorHidden(hidesSeparator(atRow: row))

@@ -264,6 +264,81 @@ private final class MutableClock: @unchecked Sendable {
     #expect(!rawBytes.contains(secretPassword))
     #expect(!rawBytes.contains("other-secret"))
   }
+
+  // MARK: - 851-2441: AutoFill credential provider extension
+
+  @Test func autoFillIdentitiesRequestIsLoggedWithoutAPasswordField() async throws {
+    let (store, fileURL) = try makeStore()
+    let identities = [
+      CredentialIdentity(id: UUID(), title: "GitHub", username: "octocat", website: URL(string: "https://github.com")),
+      CredentialIdentity(id: UUID(), title: "No website", username: "someone", website: nil),
+    ]
+
+    await store.record(
+      AccessEvent(
+        caller: testCaller,
+        request: .autoFillIdentities(serviceIdentifiers: ["github.com"]),
+        response: .autoFillIdentities(identities),
+        succeeded: true
+      )
+    )
+
+    let entries = await store.fetchAll()
+    #expect(entries.count == 1)
+    #expect(entries[0].operation == "autoFillIdentities")
+    #expect(entries[0].fields == ["username", "website"])
+    #expect(entries[0].succeeded == true)
+
+    // No password field name, and no possibility of a password value, ever appears — this request
+    // never even asks the helper for a password.
+    #expect(!entries[0].fields.contains("password"))
+    let rawBytes = try Data(contentsOf: fileURL)
+    #expect(!rawBytes.contains("password"))
+  }
+
+  @Test func autoFillCredentialNeverWritesThePasswordToTheOnDiskLog() async throws {
+    let (store, fileURL) = try makeStore()
+    let itemId = UUID()
+
+    await store.record(
+      AccessEvent(
+        caller: testCaller,
+        request: .autoFillCredential(id: itemId),
+        response: .autoFillCredential(username: "octocat", password: secretPassword),
+        succeeded: true
+      )
+    )
+
+    let rawBytes = try Data(contentsOf: fileURL)
+    #expect(!rawBytes.contains(secretPassword))
+
+    let entries = await store.fetchAll()
+    #expect(entries.count == 1)
+    #expect(entries[0].operation == "autoFillCredential")
+    #expect(entries[0].itemId == itemId)
+    #expect(entries[0].fields == ["username", "password"])  // field *name*, not the value
+    #expect(!entries[0].fields.contains(secretPassword))
+  }
+
+  /// A failed `.autoFillCredential` (e.g. `.locked`, `.notFound`) still logs the attempted item id
+  /// (the id lives on the *request*, not the response) and the same fixed `fields` names — but
+  /// since there was never a successful response to leak from, there's still no secret *value* on
+  /// disk, only the field name `"password"` describing what would have been touched.
+  @Test func autoFillCredentialFailureIsStillLoggedWithTheAttemptedItemId() async throws {
+    let (store, _) = try makeStore()
+    let itemId = UUID()
+
+    await store.record(
+      AccessEvent(caller: testCaller, request: .autoFillCredential(id: itemId), response: nil, succeeded: false)
+    )
+
+    let entries = await store.fetchAll()
+    #expect(entries.count == 1)
+    #expect(entries[0].operation == "autoFillCredential")
+    #expect(entries[0].itemId == itemId)
+    #expect(entries[0].succeeded == false)
+    #expect(entries[0].fields == ["username", "password"])  // field *name*, not a value
+  }
 }
 
 extension Data {

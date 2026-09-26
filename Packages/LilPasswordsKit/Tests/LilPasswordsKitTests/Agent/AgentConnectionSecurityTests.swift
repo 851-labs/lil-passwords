@@ -37,6 +37,24 @@ import Testing
     #expect(!text.contains("com.851labs.lilpasswords.cli"))
   }
 
+  @Test func acceptingThreePeersMentionsAllThreeIdentifiers() {
+    // 851-2441: `Agent/Sources/main.swift` accepts `[.app, .cli, .autoFill]` in production — the
+    // requirement string must actually list all three, or the AutoFill extension's connection
+    // would be silently refused at the code-signing layer before ever reaching `AgentServer`.
+    let requirement = AgentConnectionSecurity.requirement(
+      acceptingPeers: [.app, .cli, .autoFill],
+      teamIdentifier: "WH4QW9ND3J"
+    )
+
+    guard case .enforce(let text) = requirement else {
+      Issue.record("expected .enforce, got \(requirement)")
+      return
+    }
+    #expect(text.contains("com.851labs.lilpasswords\""))
+    #expect(text.contains("com.851labs.lilpasswords.cli"))
+    #expect(text.contains("com.851labs.lilpasswords.autofill"))
+  }
+
   @Test func nilTeamIdentifierInADebugBuildFallsBackToDevelopmentModeInsteadOfRejecting() {
     let requirement = AgentConnectionSecurity.requirement(
       acceptingPeers: [.app, .cli],

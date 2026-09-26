@@ -20,6 +20,7 @@ public actor AgentServer {
   private let accessLog: any AccessLogging
   private let passwordGenerator: PasswordGenerator
   private let appCallerBundleIdentifier: String
+  private let autoFillCallerBundleIdentifier: String
   private let agentSettingsStore: any AgentSettingsStoring
 
   /// - Parameters:
@@ -42,6 +43,11 @@ public actor AgentServer {
   ///     `AgentServer` to trust that identifier as "the app" instead. This exercises the exact same
   ///     caller-identity-resolution and gating code production does; only which identifier counts
   ///     as trusted changes.
+  ///   - autoFillCallerBundleIdentifier: The bundle identifier `isAutoFillCaller(_:)` treats as the
+  ///     851-2441 AutoFill credential provider extension, for `.unlock` and the `.autoFill*`
+  ///     request gating in `isRequestPermitted(_:for:)`. Defaults to the real extension's
+  ///     identifier (`AgentConnectionSecurity.PeerIdentifier.autoFill`), overridable for the same
+  ///     test-harness reason `appCallerBundleIdentifier` is.
   ///   - agentSettingsStore: Where `.getAgentSettings`/`.setAgentSettings` persist the 851-2428
   ///     agent-access settings, including the 851-2433 write-access toggle
   ///     (`AgentSettings.agentWriteAccessEnabled`) — the real, Keychain-backed
@@ -57,6 +63,7 @@ public actor AgentServer {
     accessLog: any AccessLogging = NoOpAccessLog(),
     passwordGenerator: PasswordGenerator = PasswordGenerator(),
     appCallerBundleIdentifier: String = AgentConnectionSecurity.PeerIdentifier.app.rawValue,
+    autoFillCallerBundleIdentifier: String = AgentConnectionSecurity.PeerIdentifier.autoFill.rawValue,
     agentSettingsStore: any AgentSettingsStoring = InMemoryAgentSettingsStore()
   ) {
     self.vaultStore = vaultStore
@@ -65,6 +72,7 @@ public actor AgentServer {
     self.accessLog = accessLog
     self.passwordGenerator = passwordGenerator
     self.appCallerBundleIdentifier = appCallerBundleIdentifier
+    self.autoFillCallerBundleIdentifier = autoFillCallerBundleIdentifier
     self.agentSettingsStore = agentSettingsStore
   }
 
@@ -82,6 +90,10 @@ public actor AgentServer {
       )
     }
 
+    guard isRequestPermitted(envelope.request, for: caller) else {
+      return AgentReplyEnvelope(outcome: .failure(.callerNotAuthorized))
+    }
+
     let outcome: AgentOutcome
     switch envelope.request {
     case .status, .createVault, .unlock, .lock, .getAgentSettings, .setAgentSettings, .rotateRecoveryKey:
@@ -90,6 +102,30 @@ public actor AgentServer {
       outcome = await vaultOutcome(for: envelope.request, caller: caller)
     }
     return AgentReplyEnvelope(outcome: outcome)
+  }
+
+  /// 851-2441: the AutoFill credential provider extension's connection is trusted for exactly five
+  /// operations — `.status` (always answerable, regardless of caller), `.unlock`/`.lock` (its own
+  /// `LAContext`-gated "Unlock" button, the same trust rationale `.unlock`'s documentation gives the
+  /// app), and the two `.autoFill*` ops built specifically for it. Every other `AgentRequest` is
+  /// refused outright for this caller, `.list`/`.search`/`.getItem` included — even though those
+  /// are already covered for other non-app callers by `AccessPolicyProviding`/`requireWriteAccess`,
+  /// AutoFill gets no dispatch route to them at all, so "only the chosen identity, never general
+  /// list/search access" (this ticket's own requirement) is structural, not just a policy that a
+  /// future change to `AgentSettingsAccessPolicy` could accidentally loosen.
+  ///
+  /// Every other caller (the app, `lilpass`) is unaffected: this only ever narrows AutoFill's own
+  /// connection, so it's checked first, before any of the existing app-only/access-policy/
+  /// write-access gating below even runs.
+  private func isRequestPermitted(_ request: AgentRequest, for caller: CallerIdentity) -> Bool {
+    guard isAutoFillCaller(caller) else { return true }
+    switch request {
+    case .status, .unlock, .lock, .autoFillIdentities, .autoFillCredential:
+      return true
+    case .createVault, .rotateRecoveryKey, .getAgentSettings, .setAgentSettings, .list, .search, .getItem,
+      .createItem, .updateItem, .deleteItem, .generatePassword, .totpCode:
+      return false
+    }
   }
 
   // MARK: - Lock lifecycle and helper configuration (never logged — see AccessLogging)
@@ -128,7 +164,7 @@ public actor AgentServer {
       }
 
     case .unlock:
-      guard isAppCaller(caller) else { return .failure(.callerNotAuthorized) }
+      guard isAppCaller(caller) || isAutoFillCaller(caller) else { return .failure(.callerNotAuthorized) }
       do {
         guard let key = try vaultKeyStore.loadKey() else {
           // No key ever stored — either `.createVault` never ran (shouldn't happen; the app
@@ -208,6 +244,26 @@ public actor AgentServer {
   /// bug).
   private func isAppCaller(_ caller: CallerIdentity) -> Bool {
     caller.isVerifiedApp(appBundleIdentifier: appCallerBundleIdentifier)
+  }
+
+  /// The 851-2441 counterpart to ``isAppCaller(_:)``: whether `caller` is the AutoFill credential
+  /// provider extension's verified connection. See ``isRequestPermitted(_:for:)`` for what this
+  /// caller is actually trusted to do, which is deliberately much narrower than what
+  /// `isAppCaller(_:)` grants.
+  ///
+  /// Deliberately **not** implemented via `CallerIdentity.isVerifiedApp(appBundleIdentifier:)`,
+  /// unlike `isAppCaller(_:)`: that helper treats a caller with no resolvable `bundleIdentifier`
+  /// (an unsigned/ad-hoc build with no explicit `-i` identifier, or a from-source `swift run`
+  /// dev workflow) as a match in DEBUG builds — the right call for "is this the app", the single
+  /// most-privileged caller, but wrong here. `isRequestPermitted(_:for:)` *restricts* whatever
+  /// caller this returns `true` for down to five operations, so falling back to `true` for an
+  /// unidentifiable caller would wrongly lock a real app or `lilpass` connection (which has no
+  /// `-i` identifier in that same unsigned scenario) out of everything else it needs. A plain,
+  /// exact `bundleIdentifier` comparison fails closed instead: an unidentifiable caller is simply
+  /// never treated as AutoFill, leaving it to whatever `isAppCaller(_:)`/the existing
+  /// `AccessPolicyProviding`/`requireWriteAccess` checks already decide for it.
+  private func isAutoFillCaller(_ caller: CallerIdentity) -> Bool {
+    caller.bundleIdentifier == autoFillCallerBundleIdentifier
   }
 
   /// Gates `.createItem`/`.updateItem`/`.deleteItem` for non-app callers behind the separate
@@ -304,6 +360,30 @@ public actor AgentServer {
       }
       let now = Date()
       return .totpCode(TOTPCodeResult(code: totp.code(at: now), expiresAt: totp.nextChange(after: now)))
+
+    case .autoFillIdentities(let serviceIdentifiers):
+      // 851-2441: powers `prepareCredentialList(for:)`. Only items with both a matching website
+      // and a non-empty username can ever be offered as an AutoFill suggestion — an item with no
+      // username has nothing for `CredentialIdentity.username` to show, and `.autoFillCredential`
+      // below would have nothing sensible to fill either.
+      let items = try await vaultStore.allItems().filter(isLive)
+      let matches = items.filter { item in
+        guard !item.usernames.isEmpty else { return false }
+        return serviceIdentifiers.contains { item.matchesHost(ofServiceIdentifier: $0) }
+      }
+      return .autoFillIdentities(
+        matches.map { item in
+          CredentialIdentity(id: item.id, title: item.title, username: item.usernames[0], website: item.websites.first)
+        }
+      )
+
+    case .autoFillCredential(let id):
+      // Deliberately its own case rather than routing through `resolve(_:)`/`.getItem`: this must
+      // never be able to return anything beyond username+password for one item, by construction of
+      // `AgentResponse.autoFillCredential`'s own (narrower) type — see AgentProtocol.swift.
+      guard let item = try await vaultStore.item(id: id), isLive(item) else { throw AgentError.notFound }
+      guard let username = item.usernames.first else { throw AgentError.notFound }
+      return .autoFillCredential(username: username, password: item.password)
 
     case .status, .createVault, .unlock, .lock, .getAgentSettings, .setAgentSettings, .rotateRecoveryKey:
       preconditionFailure("vaultResponse never sees lock-lifecycle/helper-configuration requests")

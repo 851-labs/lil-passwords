@@ -39,12 +39,16 @@ public enum AgentRequest: Sendable, Codable, Equatable {
   /// `lilpass`); see `AgentError.callerNotAuthorized`.
   case createVault
 
-  /// An unlock **intent**, carrying no key material at all: the app performs `LAContext`
+  /// An unlock **intent**, carrying no key material at all: the caller performs `LAContext`
   /// authentication (Touch ID/Apple Watch/login password) first, then sends this so the helper
   /// reads the vault key itself from the local Keychain (`VaultKeyStoring`) and opens the store.
   /// The key never leaves the helper process — see docs/adr/0001-storage-and-process-model.md (b).
-  /// Restricted to the app itself, the same as `.createVault`, and authenticated by the
-  /// connection's code-signing requirement rather than anything in this payload.
+  /// Restricted to the app **and** the 851-2441 AutoFill credential provider extension — both
+  /// perform their own `LAContext` authentication before sending this (the extension's "Unlock"
+  /// button in `prepareInterfaceToProvideCredential`, the app's lock screen), so both get the same
+  /// trust `AgentServer.isAppCaller(_:)`/`isAutoFillCaller(_:)` verify by code signature. Never
+  /// `lilpass`. Authenticated by the connection's code-signing requirement rather than anything in
+  /// this payload.
   case unlock
 
   /// Discards the in-memory vault key and any open store. Idempotent.
@@ -95,6 +99,46 @@ public enum AgentRequest: Sendable, Codable, Equatable {
   /// Replaces the 851-2428 agent-access settings. Restricted to the app itself, same as
   /// ``getAgentSettings``. The Settings → Agents UI is the only writer.
   case setAgentSettings(AgentSettings)
+
+  /// 851-2441: every live item whose website matches one of `serviceIdentifiers` (a host match —
+  /// see `PasswordItem.matchesHost(of:)` — against each identifier parsed as a URL), reduced to
+  /// ``CredentialIdentity`` — service/website and username only, **never** the password. Powers
+  /// the AutoFill credential provider extension's `prepareCredentialList(for:)`, which needs to
+  /// show a relevant, searchable list without ever handing the extension a full ``PasswordItem``.
+  /// Restricted to the AutoFill extension's verified connection (`AgentServer.isAutoFillCaller(_:)`);
+  /// see `AgentError.callerNotAuthorized`. Deliberately **not** reachable by `lilpass` or the app —
+  /// both already have `.list`/`.search` for the same data plus everything else on a `PasswordItem`.
+  case autoFillIdentities(serviceIdentifiers: [String])
+
+  /// 851-2441: the single username+password to fill for one identity, by the vault item id
+  /// `ASCredentialIdentityStore` was given when that identity was registered
+  /// (`ASPasswordCredentialIdentity.recordIdentifier`, set to `PasswordItem.id.uuidString`).
+  /// Deliberately narrower than ``getItem(_:)``: this is the *only* operation that can ever hand
+  /// the AutoFill extension a password, and it can never return a title, website, notes, or TOTP
+  /// secret alongside it — the wire type (`AgentResponse.autoFillCredential`) makes that structural,
+  /// not just a policy choice. Restricted to the AutoFill extension's verified connection, same as
+  /// ``autoFillIdentities(serviceIdentifiers:)``. Fails with ``AgentError/notFound`` if `id` doesn't
+  /// match a live item.
+  case autoFillCredential(id: UUID)
+}
+
+/// A vault item's identity for AutoFill purposes (851-2441): enough to render one row in the
+/// credential provider's picker and to register with `ASCredentialIdentityStore` — service/website
+/// and username — and **never** the password. Kept as its own type, distinct from `PasswordItem`,
+/// specifically so `AgentResponse.autoFillIdentities` cannot carry a password no matter how
+/// `PasswordItem` itself grows later.
+public struct CredentialIdentity: Sendable, Codable, Equatable, Identifiable {
+  public var id: UUID
+  public var title: String
+  public var username: String
+  public var website: URL?
+
+  public init(id: UUID, title: String, username: String, website: URL?) {
+    self.id = id
+    self.title = title
+    self.username = username
+    self.website = website
+  }
 }
 
 /// The 851-2428 "Allow agents to access passwords" toggle, its "keep agent access available while
@@ -235,6 +279,11 @@ public enum AgentResponse: Sendable, Codable, Equatable {
   /// `.updated` echoing the item as stored), so a caller never has to issue a separate get right
   /// after a set to confirm what took effect.
   case agentSettings(AgentSettings)
+  /// Answers ``AgentRequest/autoFillIdentities(serviceIdentifiers:)``.
+  case autoFillIdentities([CredentialIdentity])
+  /// Answers ``AgentRequest/autoFillCredential(id:)``. Exactly the two fields needed to build an
+  /// `ASPasswordCredential` — nothing else about the item.
+  case autoFillCredential(username: String, password: String)
 }
 
 /// Every way an `AgentRequest` can fail, as a typed, `Codable` value rather than an opaque string

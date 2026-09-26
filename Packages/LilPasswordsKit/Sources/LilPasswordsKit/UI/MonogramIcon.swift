@@ -1,12 +1,17 @@
 import AppKit
-import LilPasswordsKit
 
 /// Draws the colored rounded-square monogram icons Apple Passwords shows next to each item in the
 /// list when a site has no favicon: a flat tinted square with the item's first letter centered
 /// inside it in white. Shared with 851-2459 (website icon fetching, see `WebsiteIconLoader`), which
 /// falls back to this when no real icon is available or "Show website icons" is off.
+///
+/// 851-2441: moved here from the app target (`App/Sources/Shared/MonogramIcon.swift`) and made
+/// `public` so the AutoFill credential provider extension's own list UI (`AutoFillExtension`,
+/// sandboxed, a separate bundle from the app) can render the exact same monogram style as the
+/// app's own item list — see ``CredentialRowView`` in this same directory, which is the other half
+/// of that shared-row-style move.
 @MainActor
-enum MonogramIcon {
+public enum MonogramIcon {
   private static var cache: [CacheKey: NSImage] = [:]
 
   private struct CacheKey: Hashable {
@@ -36,7 +41,7 @@ enum MonogramIcon {
   /// The single uppercase letter drawn for `title`: its first letter, or "#" if it doesn't start
   /// with one (digits, symbols, emoji, or an empty title). Matches `PasswordItem.titleSectionKey`
   /// so a row's monogram always agrees with the section header it's grouped under.
-  static func letter(for title: String) -> String {
+  public static func letter(for title: String) -> String {
     guard let first = title.trimmingCharacters(in: .whitespacesAndNewlines).first, first.isLetter else {
       return "#"
     }
@@ -46,26 +51,25 @@ enum MonogramIcon {
   /// A stable tint for `title`, deterministically hashed into ``palette`` so the same title
   /// always gets the same color across launches, but different titles are spread across the
   /// whole palette rather than clustering. The hashing itself is ``MonogramPalette/colorIndex(for:paletteCount:)``
-  /// (LilPasswordsKit) — a fixed, unseeded FNV-1a hash, not Swift's `String.hashValue` (which is
-  /// randomly reseeded every launch, so the same title used to get a different color each time the
-  /// app ran). Kept as a public entry point via ``colorIndex(for:)`` below so the detail pane
-  /// (851-2414, detail PR #14) can agree on the same color for a title without duplicating this
-  /// palette.
-  static func tint(for title: String) -> NSColor {
+  /// — a fixed, unseeded FNV-1a hash, not Swift's `String.hashValue` (which is randomly reseeded
+  /// every launch, so the same title used to get a different color each time the app ran). Kept as
+  /// a public entry point via ``colorIndex(for:)`` below so other views can agree on the same
+  /// color for a title without duplicating this palette.
+  public static func tint(for title: String) -> NSColor {
     palette[colorIndex(for: title)]
   }
 
   /// The stable index into ``palette`` for `title` — see ``tint(for:)``. Exposed separately (in
   /// addition to `tint(for:)`) so callers that just need to agree on *which* color a title maps to
   /// (e.g. a test, or another view reusing this exact palette) don't need an `NSColor` comparison.
-  static func colorIndex(for title: String) -> Int {
+  public static func colorIndex(for title: String) -> Int {
     MonogramPalette.colorIndex(for: title, paletteCount: palette.count)
   }
 
   /// - Parameters:
   ///   - title: The item title the monogram represents; drives both the letter and the tint.
   ///   - dimension: Side length of the square, in points. List rows use 28pt.
-  static func icon(for title: String, dimension: CGFloat = 28) -> NSImage {
+  public static func icon(for title: String, dimension: CGFloat = 28) -> NSImage {
     let letter = letter(for: title)
     let tint = tint(for: title)
     let key = CacheKey(letter: letter, tint: tint, dimension: dimension)

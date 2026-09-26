@@ -51,6 +51,23 @@ struct GeneralSettingsView: View {
         Text("Fetching icons reveals which sites you have accounts for to those sites.")
       }
 
+      // 851-2441: the AutoFill credential provider extension can't turn itself on — the system
+      // only lets the user enable a provider from System Settings, so this is a pointer, not a
+      // toggle. See `AutoFillSystemSettings.open()` and
+      // docs/adr/0005-autofill-credential-provider.md for why it may not be selectable there yet
+      // (the provisioning-profile blocker, 851-2400).
+      Section {
+        Button("Open AutoFill & Passwords Settings…") {
+          AutoFillSystemSettings.open()
+        }
+      } header: {
+        Text("AutoFill")
+      } footer: {
+        Text(
+          "To let Safari and other apps offer lil passwords when filling in a username and password, turn it on in "
+            + "System Settings → General → AutoFill & Passwords.")
+      }
+
       // 851-2425. "Show in menu bar" is the actual visibility toggle for the `NSStatusItem`;
       // browser suggestions are a separate opt-in since they need the app to read another app's
       // frontmost tab via AppleScript, which prompts for Automation permission the first time.
