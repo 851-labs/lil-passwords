@@ -26,3 +26,21 @@ public struct FixedAutoLockPolicy: AutoLockPolicyProviding {
 
   public func idleTimeout() async -> TimeInterval? { timeout }
 }
+
+/// The real, live conformer: reads Settings → Security → "Lock after" (``AppSettings/autoLockInterval``)
+/// on every check, rather than snapshotting it once — the Settings window (851-2424) writes to the
+/// same shared `UserDefaults` suite from a different process, so this always sees a change the
+/// moment it's saved, with no notification wiring of its own needed. `AppSettings` itself already
+/// registers a default (``AppSettings/AutoLockInterval/fiveMinutes``), matching this ticket's own
+/// 5-minute default, so there's no separate fallback to maintain here.
+public struct AppSettingsAutoLockPolicy: AutoLockPolicyProviding {
+  private let settings: AppSettings
+
+  public init(settings: AppSettings = .shared) {
+    self.settings = settings
+  }
+
+  public func idleTimeout() async -> TimeInterval? {
+    settings.autoLockInterval.timeInterval
+  }
+}

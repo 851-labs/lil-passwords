@@ -95,10 +95,10 @@ struct SystemIdleTimeProvider: IdleTimeProviding {
   }
 }
 
-// TODO(851-2424): replace `FixedAutoLockPolicy()` with the real, `AppSettings`-backed "Lock
-// after" policy once it exists; this ticket's own default (5 minutes) is `FixedAutoLockPolicy`'s
-// default, so behavior is unaffected until then.
-let autoLockEngine = AutoLockEngine(policy: FixedAutoLockPolicy(), idleProvider: SystemIdleTimeProvider())
+// `AppSettingsAutoLockPolicy` reads Settings → Security → "Lock after" (851-2424) live, off the
+// same shared `UserDefaults` suite the app's Settings window writes to; its own default (5
+// minutes) matches this ticket's original hardcoded one.
+let autoLockEngine = AutoLockEngine(policy: AppSettingsAutoLockPolicy(), idleProvider: SystemIdleTimeProvider())
 
 /// Locks the vault (if it isn't already) and tells every observer (the app's 851-2422 lock
 /// screen) that lock state changed. Idempotent: `VaultStoring.lock()` on an already-locked store
