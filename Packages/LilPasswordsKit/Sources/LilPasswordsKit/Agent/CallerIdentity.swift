@@ -43,6 +43,34 @@ public struct CallerIdentity: Sendable, Equatable {
   }
 }
 
+extension CallerIdentity {
+  /// The single, shared, **verified** "is this caller the app itself" check — used by both
+  /// `AgentServer.isAppCaller(_:)` (gating `.createVault`/`.unlock`/`.getAgentSettings`/
+  /// `.setAgentSettings`) and `AgentSettingsAccessPolicy`'s own-connection exemption (851-2428).
+  ///
+  /// Reads only ``bundleIdentifier`` — resolved from the connection's audit token via
+  /// `SecCodeCopyGuestWithAttributes`/`SecCodeCheckValidity`/`SecCodeCopySigningInformation`, i.e.
+  /// the process's actual, currently-valid code signature — never ``processPath`` (a plain string
+  /// an attacker can set to anything at all, e.g. `cp lilpass "/tmp/lil passwords"`, without touching
+  /// the copy's inherited code signature one bit). A prior, separate implementation of this same
+  /// "is it the app" question (`AppSettingsAccessPolicy.defaultIsAppCaller`, before the 851-2428
+  /// security review) compared `processPath`'s last path component against the product name
+  /// instead — exactly that spoofable comparison. Having exactly one implementation, here, means
+  /// every caller of it gets the verified answer and the two checks can never independently drift.
+  ///
+  /// Falls back to `AgentConnectionSecurity.isDebugBuild` when ``bundleIdentifier`` is `nil` (an
+  /// unsigned/ad-hoc local or CI build, or an in-process XPC test harness peer with no real
+  /// identifier to read) — the same DEBUG-vs-Release philosophy `AgentConnectionSecurity` already
+  /// applies at the whole-connection level, applied here too so this per-request check doesn't
+  /// independently reject every local/CI build.
+  public func isVerifiedApp(
+    appBundleIdentifier: String = AgentConnectionSecurity.PeerIdentifier.app.rawValue
+  ) -> Bool {
+    guard let bundleIdentifier else { return AgentConnectionSecurity.isDebugBuild }
+    return bundleIdentifier == appBundleIdentifier
+  }
+}
+
 /// Resolves a `CallerIdentity` from a pid using `libproc`/`sysctl`, both best-effort: any lookup
 /// that fails just leaves the corresponding field `nil` rather than throwing, since a caller
 /// identity that's harder to attribute is still more useful to the access log than none at all.
@@ -155,6 +183,34 @@ public enum CallerIdentityResolver {
     return info[kSecCodeInfoIdentifier as String] as? String
   }
 
+  /// Walks the process tree starting at `pid` itself, out through its ancestors, for 851-2429's
+  /// access log to render a full "which tool spawned which tool" chain — e.g.
+  /// `["lilpass", "node", "claude"]` for a `lilpass` invocation made by a Node-based MCP server that
+  /// Claude Desktop itself launched — rather than just the one-hop ``parentProcessName(of:)`` used
+  /// by ``resolve(pid:)`` above.
+  ///
+  /// Every hop is resolved the same best-effort way as ``resolve(pid:)``: a name that can't be
+  /// resolved just ends the chain there instead of throwing, since a caller identity that's harder
+  /// to fully attribute is still more useful logged than not logged at all. `maxDepth` bounds the
+  /// walk so an unusual process tree (or, in principle, a pid recycled into a cycle) can't spin
+  /// forever; real ancestor chains are a handful of hops at most (shell → MCP client → MCP server →
+  /// `lilpass`), so the default is generous.
+  ///
+  /// Must be called promptly after the pid is observed (e.g. at XPC connection-accept time, not
+  /// lazily whenever a log entry finally gets written): a short-lived CLI invocation's ancestors
+  /// may already have exited or been reassigned by the time this runs otherwise.
+  public static func resolveProcessChain(pid: pid_t, maxDepth: Int = 8) -> [String] {
+    var chain: [String] = []
+    var currentPID = pid
+    for _ in 0..<maxDepth {
+      guard let name = processName(of: currentPID) else { break }
+      chain.append(name)
+      guard let ancestorPID = parentPID(of: currentPID), ancestorPID != currentPID, ancestorPID > 1 else { break }
+      currentPID = ancestorPID
+    }
+    return chain
+  }
+
   private static func processPath(of pid: pid_t) -> String? {
     // `PROC_PIDPATHINFO_MAXSIZE` is a `<libproc.h>` macro (`4 * MAXPATHLEN`), not imported into
     // Swift; `MAXPATHLEN` itself is available via Darwin, so compute it the same way libproc does.
@@ -175,8 +231,12 @@ public enum CallerIdentityResolver {
 
   private static func parentProcessName(of pid: pid_t) -> String? {
     guard let parentPID = parentPID(of: pid) else { return nil }
+    return processName(of: parentPID)
+  }
+
+  private static func processName(of pid: pid_t) -> String? {
     var buffer = [Int8](repeating: 0, count: Int(MAXCOMLEN) * 4)
-    let length = proc_name(parentPID, &buffer, UInt32(buffer.count))
+    let length = proc_name(pid, &buffer, UInt32(buffer.count))
     guard length > 0 else { return nil }
     return string(fromNulTerminated: buffer)
   }

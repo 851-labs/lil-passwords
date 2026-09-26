@@ -20,48 +20,40 @@ let sharedVaultStore = try VaultStore()
 // the legacy, file-based Keychain rather than the Data Protection Keychain.
 let vaultKeyStore = KeychainVaultKeyStore()
 
-// Agent access starts disabled and stays that way until a user explicitly turns it on (during
-// onboarding or in Settings) — never hardcode `true` here. `AlwaysDenyAccessPolicy` is wired in
-// explicitly rather than leaning on `AgentServer`'s own `AlwaysAllowAccessPolicy()` parameter
-// default, which exists only for tests that don't care about the toggle.
-// TODO(851-2428): replace this with the real, AppSettings-backed `AccessPolicyProviding` (the
-// Settings → Agents toggle) once it exists.
-//
-// Until then, a DEBUG-only local override lets 851-2430/851-2431 tophat `lilpass`/`lilpass mcp`
-// against a real, launchd-managed helper without hand-building Settings UI first. See
-// docs/tophat.md for how to enable it. `#if DEBUG` guarantees this can never reach a Release
-// build: the override check (env var, launch argument) isn't merely unreachable at runtime in
-// Release, its code doesn't exist in the compiled binary at all, and the `#else` branch is a bare,
-// unconditional `AlwaysDenyAccessPolicy()` with no override path of any kind.
-#if DEBUG
-  /// - Returns: `true` if a developer has explicitly opted this helper process into agent access
-  ///   for local tophat testing, via either:
-  ///   - `launchctl setenv LILPASS_TOPHAT_ALLOW_AGENT_ACCESS 1` (launchd reads its own managed
-  ///     environment when it activates the on-demand Mach service, so this must be set — and the
-  ///     helper stopped/relaunched if it was already running — before the next connection attempt
-  ///     triggers activation), or
-  ///   - passing `--allow-agent-access-debug` when launching this binary directly (e.g. running it
-  ///     from Xcode or a terminal rather than through launchd).
-  func debugAgentAccessOverrideEnabled() -> Bool {
-    if ProcessInfo.processInfo.environment["LILPASS_TOPHAT_ALLOW_AGENT_ACCESS"] == "1" { return true }
-    if CommandLine.arguments.contains("--allow-agent-access-debug") { return true }
-    return false
-  }
+// The real, Keychain-backed `AgentSettingsStoring` (851-2428 security review): the agent-access
+// settings — "Allow agents to access passwords" and "keep agent access available while the Mac is
+// unlocked" — are owned by this helper alone, in an explicitly ACL'd Keychain item, rather than
+// the shared, any-process-writable `AppSettings` UserDefaults suite. See that protocol's
+// documentation and docs/adr/0001-storage-and-process-model.md (e). One instance, shared between
+// the access policy below (reads only) and `AgentServer` (reads and writes, via the
+// `.getAgentSettings`/`.setAgentSettings` ops the Settings UI calls through `AgentClient`).
+let agentSettingsStore = KeychainAgentSettingsStore()
 
-  let accessPolicy: any AccessPolicyProviding =
-    debugAgentAccessOverrideEnabled() ? AlwaysAllowAccessPolicy() : AlwaysDenyAccessPolicy()
-#else
-  let accessPolicy: any AccessPolicyProviding = AlwaysDenyAccessPolicy()
-#endif
+// Agent access starts disabled and stays that way until a user explicitly turns it on in
+// Settings → Agents — never hardcode `true` here. `AgentSettingsAccessPolicy` reads that toggle
+// (and the app's own-connection exemption) live out of `agentSettingsStore`; see its documentation
+// for why re-reading per request is sufficient without separate KVO/notification plumbing.
+let accessPolicy: any AccessPolicyProviding = AgentSettingsAccessPolicy(store: agentSettingsStore)
+
+// The real, 851-2429 access log: an append-only, permission-restricted JSONL file in Application
+// Support, pruned to 30 days. Falls back to `NoOpAccessLog` only if the file/directory can't be
+// set up at all (e.g. an unwritable home directory) — better to keep serving vault operations
+// without a log than to make a broken access log take the whole helper down.
+let accessLog: any AccessLogging
+do {
+  accessLog = try AccessLogStore()
+} catch {
+  FileHandle.standardError.write(Data("LilPasswordsAgent: failed to open the access log: \(error)\n".utf8))
+  accessLog = NoOpAccessLog()
+}
 
 let server = AgentServer(
   vaultStore: sharedVaultStore,
   vaultKeyStore: vaultKeyStore,
-  accessPolicy: accessPolicy
+  accessPolicy: accessPolicy,
+  accessLog: accessLog,
+  agentSettingsStore: agentSettingsStore
 )
-
-// TODO(851-2429): supply the real `AccessLogging` conformer once it exists; `AgentServer`'s default
-// (`NoOpAccessLog`) is used above until then.
 
 // Accept only connections from the app or `lilpass`, validated against our own running process's
 // code-signing team identifier — see `AgentConnectionSecurity`'s documentation for why this reads

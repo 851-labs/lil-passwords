@@ -1,7 +1,7 @@
 # 0001. Storage and process model
 
 - Status: Accepted
-- Related: [851-2402](https://linear.app/851/issue/851-2402) (this spike), [851-2400](https://linear.app/851/issue/851-2400) (signing/entitlements), [851-2427](https://linear.app/851/issue/851-2427) (XPC, not yet scheduled at time of writing)
+- Related: [851-2402](https://linear.app/851/issue/851-2402) (this spike), [851-2400](https://linear.app/851/issue/851-2400) (signing/entitlements), [851-2427](https://linear.app/851/issue/851-2427) (XPC, not yet scheduled at time of writing), [851-2428](https://linear.app/851/issue/851-2428) ((e): agent-access settings storage, added in a later security review)
 
 ## Context
 
@@ -202,6 +202,84 @@ don't need `NSFilePresenter`/file coordination — that machinery exists to
 mediate *simultaneous* writers under sandboxed file coordination, and in this
 design there's exactly one writer (the helper) and N read-only observers.
 
+## (e) Where do the 851-2428 agent-access settings live? (post-MVP security review)
+
+851-2428 ("Agent access toggle + policy") originally stored its two settings —
+"Allow agents to access passwords" and "keep agent access available while the
+Mac is unlocked" — as ordinary properties on `AppSettings`, i.e. in the same
+shared `UserDefaults` suite (`com.851labs.lilpasswords.shared`) as (d)'s
+non-security preferences (auto-lock interval, clipboard-clear interval,
+password-generation defaults). That suite exists, by design, so `AppSettings`
+is readable from all three processes without any Keychain/entitlement
+machinery — but "readable by any local process that knows the suite name" also
+means **writable** by any local process that knows it: `defaults write
+com.851labs.lilpasswords.shared AppSettings.agentAccessEnabled -bool true` from
+an unrelated, unprivileged process would have silently re-enabled agent access
+regardless of what the user chose in Settings. A security review of the
+851-2428/851-2429/851-2460 PR caught this before it shipped (alongside a
+related caller-identity spoofing bug, fixed separately in
+`CallerIdentity.isVerifiedApp(appBundleIdentifier:)` — see that method's doc
+comment).
+
+**Two storage options were considered:**
+
+1. **Seal the settings in the vault's own metadata**, encrypted with the vault
+   key alongside the vault DB — the same trust boundary (e)'s sibling
+   decisions already put the vault contents behind. Rejected: this would only
+   be readable/writable while the vault is *unlocked*, but
+   `AgentServer.isAgentAccessEnabled()`/`AccessPolicyProviding` are
+   deliberately independent of lock state today (`AgentServerTests.
+   statusReflectsAgentAccessPolicyRegardlessOfLockState`, `.
+   agentAccessDisabledTakesPrecedenceOverAnUnlockedStore` — a disabled toggle
+   must report `.agentAccessDisabled`, never `.locked`, even before the vault
+   has ever been unlocked this session). Moving the setting into vault
+   metadata would break that already-tested behavior, or require duplicating
+   the setting outside the vault anyway just to answer "is access enabled"
+   before unlock — at which point it isn't actually sealed by the vault key.
+2. **A dedicated, explicitly-ACL'd legacy-Keychain item, owned by the helper**
+   (chosen). `KeychainAgentSettingsStore` (`AgentSettingsStoring.swift`) stores
+   the two settings as a JSON-encoded `AgentSettings` value in a
+   generic-password item, using `SecAccessCreate`/
+   `SecTrustedApplicationCreateFromPath(nil, _:)` to build an **explicit** ACL
+   trusting only `LilPasswordsAgent`'s own code — unlike the vault-key item in
+   (a)/(b), which relies on the legacy keychain's *implicit* default ACL
+   (whatever process created the item). The explicit ACL matters here
+   specifically because this item, unlike the vault key, has a legitimate
+   *reader* outside the helper's own process (the Settings UI, via
+   `AgentClient`) but must still reject a write from anything other than the
+   helper itself — the implicit default ACL a bare `SecItemAdd` gets doesn't
+   let a later caller assert "trust exactly this one binary and no other" the
+   way `SecAccessCreate` does. Any other local process attempting
+   `SecItemAdd`/`SecItemUpdate` against this item now gets a user-facing
+   Keychain access prompt instead of silently succeeding — this is on the
+   legacy keychain specifically because (a)/(c) already established the DP
+   keychain is unreachable here without a restricted, profile-gated
+   entitlement.
+
+**Fail-closed contract:** `AgentSettings.loaded(from:)` treats a missing item
+(never stored) and a read failure (corrupt data, unexpected `OSStatus`)
+identically — both fall back to `AgentSettings.disabled`, never to "enabled."
+`AgentServer` and `AgentSettingsAccessPolicy` both call this one helper rather
+than each independently deciding what "no value yet" means, so the two can't
+drift into disagreeing about the safe default.
+
+**Mutation path:** the settings are no longer just read by the helper — they
+are now *exclusively written* by it too, via two new gated XPC ops,
+`AgentRequest.getAgentSettings`/`.setAgentSettings(AgentSettings)`, both
+routed through `AgentServer`'s existing lock-lifecycle dispatch (bypassing the
+851-2429 access log, like `.status`/`.createVault`/`.unlock`/`.lock` already
+do — a settings read/write isn't a vault access event) and both gated by
+`isAppCaller(_:)`, the same verified-code-signing check that already restricts
+`.createVault`/`.unlock`. The Settings → Agents pane
+(`AgentSettingsViewModel`) reads and writes through `AgentClient.
+agentSettings()`/`.setAgentSettings(_:)` — it never touches `AppSettings` or
+`UserDefaults` for these two toggles. Non-security preferences (auto-lock,
+clipboard, password-generation defaults, menu bar) are unaffected and remain
+exactly as decided in (d): plain `AppSettings` properties in the shared suite,
+since a process quietly changing "clear the clipboard after 30s" instead of
+10s isn't a security-relevant write the way silently re-enabling agent access
+is.
+
 ## Decision
 
 1. **Only `LilPasswordsAgent` touches the Keychain.** It stores the vault key
@@ -224,6 +302,12 @@ design there's exactly one writer (the helper) and N read-only observers.
 6. **`keychain-access-groups` is deferred**, not designed around. If a future
    milestone needs the app to read the vault key directly, that's a new ADR,
    gated on the 851 Labs Apple Developer team and a provisioning profile.
+7. **The 851-2428 agent-access settings live in their own, explicitly-ACL'd
+   legacy-Keychain item owned by `LilPasswordsAgent`**, not in the shared
+   `AppSettings`/`UserDefaults` suite (d) uses for non-security preferences —
+   see (e). Reads and writes both go through the helper's gated
+   `getAgentSettings`/`setAgentSettings` XPC ops; the Settings UI never reads
+   or writes this suite for these two toggles.
 
 ## Infrastructure landed alongside this spike
 

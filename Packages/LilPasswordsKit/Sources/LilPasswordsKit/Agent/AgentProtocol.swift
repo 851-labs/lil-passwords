@@ -76,6 +76,52 @@ public enum AgentRequest: Sendable, Codable, Equatable {
   /// rule). Fails with `AgentError.internal` if the item has no `totpURI`, or one that fails to
   /// parse.
   case totpCode(ItemReference)
+
+  /// Reads the 851-2428 agent-access settings (``AgentSettings``) straight from the helper's own
+  /// storage — never from the shared, any-process-writable `AppSettings` `UserDefaults` suite; see
+  /// `AgentSettingsStoring`. Restricted to the app itself, same as ``createVault``/``unlock``, and
+  /// — like those two — never reaches the access log: this is helper configuration, not a vault
+  /// operation on a user's items.
+  case getAgentSettings
+
+  /// Replaces the 851-2428 agent-access settings. Restricted to the app itself, same as
+  /// ``getAgentSettings``. The Settings → Agents UI is the only writer.
+  case setAgentSettings(AgentSettings)
+}
+
+/// The 851-2428 "Allow agents to access passwords" toggle and its "keep agent access available
+/// while the Mac is unlocked" nuance — persisted **helper-side** (`AgentSettingsStoring`), read and
+/// written exclusively through ``AgentRequest/getAgentSettings``/``AgentRequest/setAgentSettings(_:)``,
+/// both restricted to the app's own, code-signing-verified connection
+/// (`CallerIdentity.isVerifiedApp(appBundleIdentifier:)`).
+///
+/// Deliberately **not** stored in `AppSettings`'s shared `UserDefaults` suite the way the app's
+/// other preferences are: that suite is, by design, freely writable by any local process that
+/// knows its name (`defaults write com.851labs.lilpasswords.shared ...`), which would let an agent
+/// silently flip its own access back on. See docs/adr/0001-storage-and-process-model.md (e) for
+/// the full reasoning and the alternative (sealing these in the vault's own metadata) that was
+/// considered and rejected.
+public struct AgentSettings: Sendable, Codable, Equatable {
+  /// Settings → Agents → "Allow agents to access passwords".
+  public var agentAccessEnabled: Bool
+
+  /// Settings → Agents → "Keep agent access available while the Mac is unlocked" — a policy nuance
+  /// separate from the app's own auto-lock.
+  public var keepAgentAccessAvailableWhileMacUnlocked: Bool
+
+  public init(agentAccessEnabled: Bool, keepAgentAccessAvailableWhileMacUnlocked: Bool) {
+    self.agentAccessEnabled = agentAccessEnabled
+    self.keepAgentAccessAvailableWhileMacUnlocked = keepAgentAccessAvailableWhileMacUnlocked
+  }
+
+  /// The fail-closed default: every reader of a stored `AgentSettings` — `AgentServer`,
+  /// `AgentSettingsAccessPolicy` — falls back to this whenever the underlying store has nothing
+  /// persisted yet, or fails to read at all (a corrupt item, an unexpected Keychain error). Agent
+  /// access is never silently treated as enabled just because it couldn't be confirmed disabled.
+  public static let disabled = AgentSettings(
+    agentAccessEnabled: false,
+    keepAgentAccessAvailableWhileMacUnlocked: false
+  )
 }
 
 /// A generated TOTP code and when it stops being valid, so a caller can decide whether to
@@ -127,6 +173,11 @@ public enum AgentResponse: Sendable, Codable, Equatable {
   case deleted
   case generatedPassword(String)
   case totpCode(TOTPCodeResult)
+  /// Answers both ``AgentRequest/getAgentSettings`` and ``AgentRequest/setAgentSettings(_:)`` — a
+  /// set always echoes back the settings that actually ended up persisted (mirroring `.created`/
+  /// `.updated` echoing the item as stored), so a caller never has to issue a separate get right
+  /// after a set to confirm what took effect.
+  case agentSettings(AgentSettings)
 }
 
 /// Every way an `AgentRequest` can fail, as a typed, `Codable` value rather than an opaque string

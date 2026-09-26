@@ -102,3 +102,78 @@ private final class CallerIdentityProbePingObject: NSObject, CallerIdentityProbe
     reply()
   }
 }
+
+extension CallerIdentityResolverTests {
+  @Test func resolveProcessChainStartsWithTheCurrentProcessAndWalksAtLeastOneAncestor() {
+    let chain = CallerIdentityResolver.resolveProcessChain(pid: ProcessInfo.processInfo.processIdentifier)
+
+    // The test runner is a real process with at least one live ancestor (its parent, however many
+    // hops up to launchd/pid 1 that ends up being in this environment), so the chain should have
+    // more than just the test binary's own name.
+    #expect(chain.count >= 2)
+    #expect(
+      chain.first
+        == CallerIdentityResolver.resolve(pid: ProcessInfo.processInfo.processIdentifier).processPath.map {
+          ($0 as NSString).lastPathComponent
+        })
+  }
+
+  @Test func resolveProcessChainForAnImplausiblePidFailsGracefullyInsteadOfCrashing() {
+    let chain = CallerIdentityResolver.resolveProcessChain(pid: pid_t.max)
+    #expect(chain.isEmpty)
+  }
+
+  @Test func resolveProcessChainNeverExceedsMaxDepth() {
+    let chain = CallerIdentityResolver.resolveProcessChain(pid: ProcessInfo.processInfo.processIdentifier, maxDepth: 1)
+    #expect(chain.count <= 1)
+  }
+}
+
+/// `CallerIdentity.isVerifiedApp(appBundleIdentifier:)` — the single, shared "is this the app"
+/// check `AgentServer.isAppCaller(_:)` and `AgentSettingsAccessPolicy.defaultIsAppCaller` both
+/// delegate to (851-2428 security review). See `AgentSettingsAccessPolicyTests` for the
+/// policy-level regression test covering the same spoofed-path scenario end to end.
+extension CallerIdentityResolverTests {
+  private static let appBundleIdentifier = AgentConnectionSecurity.PeerIdentifier.app.rawValue
+  private static let cliBundleIdentifier = AgentConnectionSecurity.PeerIdentifier.cli.rawValue
+
+  @Test func isVerifiedAppIsTrueForTheAppsOwnBundleIdentifierRegardlessOfPath() {
+    let caller = CallerIdentity(
+      pid: 10,
+      processPath: "/private/tmp/not-actually-the-app-path",
+      parentProcessName: nil,
+      bundleIdentifier: Self.appBundleIdentifier
+    )
+    #expect(caller.isVerifiedApp() == true)
+  }
+
+  /// The exact Blocker 1 regression: a peer whose *code signature* identifies it as `lilpass`, not
+  /// the app, must not be treated as the app just because its executable happens to sit at a path
+  /// named "lil passwords" — e.g. after `cp lilpass "/tmp/lil passwords"`. `isVerifiedApp()` never
+  /// reads `processPath` at all, so this must be `false`.
+  @Test func isVerifiedAppIsFalseForACLISignedPeerAtAPathNamedLilPasswords() {
+    let spoofedPathCLICaller = CallerIdentity(
+      pid: 11,
+      processPath: "/tmp/lil passwords",
+      parentProcessName: nil,
+      bundleIdentifier: Self.cliBundleIdentifier
+    )
+    #expect(spoofedPathCLICaller.isVerifiedApp() == false)
+  }
+
+  @Test func isVerifiedAppFallsBackToIsDebugBuildWhenNoBundleIdentifierIsResolved() {
+    let unresolved = CallerIdentity(pid: 12, processPath: nil, parentProcessName: nil, bundleIdentifier: nil)
+    #expect(unresolved.isVerifiedApp() == AgentConnectionSecurity.isDebugBuild)
+  }
+
+  @Test func isVerifiedAppRespectsAnExplicitAppBundleIdentifierOverride() {
+    let customCaller = CallerIdentity(
+      pid: 13,
+      processPath: nil,
+      parentProcessName: nil,
+      bundleIdentifier: "com.example.custom-app"
+    )
+    #expect(customCaller.isVerifiedApp(appBundleIdentifier: "com.example.custom-app") == true)
+    #expect(customCaller.isVerifiedApp(appBundleIdentifier: Self.appBundleIdentifier) == false)
+  }
+}

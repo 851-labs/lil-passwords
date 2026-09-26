@@ -434,4 +434,89 @@ private let cliCaller = CallerIdentity(
     #expect(afterLock.vaultExists == true)
     #expect(afterLock.locked == true)
   }
+
+  // MARK: - Agent settings (851-2428 security review)
+
+  @Test func getAgentSettingsIsRestrictedToTheAppEvenForARecognizedCliCaller() async throws {
+    let store = InMemoryVaultStore()
+    let server = AgentServer(vaultStore: store)
+
+    guard case .failure(.callerNotAuthorized) = await send(.getAgentSettings, to: server, caller: cliCaller) else {
+      Issue.record("expected .failure(.callerNotAuthorized)")
+      return
+    }
+  }
+
+  @Test func setAgentSettingsIsRestrictedToTheAppEvenForARecognizedCliCaller() async throws {
+    let store = InMemoryVaultStore()
+    let server = AgentServer(vaultStore: store)
+    let settings = AgentSettings(agentAccessEnabled: true, keepAgentAccessAvailableWhileMacUnlocked: true)
+
+    guard
+      case .failure(.callerNotAuthorized) = await send(.setAgentSettings(settings), to: server, caller: cliCaller)
+    else {
+      Issue.record("expected .failure(.callerNotAuthorized)")
+      return
+    }
+  }
+
+  @Test func getAgentSettingsFailsClosedWhenNothingHasEverBeenStored() async throws {
+    let store = InMemoryVaultStore()
+    let server = AgentServer(vaultStore: store, agentSettingsStore: InMemoryAgentSettingsStore())
+
+    guard case .success(.agentSettings(let settings)) = await send(.getAgentSettings, to: server, caller: appCaller)
+    else {
+      Issue.record("expected .agentSettings")
+      return
+    }
+    #expect(settings == .disabled)
+  }
+
+  @Test func getAgentSettingsFailsClosedWhenTheStoreIsUnreadable() async throws {
+    struct BoomError: Error {}
+    let store = InMemoryVaultStore()
+    let settingsStore = InMemoryAgentSettingsStore(loadError: BoomError())
+    let server = AgentServer(vaultStore: store, agentSettingsStore: settingsStore)
+
+    guard case .success(.agentSettings(let settings)) = await send(.getAgentSettings, to: server, caller: appCaller)
+    else {
+      Issue.record("expected .agentSettings")
+      return
+    }
+    #expect(settings == .disabled)
+  }
+
+  @Test func setAgentSettingsFromTheAppPersistsAndIsReflectedByAFollowingGet() async throws {
+    let store = InMemoryVaultStore()
+    let settingsStore = InMemoryAgentSettingsStore()
+    let server = AgentServer(vaultStore: store, agentSettingsStore: settingsStore)
+    let updated = AgentSettings(agentAccessEnabled: true, keepAgentAccessAvailableWhileMacUnlocked: true)
+
+    guard
+      case .success(.agentSettings(let echoed)) = await send(.setAgentSettings(updated), to: server, caller: appCaller)
+    else {
+      Issue.record("expected .agentSettings")
+      return
+    }
+    #expect(echoed == updated)
+
+    guard case .success(.agentSettings(let reread)) = await send(.getAgentSettings, to: server, caller: appCaller)
+    else {
+      Issue.record("expected .agentSettings")
+      return
+    }
+    #expect(reread == updated)
+  }
+
+  @Test func agentSettingsRequestsAreNeverWrittenToTheAccessLog() async throws {
+    let log = RecordingAccessLog()
+    let store = InMemoryVaultStore()
+    let server = AgentServer(vaultStore: store, accessLog: log)
+
+    _ = await send(.getAgentSettings, to: server, caller: appCaller)
+    _ = await send(.setAgentSettings(.disabled), to: server, caller: appCaller)
+
+    let events = await log.events
+    #expect(events.isEmpty)
+  }
 }

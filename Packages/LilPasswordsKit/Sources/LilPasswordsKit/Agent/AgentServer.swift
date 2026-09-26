@@ -20,6 +20,7 @@ public actor AgentServer {
   private let accessLog: any AccessLogging
   private let passwordGenerator: PasswordGenerator
   private let appCallerBundleIdentifier: String
+  private let agentSettingsStore: any AgentSettingsStoring
 
   /// - Parameters:
   ///   - vaultStore: The single `VaultStoring` this helper serves for its entire process
@@ -41,13 +42,21 @@ public actor AgentServer {
   ///     `AgentServer` to trust that identifier as "the app" instead. This exercises the exact same
   ///     caller-identity-resolution and gating code production does; only which identifier counts
   ///     as trusted changes.
+  ///   - agentSettingsStore: Where `.getAgentSettings`/`.setAgentSettings` persist the 851-2428
+  ///     agent-access settings — the real, Keychain-backed `KeychainAgentSettingsStore` in
+  ///     production, an in-memory double in tests. Defaults to `InMemoryAgentSettingsStore()` for
+  ///     the same "existing call sites that don't care don't need updating" reason
+  ///     `vaultKeyStore`'s default exists; production wiring (`Agent/Sources/main.swift`) always
+  ///     passes `KeychainAgentSettingsStore()` explicitly, and shares that one instance with the
+  ///     `AgentSettingsAccessPolicy` it also constructs.
   public init(
     vaultStore: any VaultStoring,
     vaultKeyStore: any VaultKeyStoring = InMemoryVaultKeyStore(),
     accessPolicy: any AccessPolicyProviding = AlwaysAllowAccessPolicy(),
     accessLog: any AccessLogging = NoOpAccessLog(),
     passwordGenerator: PasswordGenerator = PasswordGenerator(),
-    appCallerBundleIdentifier: String = AgentConnectionSecurity.PeerIdentifier.app.rawValue
+    appCallerBundleIdentifier: String = AgentConnectionSecurity.PeerIdentifier.app.rawValue,
+    agentSettingsStore: any AgentSettingsStoring = InMemoryAgentSettingsStore()
   ) {
     self.vaultStore = vaultStore
     self.vaultKeyStore = vaultKeyStore
@@ -55,12 +64,14 @@ public actor AgentServer {
     self.accessLog = accessLog
     self.passwordGenerator = passwordGenerator
     self.appCallerBundleIdentifier = appCallerBundleIdentifier
+    self.agentSettingsStore = agentSettingsStore
   }
 
   /// Handles one already-decoded request and returns the reply envelope to send back.
   ///
-  /// `caller` is threaded through only as far as the access log (see `AccessLogging`'s docs for
-  /// why lock-lifecycle requests never reach it).
+  /// `caller` is threaded through to both the access policy (851-2428's app-connection exemption —
+  /// see `AccessPolicyProviding.isAccessAllowed(for:)`) and the access log (see `AccessLogging`'s
+  /// docs for why lock-lifecycle requests never reach the log).
   public func handle(_ envelope: AgentRequestEnvelope, caller: CallerIdentity) async -> AgentReplyEnvelope {
     guard envelope.version == AgentProtocolVersion.current else {
       return AgentReplyEnvelope(
@@ -72,7 +83,7 @@ public actor AgentServer {
 
     let outcome: AgentOutcome
     switch envelope.request {
-    case .status, .createVault, .unlock, .lock:
+    case .status, .createVault, .unlock, .lock, .getAgentSettings, .setAgentSettings:
       outcome = await lifecycleOutcome(for: envelope.request, caller: caller)
     default:
       outcome = await vaultOutcome(for: envelope.request, caller: caller)
@@ -80,7 +91,7 @@ public actor AgentServer {
     return AgentReplyEnvelope(outcome: outcome)
   }
 
-  // MARK: - Lock lifecycle (never logged — see AccessLogging)
+  // MARK: - Lock lifecycle and helper configuration (never logged — see AccessLogging)
 
   private func lifecycleOutcome(for request: AgentRequest, caller: CallerIdentity) async -> AgentOutcome {
     switch request {
@@ -142,26 +153,46 @@ public actor AgentServer {
       LockStateNotifications.post()
       return .success(.locked)
 
+    case .getAgentSettings:
+      guard isAppCaller(caller) else { return .failure(.callerNotAuthorized) }
+      return .success(.agentSettings(currentAgentSettings()))
+
+    case .setAgentSettings(let settings):
+      guard isAppCaller(caller) else { return .failure(.callerNotAuthorized) }
+      do {
+        try agentSettingsStore.store(settings)
+        return .success(.agentSettings(settings))
+      } catch {
+        return .failure(.internal(message: "\(error)"))
+      }
+
     default:
-      preconditionFailure("lifecycleOutcome only handles .status/.createVault/.unlock/.lock")
+      preconditionFailure(
+        "lifecycleOutcome only handles .status/.createVault/.unlock/.lock/.getAgentSettings/.setAgentSettings"
+      )
     }
   }
 
-  /// Whether `caller` is allowed to send `.createVault`/`.unlock` — both restricted to the app
-  /// itself, since only the app performs the `LAContext` authentication that's supposed to gate
-  /// them (see docs/adr/0001-storage-and-process-model.md (b)). `lilpass`, or any other process,
-  /// must never be able to trigger either just by connecting to the Mach service.
+  /// The 851-2428 agent-access settings, read with the same fail-closed fallback every reader of
+  /// ``agentSettingsStore`` must use — see ``AgentSettings/loaded(from:)``.
+  private func currentAgentSettings() -> AgentSettings {
+    AgentSettings.loaded(from: agentSettingsStore)
+  }
+
+  /// Whether `caller` is allowed to send `.createVault`/`.unlock`/`.getAgentSettings`/
+  /// `.setAgentSettings` — all four restricted to the app itself: the first two because only the
+  /// app performs the `LAContext` authentication that's supposed to gate them (see
+  /// docs/adr/0001-storage-and-process-model.md (b)), the latter two because the 851-2428 Settings
+  /// UI is their only intended writer/reader. `lilpass`, or any other process, must never be able
+  /// to trigger any of them just by connecting to the Mach service.
   ///
-  /// Falls back to `AgentConnectionSecurity.isDebugBuild` when `caller.bundleIdentifier` is `nil`
-  /// (an unsigned/ad-hoc local build, or the in-process XPC test harness, neither of which has a
-  /// real code signature to read a bundle identifier from) — the same DEBUG-vs-Release philosophy
-  /// `AgentConnectionSecurity` itself already applies at the whole-connection level, applied here
-  /// too so this per-request check doesn't independently reject every local/CI build.
+  /// Delegates entirely to `CallerIdentity.isVerifiedApp(appBundleIdentifier:)` — the single,
+  /// shared, code-signing-verified implementation also used by `AgentSettingsAccessPolicy`'s own
+  /// app-connection exemption, so the two checks can never independently drift (see that method's
+  /// documentation for why a previous, separate implementation of the policy's check was a security
+  /// bug).
   private func isAppCaller(_ caller: CallerIdentity) -> Bool {
-    guard let bundleIdentifier = caller.bundleIdentifier else {
-      return AgentConnectionSecurity.isDebugBuild
-    }
-    return bundleIdentifier == appCallerBundleIdentifier
+    caller.isVerifiedApp(appBundleIdentifier: appCallerBundleIdentifier)
   }
 
   // MARK: - Vault operations (logged via AccessLogging)
@@ -169,7 +200,7 @@ public actor AgentServer {
   private func vaultOutcome(for request: AgentRequest, caller: CallerIdentity) async -> AgentOutcome {
     let outcome: AgentOutcome
     do {
-      outcome = .success(try await vaultResponse(for: request))
+      outcome = .success(try await vaultResponse(for: request, caller: caller))
     } catch let error as AgentError {
       outcome = .failure(error)
     } catch let error as VaultStoreError {
@@ -179,17 +210,20 @@ public actor AgentServer {
     }
 
     let succeeded: Bool
-    if case .success = outcome {
+    let response: AgentResponse?
+    if case .success(let value) = outcome {
       succeeded = true
+      response = value
     } else {
       succeeded = false
+      response = nil
     }
-    await accessLog.record(AccessEvent(caller: caller, request: request, succeeded: succeeded))
+    await accessLog.record(AccessEvent(caller: caller, request: request, response: response, succeeded: succeeded))
     return outcome
   }
 
-  private func vaultResponse(for request: AgentRequest) async throws -> AgentResponse {
-    guard await accessPolicy.isAgentAccessEnabled() else { throw AgentError.agentAccessDisabled }
+  private func vaultResponse(for request: AgentRequest, caller: CallerIdentity) async throws -> AgentResponse {
+    guard await accessPolicy.isAccessAllowed(for: caller) else { throw AgentError.agentAccessDisabled }
     guard await vaultStore.isUnlocked else { throw AgentError.locked }
 
     switch request {
@@ -230,8 +264,8 @@ public actor AgentServer {
       let now = Date()
       return .totpCode(TOTPCodeResult(code: totp.code(at: now), expiresAt: totp.nextChange(after: now)))
 
-    case .status, .createVault, .unlock, .lock:
-      preconditionFailure("vaultResponse never sees lock-lifecycle requests")
+    case .status, .createVault, .unlock, .lock, .getAgentSettings, .setAgentSettings:
+      preconditionFailure("vaultResponse never sees lock-lifecycle/helper-configuration requests")
     }
   }
 

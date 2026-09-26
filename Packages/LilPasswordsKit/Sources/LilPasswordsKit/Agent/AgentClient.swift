@@ -147,6 +147,25 @@ public actor AgentClient {
     return result
   }
 
+  /// Reads the 851-2428 agent-access settings straight from the helper's own storage. Restricted
+  /// to the app itself by the helper; see `AgentError.callerNotAuthorized`.
+  public func agentSettings() async throws -> AgentSettings {
+    guard case .agentSettings(let settings) = try await send(.getAgentSettings) else {
+      throw RequestError.connection(.invalidReply)
+    }
+    return settings
+  }
+
+  /// Replaces the 851-2428 agent-access settings. Restricted to the app itself, same as
+  /// ``agentSettings()``. Returns the settings as the helper actually persisted them.
+  @discardableResult
+  public func setAgentSettings(_ settings: AgentSettings) async throws -> AgentSettings {
+    guard case .agentSettings(let updated) = try await send(.setAgentSettings(settings)) else {
+      throw RequestError.connection(.invalidReply)
+    }
+    return updated
+  }
+
   /// Tears down the current connection, if any. The next call reconnects. Not required in normal
   /// use (interruption/invalidation already clear it), but useful for tests and for explicit
   /// "log out" style flows.
