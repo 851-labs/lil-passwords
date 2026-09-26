@@ -14,7 +14,7 @@ struct ListCommand: AsyncParsableCommand {
   @OptionGroup var jsonOutput: JSONOutputOptions
 
   func run() async throws {
-    let items = try await LilpassCommands.list(client: AgentClient(), category: category)
+    let items = try await LilpassCommands.list(client: AgentEndpoint.makeClient(), category: category)
     Output.print(items, asJSON: jsonOutput.json) { items in
       guard !items.isEmpty else {
         print("no items")

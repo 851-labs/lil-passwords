@@ -14,7 +14,7 @@ struct TotpCommand: AsyncParsableCommand {
   @OptionGroup var jsonOutput: JSONOutputOptions
 
   func run() async throws {
-    let result = try await LilpassCommands.totp(client: AgentClient(), identifier: item)
+    let result = try await LilpassCommands.totp(client: AgentEndpoint.makeClient(), identifier: item)
     Output.print(result, asJSON: jsonOutput.json) { result in print(result.code) }
   }
 }

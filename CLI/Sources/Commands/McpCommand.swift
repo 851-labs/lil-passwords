@@ -19,7 +19,7 @@ struct McpCommand: AsyncParsableCommand {
   )
 
   func run() async throws {
-    let server = await LilpassMCP.makeServer(client: AgentClient())
+    let server = await LilpassMCP.makeServer(client: AgentEndpoint.makeClient())
     try await server.start(transport: StdioTransport())
     await server.waitUntilCompleted()
   }

@@ -11,7 +11,7 @@ struct StatusCommand: AsyncParsableCommand {
   @OptionGroup var jsonOutput: JSONOutputOptions
 
   func run() async throws {
-    let status = try await LilpassCommands.status(client: AgentClient())
+    let status = try await LilpassCommands.status(client: AgentEndpoint.makeClient())
     Output.print(status, asJSON: jsonOutput.json) { status in
       print("locked: \(status.locked)")
       print("agentAccessEnabled: \(status.agentAccessEnabled)")

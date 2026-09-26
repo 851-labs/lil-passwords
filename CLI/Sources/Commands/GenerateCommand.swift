@@ -21,7 +21,7 @@ struct GenerateCommand: AsyncParsableCommand {
   @OptionGroup var jsonOutput: JSONOutputOptions
 
   func run() async throws {
-    let password = try await LilpassCommands.generate(client: AgentClient(), length: length, noSymbols: noSymbols)
+    let password = try await LilpassCommands.generate(client: AgentEndpoint.makeClient(), length: length, noSymbols: noSymbols)
     Output.print(password, asJSON: jsonOutput.json) { password in print(password) }
   }
 }

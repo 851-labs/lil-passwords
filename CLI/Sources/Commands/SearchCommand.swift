@@ -14,7 +14,7 @@ struct SearchCommand: AsyncParsableCommand {
   @OptionGroup var jsonOutput: JSONOutputOptions
 
   func run() async throws {
-    let items = try await LilpassCommands.search(client: AgentClient(), query: query)
+    let items = try await LilpassCommands.search(client: AgentEndpoint.makeClient(), query: query)
     Output.print(items, asJSON: jsonOutput.json) { items in
       guard !items.isEmpty else {
         print("no items")
