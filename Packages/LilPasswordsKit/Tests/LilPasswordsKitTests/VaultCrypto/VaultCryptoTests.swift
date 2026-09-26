@@ -21,8 +21,13 @@ import Testing
 }
 
 @Suite struct VaultCryptoSealingTests {
-  private func makeAAD(recordId: UUID = UUID(), type: String = "login", schemaVersion: UInt32 = 1) -> VaultCrypto.AAD {
-    VaultCrypto.AAD(recordId: recordId, type: type, schemaVersion: schemaVersion)
+  private func makeAAD(
+    recordId: UUID = UUID(),
+    type: String = "login",
+    schemaVersion: UInt32 = 1,
+    version: UInt64 = 0
+  ) -> VaultCrypto.AAD {
+    VaultCrypto.AAD(recordId: recordId, type: type, schemaVersion: schemaVersion, version: version)
   }
 
   @Test func sealThenOpenRoundTripsThePlaintext() throws {
@@ -81,6 +86,23 @@ import Testing
 
     #expect(throws: VaultCrypto.Error.authenticationFailed) {
       _ = try VaultCrypto.open(sealed, aad: self.makeAAD(recordId: recordId, schemaVersion: 2), key: key)
+    }
+  }
+
+  @Test func openFailsWithAMismatchedVersion() throws {
+    let key = VaultCrypto.Key.generate()
+    let recordId = UUID()
+    // Simulates an attacker (or a buggy sync client) copying an old revision's ciphertext back
+    // over a row that has since moved to a newer version — the exact replay `AAD.version` exists
+    // to catch. See "AAD includes the record version" in docs/adr/0002-crypto.md.
+    let staleSealed = try VaultCrypto.seal(
+      Data("old value".utf8),
+      aad: makeAAD(recordId: recordId, version: 1),
+      key: key
+    )
+
+    #expect(throws: VaultCrypto.Error.authenticationFailed) {
+      _ = try VaultCrypto.open(staleSealed, aad: self.makeAAD(recordId: recordId, version: 2), key: key)
     }
   }
 

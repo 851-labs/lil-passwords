@@ -51,6 +51,16 @@ Every item is sealed independently with **AES-256-GCM** (`CryptoKit`) under the 
 
 `VaultCrypto.seal`/`VaultCrypto.open` implement exactly this and are the whole of the MVP's item-encryption surface; `VaultStore` (a later ticket) is expected to call them per column, constructing `AAD` from the row's own plaintext `recordId`/`type`/`schemaVersion` columns.
 
+#### AAD includes the record version
+
+*Added in [851-2403](https://linear.app/851/issue/851-2403/item-model-sync-ready-record-format), a crypto-review follow-up to this ADR.*
+
+`VaultCrypto.AAD` also authenticates `version` — the sealed record's own revision counter (`VaultRecord.version`). Without this, an attacker with write access to the vault database (or, later, the sync server) could copy an old sealed row's ciphertext back over a newer row with the same `recordId`/`type`/`schemaVersion`, rolling that item back to a stale value that would still open successfully, since nothing tied the ciphertext to *which* revision it was. Folding `version` into the AAD closes that: replaying an old revision's ciphertext into a slot now claiming a different `version` makes `open` fail with `authenticationFailed`, exactly like a mismatched `recordId` or `type` does today.
+
+This is an in-place extension of `AAD`'s encoding rather than a new `formatVersion`, since it changes what a caller *chooses* to authenticate, not the on-the-wire shape of `SealedItem`/`WrappedKey` themselves. `version` defaults to `0` so any code written against the pre-851-2403 three-argument `AAD.init` still compiles, but that default carries none of the replay protection above — every caller that has a real revision counter (`RecordCodec`, and `VaultStore` once it exists) must pass it explicitly. `RecordCodec` (851-2403) is the first, and so far only, caller that does.
+
+Detecting a rollback this way still requires the *reader* to know which `version` a row is currently supposed to be at (i.e., to pass the row's current, not stale, `version` into `AAD`) — `VaultCrypto` only proves the ciphertext matches whatever `version` it's asked to check against. Preventing a stale row from being read *as if* it were current in the first place is `VaultStore`/sync's job, not this layer's; this AAD binding is the backstop that makes a successful rollback-and-reopen cryptographically detectable rather than silent.
+
 ### Unlock methods
 
 | Method | Where | MVP? |
@@ -98,7 +108,7 @@ The sync server only ever stores ciphertext: sealed items, `WrappedKey` blobs, a
 
 ## Consequences
 
-- `VaultStore` (next) can be built directly against `VaultCrypto.seal`/`open`, constructing `AAD` from each row's own plaintext `recordId`/`type`/`schemaVersion` columns.
+- `VaultStore` (next) can be built directly against `VaultCrypto.seal`/`open`, constructing `AAD` from each row's own plaintext `recordId`/`type`/`schemaVersion`/`version` columns. `RecordCodec` (851-2403) already does this for `PasswordItem` ↔ `VaultRecord` and is the reference implementation to follow.
 - The recovery kit (a future UI ticket) needs only `VaultCrypto.RecoveryKey.generate()`, its `displayString`, and `VaultCrypto.wrapKey`, storing the resulting `WrappedKey` in the database header.
 - The Keychain-storage half of "local Keychain unlock" is implemented separately (851-2402/851-2400); this ADR is what that work should match.
 - Nothing here blocks "Sync & web" from later adding passkey PRF, device approval, or an account key pair — none of the MVP's types assume they don't exist, and none of the "Sync & web" design depends on changing the vault key's own representation.
