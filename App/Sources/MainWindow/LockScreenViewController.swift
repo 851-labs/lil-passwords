@@ -11,7 +11,7 @@ protocol LockScreenViewControllerDelegate: AnyObject {
 }
 
 /// The 851-2422 lock screen: matches Apple Passwords' own lock screen — centered app icon with a
-/// Touch ID badge, "<App Name> Is Locked", "Touch ID or enter your password to continue.", and a
+/// Touch ID badge, "<app name> is locked", "Touch ID or enter your password to continue.", and a
 /// "Use Password…" button. `MainWindowController` swaps this in for `splitViewController` as
 /// `window.contentViewController` while `LockCoordinator.state` is `.locked`, and hides/disables
 /// the toolbar for the same duration — see that type.
@@ -66,7 +66,7 @@ final class LockScreenViewController: NSViewController {
     iconContainer.addSubview(badgeBackground)
     badgeBackground.addSubview(badgeImageView)
 
-    let titleField = NSTextField(labelWithString: "\(LilPasswordsKit.productName) Is Locked")
+    let titleField = NSTextField(labelWithString: "\(LilPasswordsKit.productName) is locked")
     titleField.font = .systemFont(ofSize: 22, weight: .bold)
     titleField.alignment = .center
     titleField.translatesAutoresizingMaskIntoConstraints = false

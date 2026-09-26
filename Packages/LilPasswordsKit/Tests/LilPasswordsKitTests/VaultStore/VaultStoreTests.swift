@@ -224,7 +224,7 @@ import Testing
   @Test func defaultDatabaseURLPointsAtApplicationSupport() throws {
     let url = try VaultStore.defaultDatabaseURL()
     #expect(url.lastPathComponent == "vault.sqlite")
-    #expect(url.deletingLastPathComponent().lastPathComponent == "Lil Passwords")
+    #expect(url.deletingLastPathComponent().lastPathComponent == "lil passwords")
   }
 
   /// The vault lives in `~/Library/Application Support` — a location a malicious sandboxed app
@@ -238,7 +238,7 @@ import Testing
       return (attributes[.posixPermissions] as? NSNumber)?.intValue ?? -1
     }
 
-    let directory = try makeTempDirectory().appendingPathComponent("Lil Passwords", isDirectory: true)
+    let directory = try makeTempDirectory().appendingPathComponent("lil passwords", isDirectory: true)
     let url = directory.appendingPathComponent("vault.sqlite")
 
     // Loosen the directory's permissions first, so the assertions below only pass if `VaultStore`

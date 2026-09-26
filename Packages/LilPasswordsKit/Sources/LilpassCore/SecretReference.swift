@@ -1,7 +1,7 @@
 import Foundation
 
-/// A `lilpw://<item>/<field>` secret reference, the same shape `lilpw read`, `lilpw run --env`, and
-/// `lilpw inject`'s `{{ lilpw://... }}` template placeholders all share — modeled on `op read`'s
+/// A `lilpass://<item>/<field>` secret reference, the same shape `lilpass read`, `lilpass run --env`, and
+/// `lilpass inject`'s `{{ lilpass://... }}` template placeholders all share — modeled on `op read`'s
 /// `op://vault/item/field` references.
 ///
 /// `item` is whatever ``ItemResolver`` accepts (an id, exact title, or website domain). Because it
@@ -9,7 +9,7 @@ import Foundation
 /// non-ASCII) must be percent-encoded by whoever writes the reference — `get`/`totp`/`search`'s
 /// plain string arguments have no such restriction.
 public struct SecretReference: Sendable, Equatable {
-  public static let scheme = "lilpw"
+  public static let scheme = "lilpass"
 
   public let item: String
   public let field: ItemField
@@ -19,7 +19,7 @@ public struct SecretReference: Sendable, Equatable {
     self.field = field
   }
 
-  /// Parses `string`, or returns `nil` if it isn't a well-formed `lilpw://<item>/<field>`
+  /// Parses `string`, or returns `nil` if it isn't a well-formed `lilpass://<item>/<field>`
   /// reference (wrong scheme, missing item, missing/unrecognized field, or extra path segments).
   public init?(string: String) {
     guard let components = URLComponents(string: string), components.scheme == SecretReference.scheme else {

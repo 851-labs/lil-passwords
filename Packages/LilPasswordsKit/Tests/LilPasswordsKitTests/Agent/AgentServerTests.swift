@@ -24,18 +24,18 @@ private let testCaller = CallerIdentity(pid: 1, processPath: "/usr/bin/test", pa
 /// `testCaller`, with no `bundleIdentifier` at all, relies on instead).
 private let appCaller = CallerIdentity(
   pid: 2,
-  processPath: "/Applications/Lil Passwords.app/Contents/MacOS/Lil Passwords",
+  processPath: "/Applications/lil passwords.app/Contents/MacOS/lil passwords",
   parentProcessName: nil,
   bundleIdentifier: AgentConnectionSecurity.PeerIdentifier.app.rawValue
 )
 
-/// A caller identified as `lilpw`, not the app — `.createVault`/`.unlock` must reject this caller
+/// A caller identified as `lilpass`, not the app — `.createVault`/`.unlock` must reject this caller
 /// even though it's a legitimate, recognized peer of the *connection* itself
 /// (`AgentConnectionSecurity` accepts both `.app` and `.cli`); only the app performs the
 /// `LAContext` authentication those two requests presuppose.
 private let cliCaller = CallerIdentity(
   pid: 3,
-  processPath: "/usr/local/bin/lilpw",
+  processPath: "/usr/local/bin/lilpass",
   parentProcessName: nil,
   bundleIdentifier: AgentConnectionSecurity.PeerIdentifier.cli.rawValue
 )

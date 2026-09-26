@@ -1,6 +1,6 @@
 import Foundation
 
-/// Whether `LilPasswordsAgent` should currently serve vault operations to agents (`lilpw`/MCP),
+/// Whether `LilPasswordsAgent` should currently serve vault operations to agents (`lilpass`/MCP),
 /// independent of lock state.
 ///
 /// **Seam**: the Settings → Agents → "Allow agents to access passwords" toggle and its storage

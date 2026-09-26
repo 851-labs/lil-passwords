@@ -36,7 +36,7 @@ public enum AgentRequest: Sendable, Codable, Equatable {
 
   /// First run: asks the helper to generate a fresh vault key, create the vault, and persist the
   /// key to the local Keychain — see `VaultKeyStoring`. Restricted to the app itself (never
-  /// `lilpw`); see `AgentError.callerNotAuthorized`.
+  /// `lilpass`); see `AgentError.callerNotAuthorized`.
   case createVault
 
   /// An unlock **intent**, carrying no key material at all: the app performs `LAContext`
@@ -130,7 +130,7 @@ public enum AgentResponse: Sendable, Codable, Equatable {
 }
 
 /// Every way an `AgentRequest` can fail, as a typed, `Codable` value rather than an opaque string
-/// — so `AgentClient` callers (the app's UI, `lilpw`'s exit codes per 851-2428) can switch on the
+/// — so `AgentClient` callers (the app's UI, `lilpass`'s exit codes per 851-2428) can switch on the
 /// reason instead of pattern-matching error text.
 public enum AgentError: Error, Sendable, Codable, Equatable, CustomStringConvertible {
   /// The helper holds no vault key. The caller (app) needs to unlock via `LAContext` and call
@@ -150,14 +150,14 @@ public enum AgentError: Error, Sendable, Codable, Equatable, CustomStringConvert
 
   /// The request's `AgentRequestEnvelope.version` isn't one this helper build understands. The
   /// MVP doesn't attempt partial compatibility across versions — a mismatch is always a hard
-  /// error, on the theory that the app, `LilPasswordsAgent`, and `lilpw` are always built and
+  /// error, on the theory that the app, `LilPasswordsAgent`, and `lilpass` are always built and
   /// shipped from the same repo/version and a mismatch only happens during development (an old
   /// helper still running after an app rebuild) or a bug, neither of which benefits from silently
   /// degrading.
   case unsupportedProtocolVersion(requested: Int, supported: Int)
 
   /// The connecting process isn't allowed to make this request — currently only reachable for
-  /// `.createVault`/`.unlock`, both restricted to the app itself (never `lilpw`), since only the
+  /// `.createVault`/`.unlock`, both restricted to the app itself (never `lilpass`), since only the
   /// app performs the `LAContext` authentication that's supposed to gate them. See
   /// `AgentServer`'s caller check for how the app is told apart from any other peer.
   case callerNotAuthorized
@@ -180,7 +180,7 @@ public enum AgentError: Error, Sendable, Codable, Equatable, CustomStringConvert
     case .unsupportedProtocolVersion(let requested, let supported):
       return "unsupported agent protocol version \(requested) (this helper supports \(supported))"
     case .callerNotAuthorized:
-      return "this operation is only available to Lil Passwords itself"
+      return "this operation is only available to lil passwords itself"
     case .internal(let message):
       return message
     }

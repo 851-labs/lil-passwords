@@ -1,27 +1,27 @@
 import ArgumentParser
 import LilPasswordsKit
-import LilpwCore
+import LilpassCore
 
 struct ReadCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "read",
-    abstract: "Resolve a lilpw://item/field secret reference and print its value.",
+    abstract: "Resolve a lilpass://item/field secret reference and print its value.",
     discussion: """
       Modeled on `op read`'s `op://vault/item/field` references, e.g.:
-        lilpw read lilpw://github.com/password
+        lilpass read lilpass://github.com/password
       """
   )
 
-  @Argument(help: "A lilpw://<item>/<field> reference.")
+  @Argument(help: "A lilpass://<item>/<field> reference.")
   var reference: String
 
   @OptionGroup var jsonOutput: JSONOutputOptions
 
   func run() async throws {
     guard let parsedReference = SecretReference(string: reference) else {
-      throw LilpwError(exitCode: .usage, message: "not a valid lilpw:// reference: \"\(reference)\"")
+      throw LilpassError(exitCode: .usage, message: "not a valid lilpass:// reference: \"\(reference)\"")
     }
-    let value = try await LilpwCommands.read(client: AgentClient(), reference: parsedReference)
+    let value = try await LilpassCommands.read(client: AgentClient(), reference: parsedReference)
     Output.print(value, asJSON: jsonOutput.json) { value in print(value.value) }
   }
 }

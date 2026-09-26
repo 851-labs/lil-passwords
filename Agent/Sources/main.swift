@@ -4,7 +4,7 @@ import Foundation
 import LilPasswordsKit
 
 // `LilPasswordsAgent` is a Mach service: launchd starts this process on demand when a client (the
-// app or `lilpw`) first connects to `AgentXPC.machServiceName`, and stops it again once every
+// app or `lilpass`) first connects to `AgentXPC.machServiceName`, and stops it again once every
 // connection using the service has gone away — see `Agent/Support/com.851labs.lilpasswords.agent.plist`
 // and docs/adr/0001-storage-and-process-model.md.
 
@@ -27,7 +27,7 @@ let vaultKeyStore = KeychainVaultKeyStore()
 // TODO(851-2428): replace this with the real, AppSettings-backed `AccessPolicyProviding` (the
 // Settings → Agents toggle) once it exists.
 //
-// Until then, a DEBUG-only local override lets 851-2430/851-2431 tophat `lilpw`/`lilpw mcp`
+// Until then, a DEBUG-only local override lets 851-2430/851-2431 tophat `lilpass`/`lilpass mcp`
 // against a real, launchd-managed helper without hand-building Settings UI first. See
 // docs/tophat.md for how to enable it. `#if DEBUG` guarantees this can never reach a Release
 // build: the override check (env var, launch argument) isn't merely unreachable at runtime in
@@ -36,14 +36,14 @@ let vaultKeyStore = KeychainVaultKeyStore()
 #if DEBUG
   /// - Returns: `true` if a developer has explicitly opted this helper process into agent access
   ///   for local tophat testing, via either:
-  ///   - `launchctl setenv LILPW_TOPHAT_ALLOW_AGENT_ACCESS 1` (launchd reads its own managed
+  ///   - `launchctl setenv LILPASS_TOPHAT_ALLOW_AGENT_ACCESS 1` (launchd reads its own managed
   ///     environment when it activates the on-demand Mach service, so this must be set — and the
   ///     helper stopped/relaunched if it was already running — before the next connection attempt
   ///     triggers activation), or
   ///   - passing `--allow-agent-access-debug` when launching this binary directly (e.g. running it
   ///     from Xcode or a terminal rather than through launchd).
   func debugAgentAccessOverrideEnabled() -> Bool {
-    if ProcessInfo.processInfo.environment["LILPW_TOPHAT_ALLOW_AGENT_ACCESS"] == "1" { return true }
+    if ProcessInfo.processInfo.environment["LILPASS_TOPHAT_ALLOW_AGENT_ACCESS"] == "1" { return true }
     if CommandLine.arguments.contains("--allow-agent-access-debug") { return true }
     return false
   }
@@ -63,7 +63,7 @@ let server = AgentServer(
 // TODO(851-2429): supply the real `AccessLogging` conformer once it exists; `AgentServer`'s default
 // (`NoOpAccessLog`) is used above until then.
 
-// Accept only connections from the app or `lilpw`, validated against our own running process's
+// Accept only connections from the app or `lilpass`, validated against our own running process's
 // code-signing team identifier — see `AgentConnectionSecurity`'s documentation for why this reads
 // the team id from `self` rather than a hardcoded constant, and for the ad-hoc/unsigned-build
 // fallback (the default for local dev builds and CI; see `Config/Base.xcconfig`).

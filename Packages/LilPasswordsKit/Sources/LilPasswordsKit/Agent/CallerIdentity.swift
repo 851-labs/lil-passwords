@@ -13,13 +13,13 @@ public struct CallerIdentity: Sendable, Equatable {
   /// The connecting process's pid, from `NSXPCConnection.processIdentifier`.
   public var pid: pid_t
 
-  /// The connecting process's executable path (`lilpw`, or the app's own path if the app ever
+  /// The connecting process's executable path (`lilpass`, or the app's own path if the app ever
   /// talks to itself), or `nil` if it couldn't be resolved (the process has already exited, or
   /// `proc_pidpath` failed for another reason).
   public var processPath: String?
 
   /// The name of `pid`'s parent process at connection time (e.g. `claude`, `codex`, `zsh`, or the
-  /// app itself if it launched `lilpw` directly), or `nil` if it couldn't be resolved.
+  /// app itself if it launched `lilpass` directly), or `nil` if it couldn't be resolved.
   public var parentProcessName: String?
 
   /// The connecting process's own code-signing identifier (`CFBundleIdentifier` for an app/tool

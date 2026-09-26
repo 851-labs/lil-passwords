@@ -45,7 +45,7 @@ final class SecuritySettingsViewController: NSViewController {
       SettingsLayout.sectionHeader("Auto-Lock"),
       autoLockRow,
       SettingsLayout.caption(
-        "Lil Passwords locks and requires Touch ID or your password again after this much inactivity."),
+        "lil passwords locks and requires Touch ID or your password again after this much inactivity."),
       SettingsLayout.sectionHeader("Clipboard"),
       clipboardRow,
       SettingsLayout.caption("Copied passwords and verification codes are removed from the clipboard automatically."),

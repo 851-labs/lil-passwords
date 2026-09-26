@@ -7,7 +7,7 @@
 
 The project's shape is: **LilPasswords.app** (AppKit UI), **LilPasswordsAgent** (a
 per-user login-item helper registered with `SMAppService`, which is meant to own
-the unlocked vault key and serve requests over XPC), and **lilpw** (a CLI + MCP
+the unlocked vault key and serve requests over XPC), and **lilpass** (a CLI + MCP
 server that talks to the helper). All three need to agree on where the vault
 database lives, where the vault key lives, whether a Touch ID prompt can come
 from the helper, and how they learn about each other's writes — before any of
@@ -65,7 +65,7 @@ signed, Apple Development, no ent: -34018 (A required entitlement is not present
 one this spike recommends, is: **only `LilPasswordsAgent` ever calls
 `SecItem*`.** It stores the vault key as a generic-password item in its own
 process's legacy keychain, using no entitlement and no access group. The app
-and `lilpw` never touch the Keychain — they ask the helper for a session over
+and `lilpass` never touch the Keychain — they ask the helper for a session over
 XPC instead. This sidesteps cross-process Keychain sharing entirely (no
 `keychain-access-groups`, no provisioning profile, no dependence on the 851
 Labs team existing) and reduces the blast radius of a bug: there is exactly
@@ -158,16 +158,16 @@ entitlements) is a *restricted* entitlement: carrying it in your code
 signature without a matching provisioning profile from the signing team gets
 you killed outright, independent of whether you ever call a Keychain API.
 
-The deeper reason `lilpw` specifically can never hold this, even once the 851
+The deeper reason `lilpass` specifically can never hold this, even once the 851
 Labs team exists: a provisioning profile is embedded as a file
-(`embedded.provisionprofile`) inside an application **bundle**. `lilpw` is a
-bare Mach-O executable — whether it's sitting in `Contents/Helpers/lilpw`
+(`embedded.provisionprofile`) inside an application **bundle**. `lilpass` is a
+bare Mach-O executable — whether it's sitting in `Contents/Helpers/lilpass`
 inside the app bundle or installed standalone to `/usr/local/bin` (e.g. via
 Homebrew) for scripting/agent use, it has no bundle of its own to embed a
-profile in. So `lilpw` can never be granted a restricted entitlement, by
+profile in. So `lilpass` can never be granted a restricted entitlement, by
 construction, not just "we chose not to." It must ask
 `LilPasswordsAgent` — the one process that owns the vault key — for
-everything, over XPC. `lilpw mcp` (the stdio MCP server) is the same binary,
+everything, over XPC. `lilpass mcp` (the stdio MCP server) is the same binary,
 same constraint.
 
 ## (d) Shared vault DB location and cross-process change notification
@@ -177,7 +177,7 @@ sandboxed app shares files with its sandboxed extensions, each normally
 isolated in its own container). We're not sandboxing (see Context), so it buys
 nothing here and would cost another restricted, profile-gated entitlement
 (`com.apple.security.application-groups`) for no benefit. **Recommendation:**
-a plain directory, `~/Library/Application Support/Lil Passwords/`, holding
+a plain directory, `~/Library/Application Support/lil passwords/`, holding
 `vault.sqlite`. The app and the helper both run as the same local user, so
 normal POSIX file permissions are sufficient — no entitlement, no profile, and
 it works from an ad-hoc/unsigned dev build too (matters for the "local dev
@@ -197,7 +197,7 @@ Darwin notifications carry no payload and aren't restricted by App Sandbox
 either way, so they're a good fit regardless of future sandboxing decisions.
 **Recommendation:** the helper posts a Darwin notification (reverse-DNS name,
 e.g. `com.851labs.lilpasswords.vaultChanged`) after every write; the app (and
-any future long-lived `lilpw` process) observes it and re-reads the DB. We
+any future long-lived `lilpass` process) observes it and re-reads the DB. We
 don't need `NSFilePresenter`/file coordination — that machinery exists to
 mediate *simultaneous* writers under sandboxed file coordination, and in this
 design there's exactly one writer (the helper) and N read-only observers.
@@ -213,10 +213,10 @@ design there's exactly one writer (the helper) and N read-only observers.
    authentication happens in the app via `LAContext`, which then hands its
    evaluated session to the helper over XPC (851-2427 territory, but the shape
    is decided here).
-3. **`lilpw` (and `lilpw mcp`) always go through XPC to the helper.** It never
+3. **`lilpass` (and `lilpass mcp`) always go through XPC to the helper.** It never
    touches the Keychain or the vault DB file directly — structurally, not just
    by convention, since it can never hold a restricted entitlement.
-4. **The vault DB lives at `~/Library/Application Support/Lil Passwords/vault.sqlite`,**
+4. **The vault DB lives at `~/Library/Application Support/lil passwords/vault.sqlite`,**
    no app group container, no App Sandbox.
 5. **Cross-process change notification uses Darwin notify**
    (`com.851labs.lilpasswords.vaultChanged`), posted by the helper after every
@@ -237,7 +237,7 @@ design there's exactly one writer (the helper) and N read-only observers.
   install location. No `RunAtLoad`/`KeepAlive`/`MachServices` yet — with no
   trigger, `launchd` registers the job but never runs it, which is fine: the
   agent has nothing to do until XPC (851-2427) adds a `MachServices` entry.
-- `LilPasswordsAgent` and `lilpw` are both embedded at `Contents/Helpers/`
+- `LilPasswordsAgent` and `lilpass` are both embedded at `Contents/Helpers/`
   (matching the plist's `BundleProgram`) rather than alongside the app's own
   executable in `Contents/MacOS`. They deliberately share one
   `destination`/`subpath` pair: XcodeGen groups embedded dependencies into

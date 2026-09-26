@@ -2,7 +2,7 @@ import Foundation
 import Security
 
 /// Builds the code-signing requirement that validates the far side of an `NSXPCConnection`: the
-/// helper checks that a connecting client is really the app or `lilpw`, and `AgentClient` checks
+/// helper checks that a connecting client is really the app or `lilpass`, and `AgentClient` checks
 /// that it's really talking to the real helper, not a same-user process that squatted the Mach
 /// service name before the real one started.
 ///
@@ -41,7 +41,7 @@ public enum AgentConnectionSecurity {
     /// No team identifier could be determined for the running process, and this is **not** a
     /// `DEBUG` build. Every connection must be refused rather than accepted unauthenticated: a
     /// Release build with no team identifier to validate against has no safe way to tell the real
-    /// app/`lilpw` apart from any other process on the machine, and this helper holds the vault
+    /// app/`lilpass` apart from any other process on the machine, and this helper holds the vault
     /// key once unlocked — silently running with `.developmentFallback`'s "accept anything"
     /// behavior in that configuration would let any local process read the vault through it.
     case rejectAll(reason: String)

@@ -149,7 +149,7 @@ public actor AgentServer {
 
   /// Whether `caller` is allowed to send `.createVault`/`.unlock` — both restricted to the app
   /// itself, since only the app performs the `LAContext` authentication that's supposed to gate
-  /// them (see docs/adr/0001-storage-and-process-model.md (b)). `lilpw`, or any other process,
+  /// them (see docs/adr/0001-storage-and-process-model.md (b)). `lilpass`, or any other process,
   /// must never be able to trigger either just by connecting to the Mach service.
   ///
   /// Falls back to `AgentConnectionSecurity.isDebugBuild` when `caller.bundleIdentifier` is `nil`
@@ -239,7 +239,7 @@ public actor AgentServer {
   /// deleted record (with `deletedAt` set) until the store's next reload — see
   /// `VaultStoreSharedBehaviorTests.assertCRUDLifecycle`'s "Soft delete" comment. `AgentServer`'s
   /// wire protocol has no notion of tombstones, so every vault operation filters them out here
-  /// rather than leaking that storage-layer detail to `lilpw`/the app.
+  /// rather than leaking that storage-layer detail to `lilpass`/the app.
   private func isLive(_ item: PasswordItem) -> Bool {
     item.deletedAt == nil
   }

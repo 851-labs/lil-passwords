@@ -5,7 +5,7 @@ import Foundation
 ///
 /// This is deliberately just a Swift actor protocol with no knowledge of XPC, `LilPasswordsAgent`,
 /// or the app — per the project's architecture, `LilPasswordsAgent` is the process that will own
-/// the real `VaultStore` instance and serve it to the app/`lilpw` over XPC (851-2427), but that's
+/// the real `VaultStore` instance and serve it to the app/`lilpass` over XPC (851-2427), but that's
 /// a transport concern layered on top of this, not something `VaultStore` itself should know
 /// about.
 ///

@@ -1,6 +1,6 @@
 import ArgumentParser
 import LilPasswordsKit
-import LilpwCore
+import LilpassCore
 
 struct StatusCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
@@ -11,7 +11,7 @@ struct StatusCommand: AsyncParsableCommand {
   @OptionGroup var jsonOutput: JSONOutputOptions
 
   func run() async throws {
-    let status = try await LilpwCommands.status(client: AgentClient())
+    let status = try await LilpassCommands.status(client: AgentClient())
     Output.print(status, asJSON: jsonOutput.json) { status in
       print("locked: \(status.locked)")
       print("agentAccessEnabled: \(status.agentAccessEnabled)")

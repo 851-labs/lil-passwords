@@ -1,15 +1,15 @@
 import Foundation
 import LilPasswordsKit
-import LilpwCore
+import LilpassCore
 import Testing
 
-@Suite struct LilpwInjectTests {
+@Suite struct LilpassInjectTests {
   @Test func replacesASinglePlaceholder() async throws {
     let item = makeTestItem(title: "GitHub", password: "hunter2")
     let harness = try await Harness(items: [item])
 
-    let output = try await LilpwInject.inject(
-      template: "TOKEN={{ lilpw://github/password }}\n",
+    let output = try await LilpassInject.inject(
+      template: "TOKEN={{ lilpass://github/password }}\n",
       client: harness.client
     )
     #expect(output == "TOKEN=hunter2\n")
@@ -20,10 +20,10 @@ import Testing
     let harness = try await Harness(items: [item])
 
     let template = """
-      USER={{lilpw://github/username}}
-      PASS={{ lilpw://github/password }}
+      USER={{lilpass://github/username}}
+      PASS={{ lilpass://github/password }}
       """
-    let output = try await LilpwInject.inject(template: template, client: harness.client)
+    let output = try await LilpassInject.inject(template: template, client: harness.client)
     #expect(
       output == """
         USER=octocat
@@ -35,8 +35,8 @@ import Testing
     let item = makeTestItem(title: "GitHub", usernames: ["octocat"], password: "hunter2")
     let harness = try await Harness(items: [item])
 
-    let output = try await LilpwInject.inject(
-      template: "{{lilpw://github/username}}:{{lilpw://github/password}}",
+    let output = try await LilpassInject.inject(
+      template: "{{lilpass://github/username}}:{{lilpass://github/password}}",
       client: harness.client
     )
     #expect(output == "octocat:hunter2")
@@ -44,7 +44,7 @@ import Testing
 
   @Test func leavesNonPlaceholderTextUntouched() async throws {
     let harness = try await Harness()
-    let output = try await LilpwInject.inject(template: "no placeholders here", client: harness.client)
+    let output = try await LilpassInject.inject(template: "no placeholders here", client: harness.client)
     #expect(output == "no placeholders here")
   }
 
@@ -52,11 +52,11 @@ import Testing
     let item = makeTestItem(title: "GitHub", password: "hunter2")
     let harness = try await Harness(items: [item])
 
-    let template = "GOOD={{ lilpw://github/password }}\nBAD={{ lilpw://nonexistent/password }}\n"
+    let template = "GOOD={{ lilpass://github/password }}\nBAD={{ lilpass://nonexistent/password }}\n"
     do {
-      _ = try await LilpwInject.inject(template: template, client: harness.client)
+      _ = try await LilpassInject.inject(template: template, client: harness.client)
       Issue.record("expected a throw")
-    } catch let error as LilpwError {
+    } catch let error as LilpassError {
       #expect(error.exitCode == .notFound)
     }
   }
@@ -64,9 +64,9 @@ import Testing
   @Test func rejectsAMalformedReferenceInsideAPlaceholder() async throws {
     let harness = try await Harness()
     do {
-      _ = try await LilpwInject.inject(template: "{{ lilpw://github }}", client: harness.client)
+      _ = try await LilpassInject.inject(template: "{{ lilpass://github }}", client: harness.client)
       Issue.record("expected .usage")
-    } catch let error as LilpwError {
+    } catch let error as LilpassError {
       #expect(error.exitCode == .usage)
     }
   }

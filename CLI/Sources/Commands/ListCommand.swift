@@ -1,6 +1,6 @@
 import ArgumentParser
 import LilPasswordsKit
-import LilpwCore
+import LilpassCore
 
 struct ListCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
@@ -14,7 +14,7 @@ struct ListCommand: AsyncParsableCommand {
   @OptionGroup var jsonOutput: JSONOutputOptions
 
   func run() async throws {
-    let items = try await LilpwCommands.list(client: AgentClient(), category: category)
+    let items = try await LilpassCommands.list(client: AgentClient(), category: category)
     Output.print(items, asJSON: jsonOutput.json) { items in
       guard !items.isEmpty else {
         print("no items")

@@ -1,10 +1,10 @@
 import Foundation
 
-/// The one JSON encoding lilpw ever uses for machine-readable output: sorted keys (stable, diffable
+/// The one JSON encoding lilpass ever uses for machine-readable output: sorted keys (stable, diffable
 /// output) and ISO-8601 dates. Shared by the CLI's `--json` flag (`Output.print`) and the MCP
-/// server's tool results (`LilpwMCP`) so both surfaces serialize the exact same `Codable` values
+/// server's tool results (`LilpassMCP`) so both surfaces serialize the exact same `Codable` values
 /// (`ItemSummary`, `ItemDetail`, `FieldValue`, ...) identically.
-public enum LilpwJSON {
+public enum LilpassJSON {
   public static let encoder: JSONEncoder = {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]

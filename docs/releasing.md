@@ -35,8 +35,8 @@ standalone script you can also run on its own once earlier stages have run:
    identity; signing happens as its own step next.
 3. `sign.sh` — signs inside out with each target's entitlements: Sparkle's
    bundled helper tools first (`Autoupdate`, `Updater.app`, its two XPC
-   services), then the embedded `LilPasswordsAgent` and `lilpw`
-   (`Contents/Helpers`), then `Lil Passwords.app` itself last, since its seal
+   services), then the embedded `LilPasswordsAgent` and `lilpass`
+   (`Contents/Helpers`), then `lil passwords.app` itself last, since its seal
    has to cover everything already signed inside it. Uses whichever identity
    `scripts/release/lib.sh`'s `signing_identity()` resolves — ad hoc today, a
    real Developer ID identity once one exists. Hardened runtime
@@ -184,13 +184,13 @@ Useful verification commands against the results:
 
 ```
 # Inspect the built app's signature
-codesign -dv --verbose=4 "build/Build/Products/Release/Lil Passwords.app"
-codesign --verify --deep --strict --verbose=2 "build/Build/Products/Release/Lil Passwords.app"
+codesign -dv --verbose=4 "build/Build/Products/Release/lil passwords.app"
+codesign --verify --deep --strict --verbose=2 "build/Build/Products/Release/lil passwords.app"
 
 # Mount the DMG and look at what shipped inside it
 hdiutil attach dist/LilPasswords-*.dmg
-ls "/Volumes/Lil Passwords"
-hdiutil detach "/Volumes/Lil Passwords"
+ls "/Volumes/lil passwords"
+hdiutil detach "/Volumes/lil passwords"
 ```
 
 `generate-appcast.sh` needs `SPARKLE_ED_PRIVATE_KEY` set in your shell to do

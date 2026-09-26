@@ -2,7 +2,7 @@
 
 **Status: Proposed — needs external review.**
 
-Related: [851-2446](https://linear.app/851/issue/851-2446/crypto-design-adr-key-hierarchy-unlock-methods-recovery). Written before `VaultStore` is built, per the [project decisions](https://linear.app/851/project/lil-passwords-ceedf3416b9d): macOS 13+, Swift 6, AppKit, a **fully local MVP** (no accounts, no server, no iCloud, no network requests that touch vault data), an encrypted SQLite vault, a `LilPasswordsAgent` helper that owns the vault key and serves XPC, and `lilpw`/MCP talking to the helper.
+Related: [851-2446](https://linear.app/851/issue/851-2446/crypto-design-adr-key-hierarchy-unlock-methods-recovery). Written before `VaultStore` is built, per the [project decisions](https://linear.app/851/project/lil-passwords-ceedf3416b9d): macOS 13+, Swift 6, AppKit, a **fully local MVP** (no accounts, no server, no iCloud, no network requests that touch vault data), an encrypted SQLite vault, a `LilPasswordsAgent` helper that owns the vault key and serves XPC, and `lilpass`/MCP talking to the helper.
 
 This ADR covers what ships in the MVP (implemented alongside this doc, in `LilPasswordsKit`'s `VaultCrypto`) and what's designed but deliberately **not built yet** for "Sync & web" and "Later" (marked as such throughout).
 
@@ -70,7 +70,7 @@ Detecting a rollback this way still requires the *reader* to know which `version
 | Passkey (WebAuthn PRF) | Web vault | 🔜 Designed below; not built ("Sync & web"). |
 | Approval from an existing device | New devices | 🔜 Designed below; not built ("Sync & web"). |
 
-**Local Keychain (Mac).** The vault key's raw bytes are stored as a Keychain item scoped `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` — available only while the Mac is unlocked, and, critically, **never included in an iCloud Keychain sync circle or a device backup that would carry it off-device**. Access is additionally gated by a `SecAccessControl` requiring Touch ID/user presence, so a process other than `LilPasswordsAgent` can't silently read it via a generic Keychain query. Only `LilPasswordsAgent` holds an unwrapped copy in memory once the user has unlocked; `lilpw` and the app never touch the Keychain item directly, they ask the agent over XPC.
+**Local Keychain (Mac).** The vault key's raw bytes are stored as a Keychain item scoped `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` — available only while the Mac is unlocked, and, critically, **never included in an iCloud Keychain sync circle or a device backup that would carry it off-device**. Access is additionally gated by a `SecAccessControl` requiring Touch ID/user presence, so a process other than `LilPasswordsAgent` can't silently read it via a generic Keychain query. Only `LilPasswordsAgent` holds an unwrapped copy in memory once the user has unlocked; `lilpass` and the app never touch the Keychain item directly, they ask the agent over XPC.
 
 **Recovery key.** 160 bits of randomness (`VaultCrypto.RecoveryKey`), shown to the user once, at vault creation, as grouped, human-transcribable **Crockford Base32** (excludes the visually ambiguous `I`, `L`, `O`, `U`) with a trailing CRC-8 checksum byte, e.g. `4S9K-D2XQ-7RTN-…`. The checksum catches the overwhelming majority of single-character copying mistakes before the user walks away from the recovery card thinking they wrote it down correctly.
 
