@@ -41,6 +41,14 @@ import Testing
     #expect(LilpassError.from(error).exitCode == .ambiguous)
   }
 
+  @Test func mapsRemoteApprovalDeniedOrTimedOutToItsOwnExitCode() {
+    let error = AgentClient.RequestError.remote(.approvalDeniedOrTimedOut)
+    #expect(LilpassError.from(error).exitCode == .approvalDeniedOrTimedOut)
+    // 851-2430/851-2433 already claimed exit codes 0-8; 851-2445's new case must not collide with
+    // any of them or with any future ticket picking the "next" code without checking here first.
+    #expect(LilpassExitCode.approvalDeniedOrTimedOut.rawValue == 9)
+  }
+
   @Test func mapsRemoteInternalErrorToGeneric() {
     let error = AgentClient.RequestError.remote(.internal(message: "boom"))
     #expect(LilpassError.from(error).exitCode == .generic)

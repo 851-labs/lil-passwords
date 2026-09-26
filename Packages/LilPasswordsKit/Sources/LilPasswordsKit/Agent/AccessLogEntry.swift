@@ -40,6 +40,14 @@ public struct AccessLogEntry: Sendable, Codable, Equatable, Identifiable {
   /// written. See ``AccessEventSummary`` for exactly how this is derived per operation.
   public var fields: [String]
 
+  /// The Settings → Agents access mode (851-2445) in effect for this event — see
+  /// `AccessEvent.accessMode`.
+  public var accessMode: AgentAccessScope
+
+  /// How a live `.askEveryTime` approval (if one ran) was resolved — see
+  /// `AccessEvent.approvalOutcome`.
+  public var approvalOutcome: ApprovalOutcome?
+
   public init(
     id: UUID = UUID(),
     date: Date,
@@ -48,7 +56,9 @@ public struct AccessLogEntry: Sendable, Codable, Equatable, Identifiable {
     succeeded: Bool,
     itemId: UUID? = nil,
     itemTitle: String? = nil,
-    fields: [String] = []
+    fields: [String] = [],
+    accessMode: AgentAccessScope = .allPasswords,
+    approvalOutcome: ApprovalOutcome? = nil
   ) {
     self.id = id
     self.date = date
@@ -58,6 +68,31 @@ public struct AccessLogEntry: Sendable, Codable, Equatable, Identifiable {
     self.itemId = itemId
     self.itemTitle = itemTitle
     self.fields = fields
+    self.accessMode = accessMode
+    self.approvalOutcome = approvalOutcome
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case id, date, operation, callerChain, succeeded, itemId, itemTitle, fields, accessMode, approvalOutcome
+  }
+
+  /// A custom, rather than synthesized, `Decodable` conformance so an on-disk JSONL entry written
+  /// before 851-2445 added ``accessMode``/``approvalOutcome`` (no such keys in its stored JSON at
+  /// all) still decodes instead of throwing — falling back to ``AgentAccessScope/allPasswords``/
+  /// `nil`, the same defaults `init(...)` above uses, the same backward-compatibility pattern
+  /// `AgentSettings.init(from:)` established for 851-2433.
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(UUID.self, forKey: .id)
+    date = try container.decode(Date.self, forKey: .date)
+    operation = try container.decode(String.self, forKey: .operation)
+    callerChain = try container.decode([String].self, forKey: .callerChain)
+    succeeded = try container.decode(Bool.self, forKey: .succeeded)
+    itemId = try container.decodeIfPresent(UUID.self, forKey: .itemId)
+    itemTitle = try container.decodeIfPresent(String.self, forKey: .itemTitle)
+    fields = try container.decodeIfPresent([String].self, forKey: .fields) ?? []
+    accessMode = try container.decodeIfPresent(AgentAccessScope.self, forKey: .accessMode) ?? .allPasswords
+    approvalOutcome = try container.decodeIfPresent(ApprovalOutcome.self, forKey: .approvalOutcome)
   }
 
   /// Display string for the Settings → Agents table's "Agent" column, e.g. `"claude → node → lilpass"`
@@ -93,7 +128,9 @@ enum AccessEventSummary {
       succeeded: event.succeeded,
       itemId: summary.itemId,
       itemTitle: summary.itemTitle,
-      fields: summary.fields
+      fields: summary.fields,
+      accessMode: event.accessMode,
+      approvalOutcome: event.approvalOutcome
     )
   }
 
@@ -179,7 +216,8 @@ enum AccessEventSummary {
       // to report, by construction.
       return Summary(operation: "autoFillCredential", itemId: id, itemTitle: nil, fields: ["username", "password"])
 
-    case .status, .createVault, .unlock, .lock, .getAgentSettings, .setAgentSettings, .rotateRecoveryKey:
+    case .status, .createVault, .unlock, .lock, .getAgentSettings, .setAgentSettings, .rotateRecoveryKey,
+      .pendingApprovals, .resolveApproval:
       preconditionFailure(
         "AgentServer never sends lock-lifecycle/helper-configuration requests to the access log"
       )

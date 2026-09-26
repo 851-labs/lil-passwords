@@ -120,6 +120,27 @@ public enum AgentRequest: Sendable, Codable, Equatable {
   /// ``autoFillIdentities(serviceIdentifiers:)``. Fails with ``AgentError/notFound`` if `id` doesn't
   /// match a live item.
   case autoFillCredential(id: UUID)
+
+  /// The 851-2445 "ask every time" approval queue: every request currently parked in
+  /// `ApprovalCenter` awaiting a decision. Restricted to the app itself, same as
+  /// ``getAgentSettings``/``setAgentSettings``, and — like those two — never reaches the access
+  /// log; see docs/adr/0007-scoped-agent-access.md.
+  case pendingApprovals
+
+  /// Answers one pending approval (by the id `PendingApprovalSummary.id` handed back from
+  /// ``pendingApprovals``) with the person's decision from the 851-2445 Touch ID-gated system
+  /// dialog. Restricted to the app itself, same as ``pendingApprovals``.
+  case resolveApproval(id: UUID, decision: ApprovalDecision)
+
+  /// Whether this is `.generatePassword` — the one vault-adjacent request `AgentServer` exempts
+  /// from 851-2445's `AgentAccessScope.askEveryTime` approval gate, since it never reads or writes
+  /// any existing item and so has nothing an approval dialog could meaningfully describe (there's
+  /// no item title, and "wants to generate a password" isn't a decision worth interrupting someone
+  /// for). See docs/adr/0007-scoped-agent-access.md.
+  public var isGeneratePassword: Bool {
+    if case .generatePassword = self { return true }
+    return false
+  }
 }
 
 /// A vault item's identity for AutoFill purposes (851-2441): enough to render one row in the
@@ -138,6 +159,97 @@ public struct CredentialIdentity: Sendable, Codable, Equatable, Identifiable {
     self.title = title
     self.username = username
     self.website = website
+  }
+}
+
+/// How Settings → Agents' 851-2445 access-mode picker currently gates non-app callers
+/// (`lilpass`/MCP) — mutually exclusive, unlike ``AgentSettings/agentAccessEnabled``/
+/// ``AgentSettings/agentWriteAccessEnabled``, which are independent flags. See
+/// docs/adr/0007-scoped-agent-access.md for the full design, including why `.selected` and
+/// `.askEveryTime` are alternatives rather than stackable.
+public enum AgentAccessScope: String, Sendable, Codable, Equatable, CaseIterable {
+  /// Today's (pre-851-2445) behavior: every non-app caller with ``AgentSettings/agentAccessEnabled``
+  /// sees every item. The default, and what every `AgentSettings` item stored before this ticket
+  /// decodes to — see ``AgentSettings/init(from:)``.
+  case allPasswords
+
+  /// Only items whose id is in ``AgentSettings/allowedItemIDs`` or whose group is in
+  /// ``AgentSettings/allowedGroups`` are visible to a non-app caller; everything else behaves as
+  /// `AgentError.notFound`, never a distinguishable "forbidden" — see
+  /// docs/adr/0007-scoped-agent-access.md's "No existence leak" section.
+  case selected
+
+  /// Every vault operation except ``AgentRequest/generatePassword(_:)`` blocks on a live,
+  /// `LAContext`-gated approval from the app before proceeding — see ``ApprovalDecision``,
+  /// ``PendingApprovalSummary``, and docs/adr/0007-scoped-agent-access.md's "Approval flow"
+  /// section.
+  case askEveryTime
+
+  /// Plain-English label, for non-UI call sites (the access log's future use, debug/tophat
+  /// descriptions) that just need a readable name and aren't rendered through SwiftUI. This package
+  /// has no String Catalog of its own — the same reason `AppSettings.AutoLockInterval.displayName`
+  /// returns unlocalized text — so it's deliberately *not* used by `AgentsSettingsView`'s picker;
+  /// that view builds its own `Text("literal")` per case instead, so each option is a
+  /// `LocalizedStringKey` the App target's `Localizable.xcstrings` actually extracts and localizes.
+  public var displayName: String {
+    switch self {
+    case .allPasswords: "All Passwords"
+    case .selected: "Only Selected Passwords"
+    case .askEveryTime: "Ask Every Time"
+    }
+  }
+}
+
+/// A person's answer to one 851-2445 approval prompt, sent back via
+/// ``AgentRequest/resolveApproval(id:decision:)``.
+public enum ApprovalDecision: Sendable, Codable, Equatable {
+  /// Allow just the one request that's currently parked awaiting this decision.
+  case allowOnce
+
+  /// Allow this request, and — per docs/adr/0007-scoped-agent-access.md's "Agent identity for
+  /// grants" — skip the prompt for any further request from the same top-level agent
+  /// (`AgentGrantIdentity`) for the next 15 minutes.
+  case allowFor15Minutes
+
+  /// Deny this request. Indistinguishable, by design, from a timeout — see
+  /// ``AgentError/approvalDeniedOrTimedOut``.
+  case deny
+}
+
+/// Everything the app's 851-2445 approval dialog needs to render one pending request — carries no
+/// secret: not the requested item's password, only its title (if the item could be resolved before
+/// the prompt was raised).
+public struct PendingApprovalSummary: Sendable, Codable, Equatable, Identifiable {
+  public var id: UUID
+  public var requestedAt: Date
+
+  /// A short, human-readable name for the requesting agent (e.g. `"claude"`) — the top-level
+  /// entry of the resolved process chain, not a raw pid. See
+  /// `CallerIdentityResolver.resolveTopLevelAgentIdentity(pid:maxDepth:)`.
+  public var agentDescription: String
+
+  /// The title of the item this request concerns, if one could be resolved — `nil` for operations
+  /// with no single target (`.list`/`.search`/`.generatePassword`, the last of which never reaches
+  /// this prompt at all).
+  public var itemTitle: String?
+
+  /// A human description of what's being requested, e.g. `"wants to read the password for"` —
+  /// combined with ``agentDescription``/``itemTitle`` by the app's dialog to render something like
+  /// `"claude (via lilpass) wants to read the password for GitHub"`.
+  public var operationDescription: String
+
+  public init(
+    id: UUID = UUID(),
+    requestedAt: Date = Date(),
+    agentDescription: String,
+    itemTitle: String?,
+    operationDescription: String
+  ) {
+    self.id = id
+    self.requestedAt = requestedAt
+    self.agentDescription = agentDescription
+    self.itemTitle = itemTitle
+    self.operationDescription = operationDescription
   }
 }
 
@@ -181,26 +293,50 @@ public struct AgentSettings: Sendable, Codable, Equatable {
   /// unspecified.
   public var agentWriteAccessEnabled: Bool
 
+  /// Settings → Agents' 851-2445 access-mode picker. Defaults to ``AgentAccessScope/allPasswords``
+  /// — today's behavior — both for freshly constructed settings and for any item stored before
+  /// this ticket; see ``init(from:)``.
+  public var accessScope: AgentAccessScope
+
+  /// The allowlist ``AgentAccessScope/selected`` filters against, by item id. Ignored by the other
+  /// two scopes. See docs/adr/0007-scoped-agent-access.md's "No existence leak" section.
+  public var allowedItemIDs: Set<UUID>
+
+  /// The allowlist ``AgentAccessScope/selected`` filters against, by `PasswordItem.group`. Ignored
+  /// by the other two scopes.
+  public var allowedGroups: Set<String>
+
   public init(
     agentAccessEnabled: Bool,
     keepAgentAccessAvailableWhileMacUnlocked: Bool,
-    agentWriteAccessEnabled: Bool = false
+    agentWriteAccessEnabled: Bool = false,
+    accessScope: AgentAccessScope = .allPasswords,
+    allowedItemIDs: Set<UUID> = [],
+    allowedGroups: Set<String> = []
   ) {
     self.agentAccessEnabled = agentAccessEnabled
     self.keepAgentAccessAvailableWhileMacUnlocked = keepAgentAccessAvailableWhileMacUnlocked
     self.agentWriteAccessEnabled = agentWriteAccessEnabled
+    self.accessScope = accessScope
+    self.allowedItemIDs = allowedItemIDs
+    self.allowedGroups = allowedGroups
   }
 
   private enum CodingKeys: String, CodingKey {
     case agentAccessEnabled
     case keepAgentAccessAvailableWhileMacUnlocked
     case agentWriteAccessEnabled
+    case accessScope
+    case allowedItemIDs
+    case allowedGroups
   }
 
   /// A custom, rather than synthesized, `Decodable` conformance so a Keychain item written before
-  /// 851-2433 added ``agentWriteAccessEnabled`` (no such key in its stored JSON at all) still
-  /// decodes instead of throwing — falling back to `false`, the same fail-closed default this
-  /// field's own documentation promises, rather than treating a pre-851-2433 item as corrupt.
+  /// 851-2433 added ``agentWriteAccessEnabled``, or before 851-2445 added ``accessScope``/
+  /// ``allowedItemIDs``/``allowedGroups`` (no such keys in its stored JSON at all), still decodes
+  /// instead of throwing — falling back to `false`/``AgentAccessScope/allPasswords``/empty sets,
+  /// the same fail-closed-to-"no new restriction implied" defaults each field's own documentation
+  /// promises, rather than treating a pre-851-2445 item as corrupt.
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     agentAccessEnabled = try container.decode(Bool.self, forKey: .agentAccessEnabled)
@@ -209,16 +345,25 @@ public struct AgentSettings: Sendable, Codable, Equatable {
       forKey: .keepAgentAccessAvailableWhileMacUnlocked
     )
     agentWriteAccessEnabled = try container.decodeIfPresent(Bool.self, forKey: .agentWriteAccessEnabled) ?? false
+    accessScope = try container.decodeIfPresent(AgentAccessScope.self, forKey: .accessScope) ?? .allPasswords
+    allowedItemIDs = try container.decodeIfPresent(Set<UUID>.self, forKey: .allowedItemIDs) ?? []
+    allowedGroups = try container.decodeIfPresent(Set<String>.self, forKey: .allowedGroups) ?? []
   }
 
   /// The fail-closed default: every reader of a stored `AgentSettings` — `AgentServer`,
   /// `AgentSettingsAccessPolicy` — falls back to this whenever the underlying store has nothing
   /// persisted yet, or fails to read at all (a corrupt item, an unexpected Keychain error). Agent
   /// access is never silently treated as enabled just because it couldn't be confirmed disabled.
+  /// `accessScope` stays `.allPasswords` here — irrelevant while `agentAccessEnabled` is `false`,
+  /// and keeping it at the "no restriction configured" default means this fail-closed struct never
+  /// implies a scope decision that was never actually made.
   public static let disabled = AgentSettings(
     agentAccessEnabled: false,
     keepAgentAccessAvailableWhileMacUnlocked: false,
-    agentWriteAccessEnabled: false
+    agentWriteAccessEnabled: false,
+    accessScope: .allPasswords,
+    allowedItemIDs: [],
+    allowedGroups: []
   )
 }
 
@@ -284,6 +429,10 @@ public enum AgentResponse: Sendable, Codable, Equatable {
   /// Answers ``AgentRequest/autoFillCredential(id:)``. Exactly the two fields needed to build an
   /// `ASPasswordCredential` — nothing else about the item.
   case autoFillCredential(username: String, password: String)
+  /// Answers ``AgentRequest/pendingApprovals``.
+  case pendingApprovals([PendingApprovalSummary])
+  /// Answers ``AgentRequest/resolveApproval(id:decision:)``.
+  case approvalResolved
 }
 
 /// Every way an `AgentRequest` can fail, as a typed, `Codable` value rather than an opaque string
@@ -330,6 +479,12 @@ public enum AgentError: Error, Sendable, Codable, Equatable, CustomStringConvert
   /// `AgentServer`.
   case `internal`(message: String)
 
+  /// The caller was subject to ``AgentAccessScope/askEveryTime`` and either the person explicitly
+  /// denied the request, or nobody responded to the approval prompt within the ~60 second timeout
+  /// — the two are indistinguishable by design; see docs/adr/0007-scoped-agent-access.md's
+  /// "Approval flow" section. Maps to `LilpassExitCode.approvalDeniedOrTimedOut` (9).
+  case approvalDeniedOrTimedOut
+
   public var description: String {
     switch self {
     case .locked:
@@ -348,6 +503,8 @@ public enum AgentError: Error, Sendable, Codable, Equatable, CustomStringConvert
       return "this operation is only available to lil passwords itself"
     case .internal(let message):
       return message
+    case .approvalDeniedOrTimedOut:
+      return "approval denied or timed out"
     }
   }
 }

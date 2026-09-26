@@ -52,6 +52,10 @@ import Testing
       .totpCode(.id(item.id)),
       .autoFillIdentities(serviceIdentifiers: ["netflix.com", "github.com"]),
       .autoFillCredential(id: item.id),
+      .pendingApprovals,
+      .resolveApproval(id: UUID(), decision: .allowOnce),
+      .resolveApproval(id: UUID(), decision: .allowFor15Minutes),
+      .resolveApproval(id: UUID(), decision: .deny),
     ]
 
     for request in requests {
@@ -84,6 +88,15 @@ import Testing
         CredentialIdentity(id: .v7(), title: "No website", username: "someone", website: nil),
       ]),
       .autoFillCredential(username: "octocat", password: "hunter2"),
+      .pendingApprovals([
+        PendingApprovalSummary(
+          requestedAt: Date(timeIntervalSince1970: 1_700_000_000),
+          agentDescription: "claude",
+          itemTitle: "GitHub",
+          operationDescription: "wants to read the password for"
+        )
+      ]),
+      .approvalResolved,
     ]
 
     for response in responses {
@@ -101,6 +114,7 @@ import Testing
       .unsupportedProtocolVersion(requested: 99, supported: AgentProtocolVersion.current),
       .callerNotAuthorized,
       .internal(message: "something went wrong"),
+      .approvalDeniedOrTimedOut,
     ]
 
     for error in errors {
@@ -109,6 +123,52 @@ import Testing
     }
 
     #expect(AgentError.locked.description == "lil passwords is locked — unlock the app")
+    #expect(AgentError.approvalDeniedOrTimedOut.description == "approval denied or timed out")
+  }
+
+  // MARK: - Scoped agent access (851-2445)
+
+  @Test func agentAccessScopeRoundTrips() throws {
+    for scope: AgentAccessScope in [.allPasswords, .selected, .askEveryTime] {
+      #expect(try roundTrip(scope) == scope)
+    }
+  }
+
+  @Test func approvalDecisionRoundTrips() throws {
+    for decision: ApprovalDecision in [.allowOnce, .allowFor15Minutes, .deny] {
+      #expect(try roundTrip(decision) == decision)
+    }
+  }
+
+  @Test func pendingApprovalSummaryRoundTrips() throws {
+    let summary = PendingApprovalSummary(
+      requestedAt: Date(timeIntervalSince1970: 1_700_000_000),
+      agentDescription: "claude",
+      itemTitle: "GitHub",
+      operationDescription: "wants to read the password for"
+    )
+    #expect(try roundTrip(summary) == summary)
+  }
+
+  /// `AgentSettings.init(from:)` must keep decoding a Keychain item written before 851-2445 added
+  /// `accessScope`/`allowedItemIDs`/`allowedGroups` — no such keys at all in the persisted JSON —
+  /// falling back to `.allPasswords`/empty sets, the same fail-closed defaults `init(...)` uses.
+  /// This is the exact backward-compatibility pattern 851-2433's `agentWriteAccessEnabled` already
+  /// established for this type; see that field's `CodingKeys`/`init(from:)` for precedent.
+  @Test func agentSettingsDecodesPre851_2445JSONMissingScopeFieldsWithFailClosedDefaults() throws {
+    let legacyJSON = """
+      {
+        "agentAccessEnabled": true,
+        "keepAgentAccessAvailableWhileMacUnlocked": true,
+        "agentWriteAccessEnabled": true
+      }
+      """
+    let decoded = try JSONDecoder().decode(AgentSettings.self, from: Data(legacyJSON.utf8))
+    #expect(decoded.accessScope == .allPasswords)
+    #expect(decoded.allowedItemIDs.isEmpty)
+    #expect(decoded.allowedGroups.isEmpty)
+    #expect(decoded.agentAccessEnabled == true)
+    #expect(decoded.agentWriteAccessEnabled == true)
   }
 
   @Test func outcomeRoundTripsBothSuccessAndFailure() throws {

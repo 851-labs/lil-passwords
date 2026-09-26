@@ -53,12 +53,18 @@ do {
 // check `accessPolicy` performs. It shares this same Keychain item/ACL and
 // `.getAgentSettings`/`.setAgentSettings` XPC pair rather than a second, near-duplicate store, so
 // there's nothing extra to wire up here beyond what 851-2428 already provides.
+
+// 851-2445: the "ask every time" approval queue. Real `Date()` clock and the real, `NSWorkspace`-
+// backed app launcher — a test double only ever belongs in `ApprovalCenterTests`/`AgentServerTests`.
+let approvalCenter = ApprovalCenter(appLauncher: NSWorkspaceApprovalAppLauncher())
+
 let server = AgentServer(
   vaultStore: sharedVaultStore,
   vaultKeyStore: vaultKeyStore,
   accessPolicy: accessPolicy,
   accessLog: accessLog,
-  agentSettingsStore: agentSettingsStore
+  agentSettingsStore: agentSettingsStore,
+  approvalCenter: approvalCenter
 )
 
 // Accept only connections from the app, `lilpass`, or (851-2441) the AutoFill credential provider

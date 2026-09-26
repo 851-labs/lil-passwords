@@ -11,8 +11,10 @@ import SwiftUI
 /// currently parameterless — to thread a shared instance through.
 @MainActor
 final class AgentsSettingsViewController: NSHostingController<AgentsSettingsView> {
-  init(client: AgentClient = AgentClient()) {
-    super.init(rootView: AgentsSettingsView(client: client))
+  /// - Parameter initialSettings: See `AgentSettingsViewModel.init(client:initialSettings:)` — a
+  ///   tophat-only seam, `nil` at every production call site.
+  init(client: AgentClient = AgentClient(), initialSettings: AgentSettings? = nil) {
+    super.init(rootView: AgentsSettingsView(client: client, initialSettings: initialSettings))
     sizingOptions = [.intrinsicContentSize]
   }
 

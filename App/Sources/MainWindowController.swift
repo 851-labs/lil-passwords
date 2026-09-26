@@ -216,7 +216,12 @@ final class MainWindowController: NSWindowController {
   /// environments that can't press an actual Touch ID sensor (851-2411's own sandboxed worktree,
   /// for instance). Never flip this default; it exists so a plain `DEBUG` build a developer runs
   /// day to day still exercises the real unlock path.
-  private static func makeAuthenticator() -> any VaultAuthenticating {
+  ///
+  /// Not `private`: `AppDelegate` (851-2445) reuses this exact seam for `AgentApprovalController`'s
+  /// Touch ID-gated approval dialog, rather than duplicating the `#if DEBUG`/`LILPASSWORDS_FAKE_AUTH`
+  /// check a second time — see `docs/adr/0007-scoped-agent-access.md`'s "Approval flow" section,
+  /// which explicitly calls for reusing this seam.
+  static func makeAuthenticator() -> any VaultAuthenticating {
     #if DEBUG
       if ProcessInfo.processInfo.environment["LILPASSWORDS_FAKE_AUTH"] == "1" {
         return AlwaysSucceedAuthenticator()
