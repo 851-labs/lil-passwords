@@ -91,6 +91,16 @@ jobs:
         # `swift-test` itself) every 30s for real stack traces — the actual evidence a silent hang
         # can't otherwise produce. If `make e2e` finishes normally, the loop notices within at
         # most one 30s tick and just falls through to `wait` for its real exit code.
+        #
+        # A first attempt at this (commit 33298f4, run 36234929125) confirmed the hang — one PID
+        # stayed stuck across 15 consecutive samples over 8 minutes — but piped `sample`'s output
+        # through `tail -150`, which threw away the actual call graph: `sample` prints "Call graph:"
+        # (the real stack traces) *first* and the "Binary Images:" list (hundreds of lines, entirely
+        # useless here) *last*, so `tail -150` kept only binary images and silently discarded every
+        # thread's backtrace. Fixed below by cutting the output right before "Binary Images:"
+        # instead of blindly tailing it, and by only sampling the first two checks (60s, 90s) since
+        # the process is already known to stay stuck for the whole window — repeating an identical
+        # sample every 30s for 8 minutes added log noise, not information.
         timeout-minutes: 10
         env:
           E2E_EXTRA_ARGS: --verbose
@@ -107,10 +117,14 @@ jobs:
             fi
             echo "##[group]Still running after ~$((i * 30))s — sampling suspect processes"
             ps -ax -o pid=,ppid=,etime=,command= | grep -iE "xctest|LilpassE2E|swift-test" | grep -v grep
-            for pid in $(ps -ax -o pid=,command= | grep -iE "xctest|LilpassE2EPackageTests" | grep -v grep | awk '{print $1}'); do
-              echo "--- sample of pid $pid ---"
-              sample "$pid" 3 -mayDie 2>&1 | tail -150
-            done
+            if [ "$i" -le 2 ]; then
+              for pid in $(ps -ax -o pid=,command= | grep -iE "xctest|LilpassE2EPackageTests" | grep -v grep | awk '{print $1}'); do
+                echo "--- sample of pid $pid ---"
+                sample "$pid" 3 -mayDie 2>&1 | awk '/^Binary Images:/{exit} {print}'
+              done
+            else
+              echo "(skipping repeat sample — already captured at 60s/90s)"
+            fi
             echo "##[endgroup]"
           done
           wait "$make_pid"
