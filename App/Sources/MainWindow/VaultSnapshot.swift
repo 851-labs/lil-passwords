@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import LilPasswordsKit
 
 /// A lightweight, read-only summary of "how many items are in each sidebar category right now."
 ///
@@ -23,6 +24,22 @@ struct VaultSnapshot: Hashable, Sendable {
 
   func count(for category: SidebarCategory) -> Int {
     counts[category] ?? 0
+  }
+}
+
+extension VaultSnapshot {
+  /// Builds a snapshot from real items (851-2414/851-2417), computing sidebar counts for the
+  /// categories `PasswordItem` currently models. `passkeys`, `wifi`, and `security` aren't
+  /// represented by `PasswordItem` yet, so they're left at their default zero count.
+  init(items: [PasswordItem]) {
+    self.init(
+      counts: [
+        .all: items.filter { $0.deletedAt == nil }.count,
+        .codes: items.filter { $0.deletedAt == nil && $0.totpURI != nil }.count,
+        .deleted: items.filter { $0.deletedAt != nil }.count,
+      ],
+      sharedGroups: []
+    )
   }
 }
 
