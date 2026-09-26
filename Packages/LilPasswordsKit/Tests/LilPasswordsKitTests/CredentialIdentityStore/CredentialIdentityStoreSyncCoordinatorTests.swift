@@ -14,9 +14,11 @@ import Testing
   /// a sync happened and *which* items it was handed.
   private final actor SpySyncer: CredentialIdentityStoreSyncing {
     private(set) var calls: [[PasswordItem]] = []
+    private(set) var passkeyCalls: [[PasskeyIdentity]] = []
 
-    func sync(items: [PasswordItem]) async {
+    func sync(items: [PasswordItem], passkeys: [PasskeyIdentity]) async {
       calls.append(items)
+      passkeyCalls.append(passkeys)
     }
   }
 
@@ -29,7 +31,7 @@ import Testing
     private let listener: NSXPCListener
     private let delegate: AgentXPCListenerDelegate
 
-    init(items: [PasswordItem]) async throws {
+    init(items: [PasswordItem], passkeys: [PasskeyItem] = []) async throws {
       let store = InMemoryVaultStore()
       let keyStore = InMemoryVaultKeyStore()
       try await store.createVault()
@@ -37,6 +39,9 @@ import Testing
       try keyStore.store(vaultKey)
       for item in items {
         try await store.create(item)
+      }
+      for passkey in passkeys {
+        try await store.createPasskey(passkey)
       }
       await store.lock()
 
@@ -78,6 +83,31 @@ import Testing
     let calls = await syncer.calls
     #expect(calls.count == 1)
     #expect(calls[0].map(\.id) == [item.id])
+  }
+
+  /// 851-2442: `refresh()` also fetches `.passkeyIdentities()` and hands them to the syncer
+  /// alongside the password items — the app-side half of keeping `ASCredentialIdentityStore` in
+  /// sync for passkeys, matching ``refreshSyncsTheCurrentItemsWhenUnlocked()``'s password coverage.
+  @Test func refreshAlsoSyncsPasskeyIdentities() async throws {
+    let passkey = PasskeyItem(
+      relyingPartyIdentifier: "webauthn.io",
+      userHandle: Data([1, 2, 3, 4]),
+      userName: "octocat",
+      userDisplayName: "The Octocat",
+      credentialId: Data([5, 6, 7, 8]),
+      privateKeyPKCS8: Data([9, 9, 9])
+    )
+    let harness = try await Harness(items: [], passkeys: [passkey])
+    try await harness.client.unlock()
+    let syncer = SpySyncer()
+    let coordinator = await CredentialIdentityStoreSyncCoordinator(agentClient: harness.client, syncer: syncer)
+
+    await coordinator.refresh()
+
+    let passkeyCalls = await syncer.passkeyCalls
+    #expect(passkeyCalls.count == 1)
+    #expect(passkeyCalls[0].map(\.relyingPartyIdentifier) == ["webauthn.io"])
+    #expect(passkeyCalls[0].map(\.credentialId) == [passkey.credentialId])
   }
 
   @Test func refreshDoesNothingWhenLocked() async throws {

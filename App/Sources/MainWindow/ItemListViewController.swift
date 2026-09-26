@@ -403,7 +403,18 @@ final class ItemListViewController: NSViewController {
     }
   }
 
+  /// Pushes "<Category>" + "N Items" into the shared toolbar title — but only while this list is
+  /// actually the one on screen. `ItemListViewController`/`WiFiListViewController`/
+  /// `PasskeysListViewController` all share one `listTitleView` (only one is ever visible at a
+  /// time, per `MainSplitViewController`'s container-swap); without this guard, a `dataSource
+  /// .itemsDidChange` publish landing after the sidebar has switched to Wi-Fi/Passkeys (e.g. the
+  /// vault's real items finishing an async load a moment after launch) stomps whichever category's
+  /// title is actually showing back to this one's, even though this controller's view isn't in the
+  /// window. 851-2442 added the equivalent guard to `WiFiListViewController`/
+  /// `PasskeysListViewController.updateListTitle()`; this one had been missing it since before
+  /// either of those categories existed to expose the gap.
   private func updateListTitle() {
+    guard isViewLoaded, view.window != nil else { return }
     let subtitle =
       rows.count == 1 ? String(localized: "1 Item") : String(localized: "\(rows.count) Items")
     listTitleView?.configure(title: currentCategory.title, subtitle: subtitle)

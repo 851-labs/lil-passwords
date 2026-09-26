@@ -11,12 +11,23 @@ import LilPasswordsKit
 /// to `LilPasswordsAgent` via `AgentClient` — the same client the app and `lilpass` use — which is
 /// the only process (per docs/adr/0001-storage-and-process-model.md) allowed to open the vault.
 /// The helper structurally restricts this specific caller (see `AgentServer.isRequestPermitted(_:for:)`
-/// in LilPasswordsKit) to exactly `.unlock`/`.autoFillIdentities`/`.autoFillCredential` — it has no
-/// dispatch route at all for `.list`/`.search`/`.getItem`/any write operation, so "only the chosen
-/// credential, never general list/search access" is enforced below the UI layer, not just by this
-/// file choosing not to call anything else. See docs/adr/0005-autofill-credential-provider.md for
-/// the full trust-model writeup, including why this extension can't yet be enabled locally
+/// in LilPasswordsKit) to exactly `.status`/`.unlock`/`.lock`/`.autoFillIdentities`/
+/// `.autoFillCredential`/`.passkeyRegister`/`.passkeyAssert` — it has no dispatch route at all for
+/// `.list`/`.search`/`.getItem`/`.passkeys`/any write operation on a `PasswordItem`, so "only the
+/// chosen credential, never general list/search access" is enforced below the UI layer, not just by
+/// this file choosing not to call anything else. See docs/adr/0005-autofill-credential-provider.md
+/// for the full trust-model writeup, including why this extension can't yet be enabled locally
 /// (provisioning profile, 851-2400).
+///
+/// **Passkeys (851-2442, macOS 14+):** the four `@available(macOS 14, *)` overrides below
+/// implement registration and assertion the same no-secret-on-this-side way — a private key is
+/// generated (`prepareInterface(forPasskeyRegistration:)`) or used
+/// (`provideCredentialWithoutUserInteraction(for:)`/`prepareInterfaceToProvideCredential(for:)`)
+/// entirely inside `LilPasswordsAgent`; this file only ever sees the resulting public
+/// `credentialId`/`attestationObject`/`signature`/`authenticatorData` bytes, via
+/// `AgentClient.passkeyRegister(_:)`/`passkeyAssert(_:)`. `prepareCredentialList(for:requestParameters:)`
+/// deliberately still only lists passwords — see that override's own doc comment for why the
+/// interactive passkey picker is a scoped-out follow-up, not an oversight.
 final class CredentialProviderViewController: ASCredentialProviderViewController {
   private let agentClient = AgentClient()
   private let authenticator: DeviceAuthenticating = LAContextDeviceAuthenticator()
@@ -51,6 +62,19 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
   /// this entry point never shows.
   private var pendingCredentialIdentity: ASPasswordCredentialIdentity?
 
+  /// The passkey analog of ``pendingCredentialIdentity``, set by the macOS 14+ overrides below
+  /// when the vault is locked at the moment a passkey registration or assertion was requested.
+  /// Deliberately plain `Data`/`String`, not `ASPasskeyCredentialRequest`/`ASPasskeyCredentialIdentity`
+  /// themselves, so this property (and the enum below) need no `@available(macOS 14, *)` of their
+  /// own and can sit alongside ``pendingCredentialIdentity`` as ordinary stored state.
+  private enum PendingPasskeyAction {
+    case assert(credentialId: Data, relyingPartyIdentifier: String, clientDataHash: Data)
+    case register(
+      relyingPartyIdentifier: String, userHandle: Data, userName: String, userDisplayName: String,
+      clientDataHash: Data)
+  }
+  private var pendingPasskeyAction: PendingPasskeyAction?
+
   override func loadView() {
     view = NSView(frame: NSRect(x: 0, y: 0, width: 380, height: 420))
     configureListContainer()
@@ -63,6 +87,7 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
   override func prepareCredentialList(for serviceIdentifiers: [ASCredentialServiceIdentifier]) {
     self.serviceIdentifiers = serviceIdentifiers
     pendingCredentialIdentity = nil
+    pendingPasskeyAction = nil
     showList(loading: true)
     Task { await loadIdentities() }
   }
@@ -90,7 +115,177 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
 
   override func prepareInterfaceToProvideCredential(for credentialIdentity: ASPasswordCredentialIdentity) {
     pendingCredentialIdentity = credentialIdentity
+    pendingPasskeyAction = nil
     showLocked()
+  }
+
+  // MARK: - Passkeys (851-2442, macOS 14+)
+
+  /// The interactive picker still only lists passwords (``loadIdentities()`` below, unchanged from
+  /// the pre-passkey `prepareCredentialList(for:)` override above) —
+  /// `provideCredentialWithoutUserInteraction(for:)` is what fully implements this ticket's passkey
+  /// assertion path, and that's the path the system actually takes for an existing, already-synced
+  /// passkey (see `ASCredentialIdentityStoreSync`). Listing existing passkeys here too, so a person
+  /// could also pick one from this searchable list by hand, would need reading the credential id
+  /// back out of `ASCredentialIdentityStore` itself — `AgentClient.passkeys()`'s
+  /// `PasskeyMetadata` deliberately never carries one, see AgentProtocol.swift — and is left as a
+  /// follow-up rather than guessed at here.
+  @available(macOS 14, *)
+  override func prepareCredentialList(
+    for serviceIdentifiers: [ASCredentialServiceIdentifier],
+    requestParameters: ASPasskeyCredentialRequestParameters
+  ) {
+    prepareCredentialList(for: serviceIdentifiers)
+  }
+
+  @available(macOS 14, *)
+  override func provideCredentialWithoutUserInteraction(for credentialRequest: any ASCredentialRequest) {
+    if let passwordIdentity = credentialRequest.credentialIdentity as? ASPasswordCredentialIdentity {
+      provideCredentialWithoutUserInteraction(for: passwordIdentity)
+      return
+    }
+    guard
+      let passkeyRequest = credentialRequest as? ASPasskeyCredentialRequest,
+      let passkeyIdentity = passkeyRequest.credentialIdentity as? ASPasskeyCredentialIdentity
+    else {
+      extensionContext.cancelRequest(withError: ASExtensionError(.credentialIdentityNotFound))
+      return
+    }
+    Task {
+      do {
+        try await completePasskeyAssertion(
+          credentialId: passkeyIdentity.credentialID,
+          relyingPartyIdentifier: passkeyIdentity.relyingPartyIdentifier,
+          clientDataHash: passkeyRequest.clientDataHash,
+          // No LAContext ceremony happens in this process for this entry point — the system only
+          // invokes `provideCredentialWithoutUserInteraction(for:)` when *it's* already satisfied
+          // about user presence, without ever asking this extension to check. See `userVerified`'s
+          // own doc comment on `PasskeyAssertionRequest` for why that means this reports `false`
+          // rather than assuming the system's own check counts as this extension's.
+          userVerified: false
+        )
+      } catch AgentClient.RequestError.remote(.locked) {
+        // Same reasoning as the password path above: no UI is on screen here, so throw
+        // `.userInteractionRequired` to make the system re-invoke us through
+        // `prepareInterfaceToProvideCredential(for:)`, where the Unlock button can show.
+        extensionContext.cancelRequest(withError: ASExtensionError(.userInteractionRequired))
+      } catch {
+        extensionContext.cancelRequest(withError: ASExtensionError(.failed))
+      }
+    }
+  }
+
+  @available(macOS 14, *)
+  override func prepareInterfaceToProvideCredential(for credentialRequest: any ASCredentialRequest) {
+    if let passwordIdentity = credentialRequest.credentialIdentity as? ASPasswordCredentialIdentity {
+      prepareInterfaceToProvideCredential(for: passwordIdentity)
+      return
+    }
+    guard
+      let passkeyRequest = credentialRequest as? ASPasskeyCredentialRequest,
+      let passkeyIdentity = passkeyRequest.credentialIdentity as? ASPasskeyCredentialIdentity
+    else {
+      extensionContext.cancelRequest(withError: ASExtensionError(.failed))
+      return
+    }
+    pendingCredentialIdentity = nil
+    pendingPasskeyAction = .assert(
+      credentialId: passkeyIdentity.credentialID,
+      relyingPartyIdentifier: passkeyIdentity.relyingPartyIdentifier,
+      clientDataHash: passkeyRequest.clientDataHash
+    )
+    showLocked()
+  }
+
+  /// Registration's one entry point — there's no password equivalent, and unlike the assertion
+  /// path there's no separate "without user interaction" variant to try first: the system always
+  /// shows this extension's interface to create a brand-new passkey.
+  @available(macOS 14, *)
+  override func prepareInterface(forPasskeyRegistration registrationRequest: any ASCredentialRequest) {
+    guard
+      let passkeyRequest = registrationRequest as? ASPasskeyCredentialRequest,
+      let identity = passkeyRequest.credentialIdentity as? ASPasskeyCredentialIdentity
+    else {
+      extensionContext.cancelRequest(withError: ASExtensionError(.failed))
+      return
+    }
+    pendingCredentialIdentity = nil
+    // `ASPasskeyCredentialIdentity` has no `userDisplayName` of its own — only `userName` — so
+    // this passes through empty, matching `PasskeyRegistrationRequest.userDisplayName`/
+    // `PasskeyItem.displayName`'s own "falls back to userName when empty" convention rather than
+    // duplicating `userName` into both fields.
+    Task {
+      do {
+        try await completePasskeyRegistration(
+          relyingPartyIdentifier: identity.relyingPartyIdentifier,
+          userHandle: identity.userHandle,
+          userName: identity.userName,
+          userDisplayName: "",
+          clientDataHash: passkeyRequest.clientDataHash,
+          // Same reasoning as `provideCredentialWithoutUserInteraction(for:)` above: the system
+          // invokes this entry point directly, with no LAContext check performed by this process.
+          userVerified: false
+        )
+      } catch AgentClient.RequestError.remote(.locked) {
+        pendingPasskeyAction = .register(
+          relyingPartyIdentifier: identity.relyingPartyIdentifier,
+          userHandle: identity.userHandle,
+          userName: identity.userName,
+          userDisplayName: "",
+          clientDataHash: passkeyRequest.clientDataHash
+        )
+        showLocked()
+      } catch {
+        extensionContext.cancelRequest(withError: ASExtensionError(.failed))
+      }
+    }
+  }
+
+  /// Signs a passkey assertion over XPC and completes the request — the one place both
+  /// ``provideCredentialWithoutUserInteraction(for:)`` and the post-unlock retry in
+  /// ``retryAfterUnlock()`` funnel through, so the `ASPasskeyAssertionCredential` construction and
+  /// completion call only exist once. Throws rather than handling its own errors, since the two
+  /// call sites need different behavior specifically for `.locked` (see each's own catch clause).
+  @available(macOS 14, *)
+  private func completePasskeyAssertion(
+    credentialId: Data, relyingPartyIdentifier: String, clientDataHash: Data, userVerified: Bool
+  ) async throws {
+    let result = try await agentClient.passkeyAssert(
+      PasskeyAssertionRequest(
+        credentialId: credentialId, relyingPartyIdentifier: relyingPartyIdentifier, clientDataHash: clientDataHash,
+        userVerified: userVerified)
+    )
+    let credential = ASPasskeyAssertionCredential(
+      userHandle: result.userHandle,
+      relyingParty: relyingPartyIdentifier,
+      signature: result.signature,
+      clientDataHash: clientDataHash,
+      authenticatorData: result.authenticatorData,
+      credentialID: credentialId
+    )
+    extensionContext.completeAssertionRequest(using: credential, completionHandler: nil)
+  }
+
+  /// The registration analog of ``completePasskeyAssertion(credentialId:relyingPartyIdentifier:clientDataHash:)``
+  /// — the private key itself is generated inside `LilPasswordsAgent` by `agentClient.passkeyRegister(_:)`
+  /// and never appears here, only the resulting `credentialId`/`attestationObject`.
+  @available(macOS 14, *)
+  private func completePasskeyRegistration(
+    relyingPartyIdentifier: String, userHandle: Data, userName: String, userDisplayName: String,
+    clientDataHash: Data, userVerified: Bool
+  ) async throws {
+    let result = try await agentClient.passkeyRegister(
+      PasskeyRegistrationRequest(
+        relyingPartyIdentifier: relyingPartyIdentifier, userHandle: userHandle, userName: userName,
+        userDisplayName: userDisplayName, userVerified: userVerified)
+    )
+    let credential = ASPasskeyRegistrationCredential(
+      relyingParty: relyingPartyIdentifier,
+      clientDataHash: clientDataHash,
+      credentialID: result.credentialId,
+      attestationObject: result.attestationObject
+    )
+    extensionContext.completeRegistrationRequest(using: credential, completionHandler: nil)
   }
 
   // MARK: - Loading the list
@@ -142,11 +337,35 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
   }
 
   /// After a successful unlock: retries the one identity the system originally asked for (if this
-  /// locked screen was reached via `prepareInterfaceToProvideCredential(for:)`), or falls back to
-  /// loading the full searchable list (if it was reached from `prepareCredentialList(for:)`
-  /// discovering the vault was locked).
+  /// locked screen was reached via `prepareInterfaceToProvideCredential(for:)` or, on macOS 14+,
+  /// its passkey counterparts below), or falls back to loading the full searchable list (if it was
+  /// reached from `prepareCredentialList(for:)` discovering the vault was locked).
   private func retryAfterUnlock() async {
     unlockButton.isEnabled = true
+    if #available(macOS 14, *), let pendingPasskeyAction {
+      self.pendingPasskeyAction = nil
+      do {
+        // `userVerified: true` for both cases below: reaching this method at all means
+        // `unlockButtonClicked()` just ran `authenticator.authenticate(reason:)` — a real
+        // `LAContext` biometric/password ceremony this extension performed itself — immediately
+        // before calling here, unlike `provideCredentialWithoutUserInteraction(for:)`/
+        // `prepareInterface(forPasskeyRegistration:)`'s direct paths (see their own call sites).
+        switch pendingPasskeyAction {
+        case .assert(let credentialId, let relyingPartyIdentifier, let clientDataHash):
+          try await completePasskeyAssertion(
+            credentialId: credentialId, relyingPartyIdentifier: relyingPartyIdentifier,
+            clientDataHash: clientDataHash, userVerified: true)
+        case .register(
+          let relyingPartyIdentifier, let userHandle, let userName, let userDisplayName, let clientDataHash):
+          try await completePasskeyRegistration(
+            relyingPartyIdentifier: relyingPartyIdentifier, userHandle: userHandle, userName: userName,
+            userDisplayName: userDisplayName, clientDataHash: clientDataHash, userVerified: true)
+        }
+      } catch {
+        extensionContext.cancelRequest(withError: ASExtensionError(.failed))
+      }
+      return
+    }
     let recordIdentifier = pendingCredentialIdentity?.recordIdentifier ?? ""
     guard let pendingCredentialIdentity, let id = UUID(uuidString: recordIdentifier) else {
       showList(loading: true)

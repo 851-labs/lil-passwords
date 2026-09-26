@@ -22,6 +22,7 @@ final class MainWindowController: NSWindowController {
 
   private var itemsDidChangeCancellable: AnyCancellable?
   private var wifiNetworksDidChangeCancellable: AnyCancellable?
+  private var passkeysDidChangeCancellable: AnyCancellable?
   private var searchKeyMonitor: Any?
 
   /// Read access to the vault for surfaces that live outside `MainSplitViewController` — the
@@ -94,7 +95,7 @@ final class MainWindowController: NSWindowController {
     let vaultStore = InMemoryVaultStore()
     let dataSource = VaultStoreViewModel(store: vaultStore)
     self.dataSource = dataSource
-    splitViewController = MainSplitViewController(store: store, dataSource: dataSource)
+    splitViewController = MainSplitViewController(store: store, dataSource: dataSource, agentClient: agentClient)
 
     let window = NSWindow(
       contentRect: NSRect(x: 0, y: 0, width: 920, height: 560),
@@ -131,6 +132,7 @@ final class MainWindowController: NSWindowController {
     toolbarController.searchField.delegate = splitViewController.listViewController
     splitViewController.listViewController.searchField = toolbarController.searchField
     splitViewController.wifiListViewController.searchField = toolbarController.searchField
+    splitViewController.passkeysListViewController.searchField = toolbarController.searchField
     // The sort button now lives in the toolbar's list-actions capsule (851-2463); targeted
     // directly at `ItemListViewController` rather than through the responder chain, matching
     // `MainSplitViewController.newPassword`'s own reasoning for preferring an explicit target.
@@ -138,6 +140,7 @@ final class MainWindowController: NSWindowController {
     toolbarController.sortButton.action = #selector(ItemListViewController.showSortMenu(_:))
     splitViewController.listViewController.listTitleView = toolbarController.listTitleView
     splitViewController.wifiListViewController.listTitleView = toolbarController.listTitleView
+    splitViewController.passkeysListViewController.listTitleView = toolbarController.listTitleView
     splitViewController.detailViewController.editControl = toolbarController.editControl
     // Codes/Security/Deleted (851-2418/851-2419/851-2420) replace the list+detail split with a
     // full-width view, and Wi-Fi (851-2444) keeps its own reduced list+detail chrome; none of
@@ -152,12 +155,19 @@ final class MainWindowController: NSWindowController {
     window.toolbar = toolbarController.makeToolbar()
     window.toolbar?.isVisible = false
 
-    // The sidebar's Wi-Fi count (851-2444) comes from `WiFiNetworkViewModel.networks`, not
-    // `dataSource.items` — known Wi-Fi networks aren't `PasswordItem`s — so the snapshot is
-    // rebuilt from both sources together, and re-rebuilt whenever either one changes.
+    // The sidebar's Wi-Fi/Passkeys counts (851-2444/851-2442) come from `WiFiNetworkViewModel.networks`/
+    // `PasskeysViewModel.passkeys`, not `dataSource.items` — known Wi-Fi networks and passkeys
+    // aren't `PasswordItem`s — so the snapshot is rebuilt from all three sources together, and
+    // re-rebuilt whenever any one of them changes.
     let wifiViewModel = splitViewController.wifiViewModel
+    let passkeysViewModel = splitViewController.passkeysViewModel
     func updateSnapshot() {
-      store.update(VaultSnapshot(items: dataSource.items, wifiKnownNetworkCount: wifiViewModel.networks.count))
+      store.update(
+        VaultSnapshot(
+          items: dataSource.items,
+          wifiKnownNetworkCount: wifiViewModel.networks.count,
+          passkeyCount: passkeysViewModel.passkeys.count
+        ))
     }
 
     updateSnapshot()
@@ -165,6 +175,9 @@ final class MainWindowController: NSWindowController {
       .receive(on: RunLoop.main)
       .sink { _ in updateSnapshot() }
     wifiNetworksDidChangeCancellable = wifiViewModel.$networks
+      .receive(on: RunLoop.main)
+      .sink { _ in updateSnapshot() }
+    passkeysDidChangeCancellable = passkeysViewModel.$passkeys
       .receive(on: RunLoop.main)
       .sink { _ in updateSnapshot() }
 

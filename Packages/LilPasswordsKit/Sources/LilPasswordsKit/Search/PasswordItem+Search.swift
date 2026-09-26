@@ -57,7 +57,12 @@ extension PasswordItem {
 }
 
 extension String {
-  fileprivate var strippingLeadingWWW: String {
+  /// Lowercases and drops a leading `"www."` label, e.g. `"WWW.Amazon.com"` → `"amazon.com"`.
+  /// Used both for host-equality comparisons in this file and, since it's just a `"www."`
+  /// strip rather than a full public-suffix-list/eTLD+1 computation, for display text that wants
+  /// the same "closest thing to a registrable domain" a person actually types — see
+  /// `PasskeyMetadata.displayTitle` (851-2442). Not `fileprivate` so both can share it.
+  var strippingLeadingWWW: String {
     let lowercased = lowercased()
     return lowercased.hasPrefix("www.") ? String(lowercased.dropFirst(4)) : lowercased
   }

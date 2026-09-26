@@ -128,4 +128,45 @@ import Testing
   @Test func emptyItemListProducesNoIdentities() {
     #expect(ASCredentialIdentityStoreSync.identities(for: []).isEmpty)
   }
+
+  // MARK: - 851-2442: passkeyIdentities(for:)
+
+  @available(macOS 14, *)
+  @Test func aPasskeyIdentityProducesAnASPasskeyCredentialIdentityCarryingNoSecret() {
+    let id = UUID()
+    let passkey = PasskeyIdentity(
+      id: id,
+      relyingPartyIdentifier: "webauthn.io",
+      userName: "octocat",
+      userHandle: Data([1, 2, 3, 4]),
+      credentialId: Data([5, 6, 7, 8])
+    )
+
+    let identities = ASCredentialIdentityStoreSync.passkeyIdentities(for: [passkey])
+
+    #expect(identities.count == 1)
+    #expect(identities[0].relyingPartyIdentifier == "webauthn.io")
+    #expect(identities[0].userName == "octocat")
+    #expect(identities[0].userHandle == Data([1, 2, 3, 4]))
+    #expect(identities[0].credentialID == Data([5, 6, 7, 8]))
+    #expect(identities[0].recordIdentifier == id.uuidString)
+  }
+
+  @available(macOS 14, *)
+  @Test func aPasskeyIdentityWithNoRelyingPartyIdentifierIsExcluded() {
+    let passkey = PasskeyIdentity(
+      id: UUID(),
+      relyingPartyIdentifier: "",
+      userName: "octocat",
+      userHandle: Data([1, 2, 3, 4]),
+      credentialId: Data([5, 6, 7, 8])
+    )
+
+    #expect(ASCredentialIdentityStoreSync.passkeyIdentities(for: [passkey]).isEmpty)
+  }
+
+  @available(macOS 14, *)
+  @Test func emptyPasskeyIdentityListProducesNoIdentities() {
+    #expect(ASCredentialIdentityStoreSync.passkeyIdentities(for: []).isEmpty)
+  }
 }

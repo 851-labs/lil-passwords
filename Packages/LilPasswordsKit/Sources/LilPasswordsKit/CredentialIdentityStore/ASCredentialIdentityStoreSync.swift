@@ -37,18 +37,29 @@ import Foundation
 public struct ASCredentialIdentityStoreSync: CredentialIdentityStoreSyncing {
   public init() {}
 
-  public func sync(items: [PasswordItem]) async {
+  public func sync(items: [PasswordItem], passkeys: [PasskeyIdentity]) async {
     let store = ASCredentialIdentityStore.shared
     guard await Self.isEnabled(of: store) else { return }
 
     await Self.removeAll(from: store)
-    let identities = Self.identities(for: items)
-    guard !identities.isEmpty else { return }
-    await Self.save(identities, to: store)
+
+    // Passkeys (851-2442) need the macOS 14+ `saveCredentialIdentities(_:)` overload that accepts
+    // a mixed `[any ASCredentialIdentity]` array (`ASPasswordCredentialIdentity` and
+    // `ASPasskeyCredentialIdentity` both conform) — on macOS 13, there's no such thing as a passkey
+    // identity to register at all, so this falls back to the original password-only overload.
+    if #available(macOS 14, *) {
+      let entries: [any ASCredentialIdentity] = Self.identities(for: items) + Self.passkeyIdentities(for: passkeys)
+      guard !entries.isEmpty else { return }
+      await Self.save(entries, to: store)
+    } else {
+      let identities = Self.identities(for: items)
+      guard !identities.isEmpty else { return }
+      await Self.save(identities, to: store)
+    }
   }
 
-  /// The pure item → identity mapping, exposed separately from ``sync(items:)`` so tests can
-  /// verify it directly without depending on `ASCredentialIdentityStore.shared`'s real,
+  /// The pure item → identity mapping, exposed separately from ``sync(items:passkeys:)`` so tests
+  /// can verify it directly without depending on `ASCredentialIdentityStore.shared`'s real,
   /// environment-dependent enabled state (see this type's own documentation).
   static func identities(for items: [PasswordItem]) -> [ASPasswordCredentialIdentity] {
     items
@@ -62,6 +73,27 @@ public struct ASCredentialIdentityStoreSync: CredentialIdentityStoreSyncing {
           recordIdentifier: item.id.uuidString
         )
       }
+  }
+
+  /// The 851-2442 passkey analog of ``identities(for:)``: every ``PasskeyIdentity`` with a
+  /// non-empty relying party id becomes one `ASPasskeyCredentialIdentity`, carrying its
+  /// `credentialId`/`userHandle` (neither secret — see `PasskeyIdentity`'s own documentation) but
+  /// never a private key, which this type has no field to carry in the first place.
+  /// `PasskeyIdentity.id` (the vault item id) is the `recordIdentifier`, the same role
+  /// ``identities(for:)`` gives `PasswordItem.id` — round-tripped back out by
+  /// `CredentialProviderViewController` the same way.
+  @available(macOS 14, *)
+  static func passkeyIdentities(for passkeys: [PasskeyIdentity]) -> [ASPasskeyCredentialIdentity] {
+    passkeys.compactMap { passkey -> ASPasskeyCredentialIdentity? in
+      guard !passkey.relyingPartyIdentifier.isEmpty else { return nil }
+      return ASPasskeyCredentialIdentity(
+        relyingPartyIdentifier: passkey.relyingPartyIdentifier,
+        userName: passkey.userName,
+        credentialID: passkey.credentialId,
+        userHandle: passkey.userHandle,
+        recordIdentifier: passkey.id.uuidString
+      )
+    }
   }
 
   /// Extracts just `isEnabled` (a trivially `Sendable` `Bool`) inside the completion closure,
@@ -83,6 +115,17 @@ public struct ASCredentialIdentityStoreSync: CredentialIdentityStoreSyncing {
   private static func save(_ identities: [ASPasswordCredentialIdentity], to store: ASCredentialIdentityStore) async {
     await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
       store.saveCredentialIdentities(identities) { _, _ in continuation.resume() }
+    }
+  }
+
+  /// The macOS 14+ mixed-entry overload (`saveCredentialIdentityEntries:completion:`, Swift name
+  /// `saveCredentialIdentities(_:completion:)` — distinguished from the overload above purely by
+  /// its `[any ASCredentialIdentity]` parameter type) used once ``sync(items:passkeys:)`` has any
+  /// `ASPasskeyCredentialIdentity` entries to register alongside the password ones.
+  @available(macOS 14, *)
+  private static func save(_ entries: [any ASCredentialIdentity], to store: ASCredentialIdentityStore) async {
+    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+      store.saveCredentialIdentities(entries) { _, _ in continuation.resume() }
     }
   }
 }

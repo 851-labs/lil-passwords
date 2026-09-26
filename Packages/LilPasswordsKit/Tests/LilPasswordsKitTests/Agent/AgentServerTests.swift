@@ -835,8 +835,11 @@ private let autoFillCaller = CallerIdentity(
   /// The structural half of "only return the credential for the chosen identity, not general
   /// list/search access": every request AutoFill *can't* reach should fail with
   /// `.callerNotAuthorized`, regardless of what `AccessPolicyProviding`/write-access/lock state
-  /// would otherwise say — `isRequestPermitted(_:for:)` runs before any of that.
-  @Test func autoFillCallerIsRejectedForEveryRequestExceptItsFive() async throws {
+  /// would otherwise say — `isRequestPermitted(_:for:)` runs before any of that. 851-2442 adds
+  /// `.passkeys`/`.passkeyIdentities`/`.deletePasskey` to this disallowed set — AutoFill only ever
+  /// needs `.passkeyRegister`/`.passkeyAssert`, never general passkey list/identity-sync/delete
+  /// access, mirroring why `.list`/`.search`/`.getItem` are disallowed for passwords.
+  @Test func autoFillCallerIsRejectedForEveryRequestExceptItsSeven() async throws {
     let item = makeCredentialItem()
     let (server, _) = try await makeServer(items: [item])
     _ = await send(.unlock, to: server, caller: autoFillCaller)
@@ -854,12 +857,227 @@ private let autoFillCaller = CallerIdentity(
       .deleteItem(.id(item.id)),
       .generatePassword(.appleStrong),
       .totpCode(.id(item.id)),
+      .passkeys,
+      .passkeyIdentities,
+      .deletePasskey(id: UUID()),
     ]
     for request in disallowed {
       guard case .failure(.callerNotAuthorized) = await send(request, to: server, caller: autoFillCaller) else {
         Issue.record("expected .callerNotAuthorized for \(request)")
         continue
       }
+    }
+  }
+
+  /// The XPC allow-list's positive half for 851-2442: `.passkeyRegister`/`.passkeyAssert` are the
+  /// two ops added to AutoFill's allow-list alongside its original five, and this exercises both
+  /// end to end (register, then assert with the credential id the register call returned) to prove
+  /// neither is rejected with `.callerNotAuthorized` the way every case in
+  /// ``autoFillCallerIsRejectedForEveryRequestExceptItsSeven()`` is. Also confirms the private key
+  /// never appears on the wire: neither `PasskeyRegistrationResult` nor `PasskeyAssertionResult` has
+  /// a field capable of carrying one — see AgentProtocol.swift.
+  @Test func autoFillCallerCanRegisterAndAssertPasskeys() async throws {
+    let settingsStore = writeAccessSettingsStore(writeAccessEnabled: true)
+    let (server, _) = try await makeServer(agentSettingsStore: settingsStore)
+    _ = await send(.unlock, to: server, caller: autoFillCaller)
+
+    let registration = PasskeyRegistrationRequest(
+      relyingPartyIdentifier: "webauthn.io",
+      userHandle: Data([1, 2, 3, 4]),
+      userName: "octocat",
+      userDisplayName: "The Octocat"
+    )
+    guard
+      case .success(.passkeyRegistered(let registered)) = await send(
+        .passkeyRegister(registration),
+        to: server,
+        caller: autoFillCaller
+      )
+    else {
+      Issue.record("expected .passkeyRegistered")
+      return
+    }
+    #expect(!registered.credentialId.isEmpty)
+    #expect(!registered.attestationObject.isEmpty)
+
+    let assertion = PasskeyAssertionRequest(
+      credentialId: registered.credentialId,
+      relyingPartyIdentifier: "webauthn.io",
+      clientDataHash: Data(repeating: 0xAB, count: 32)
+    )
+    guard
+      case .success(.passkeyAsserted(let asserted)) = await send(
+        .passkeyAssert(assertion),
+        to: server,
+        caller: autoFillCaller
+      )
+    else {
+      Issue.record("expected .passkeyAsserted")
+      return
+    }
+    #expect(asserted.userHandle == registration.userHandle)
+    #expect(!asserted.signature.isEmpty)
+    #expect(!asserted.authenticatorData.isEmpty)
+  }
+
+  /// **851-2442 security fix**: the assertion's UV flag reflects exactly what
+  /// `PasskeyAssertionRequest.userVerified` said — never hardcoded — since the helper has no
+  /// biometric/PIN ceremony of its own beyond "the vault is unlocked". `0x04` is the UV bit
+  /// (`PasskeyAuthenticator`'s `Flag.userVerified`, exercised directly by `PasskeyAuthenticatorTests`);
+  /// this proves `AgentServer` actually threads the request's value through rather than defaulting.
+  @Test func passkeyAssertReportsUserVerifiedOnlyWhenTheRequestSaysSo() async throws {
+    let settingsStore = writeAccessSettingsStore(writeAccessEnabled: true)
+    let (server, _) = try await makeServer(agentSettingsStore: settingsStore)
+    _ = await send(.unlock, to: server, caller: autoFillCaller)
+
+    let registration = PasskeyRegistrationRequest(
+      relyingPartyIdentifier: "webauthn.io",
+      userHandle: Data([1, 2, 3, 4]),
+      userName: "octocat",
+      userDisplayName: "The Octocat"
+    )
+    guard
+      case .success(.passkeyRegistered(let registered)) = await send(
+        .passkeyRegister(registration), to: server, caller: autoFillCaller)
+    else {
+      Issue.record("expected .passkeyRegistered")
+      return
+    }
+
+    for userVerified in [false, true] {
+      let assertion = PasskeyAssertionRequest(
+        credentialId: registered.credentialId,
+        relyingPartyIdentifier: "webauthn.io",
+        clientDataHash: Data(repeating: 0xAB, count: 32),
+        userVerified: userVerified
+      )
+      guard
+        case .success(.passkeyAsserted(let asserted)) = await send(
+          .passkeyAssert(assertion), to: server, caller: autoFillCaller)
+      else {
+        Issue.record("expected .passkeyAsserted")
+        return
+      }
+      let flags = asserted.authenticatorData[asserted.authenticatorData.startIndex + 32]
+      #expect((flags & 0x04 != 0) == userVerified)
+    }
+  }
+
+  /// AutoFill is exempt from the 851-2433 write-access toggle for passkeys, the same as it (and the
+  /// app) is for password CRUD — `requireWriteAccess(for:)` only gates non-app callers, and the
+  /// helper treats AutoFill as such an "always exempt" caller nowhere; this proves
+  /// `.passkeyRegister` fails closed with `.agentWriteAccessDisabled` rather than silently
+  /// succeeding when the toggle is off, since a passkey registration is as much a vault write as
+  /// `.createItem`.
+  @Test func passkeyRegisterFailsWithWriteAccessDisabledWhenTheToggleIsOff() async throws {
+    let settingsStore = writeAccessSettingsStore(writeAccessEnabled: false)
+    let (server, _) = try await makeServer(agentSettingsStore: settingsStore)
+    _ = await send(.unlock, to: server, caller: autoFillCaller)
+
+    let registration = PasskeyRegistrationRequest(
+      relyingPartyIdentifier: "webauthn.io",
+      userHandle: Data([1, 2, 3, 4]),
+      userName: "octocat",
+      userDisplayName: "The Octocat"
+    )
+    guard
+      case .failure(.agentWriteAccessDisabled) = await send(
+        .passkeyRegister(registration), to: server, caller: autoFillCaller)
+    else {
+      Issue.record("expected .agentWriteAccessDisabled")
+      return
+    }
+  }
+
+  /// **851-2442 security fix (orchestrator review of PR #48).** `.passkeyRegister`/`.passkeyAssert`
+  /// used to fall through `isRequestPermitted(_:for:)` to `return true` for every non-AutoFill
+  /// caller, leaving `requireWriteAccess(for:)` — the 851-2433 toggle meant for `PasswordItem`
+  /// CRUD — as the only gate. With that toggle on, `lilpass` (or the app itself) could ask the
+  /// helper to sign a WebAuthn assertion for any relying party: a full "log in as this person
+  /// anywhere" primitive, no Touch ID, no system UI. This proves the fix: `lilpass` and the app are
+  /// both rejected with `.callerNotAuthorized` for both ops — **even with write access explicitly
+  /// turned on** — since only the verified AutoFill caller (the system's own AutoFill UI is the
+  /// real user-presence gate) may ever reach either.
+  @Test func lilpassAndAppCallersAreRejectedForPasskeyRegisterAndAssertEvenWithWriteAccessOn() async throws {
+    let settingsStore = writeAccessSettingsStore(writeAccessEnabled: true)
+    let (server, _) = try await makeServer(agentSettingsStore: settingsStore)
+    _ = await send(.unlock, to: server, caller: autoFillCaller)
+
+    // Seed one real passkey (registered by the only caller allowed to) so the assertion attempts
+    // below have a real `credentialId` to target — proving the rejection is caller-identity-based,
+    // not just "no such passkey exists yet".
+    let registration = PasskeyRegistrationRequest(
+      relyingPartyIdentifier: "webauthn.io",
+      userHandle: Data([1, 2, 3, 4]),
+      userName: "octocat",
+      userDisplayName: "The Octocat"
+    )
+    guard
+      case .success(.passkeyRegistered(let registered)) = await send(
+        .passkeyRegister(registration), to: server, caller: autoFillCaller)
+    else {
+      Issue.record("expected .passkeyRegistered")
+      return
+    }
+    let assertion = PasskeyAssertionRequest(
+      credentialId: registered.credentialId,
+      relyingPartyIdentifier: "webauthn.io",
+      clientDataHash: Data(repeating: 0xAB, count: 32)
+    )
+
+    for caller in [cliCaller, appCaller] {
+      guard
+        case .failure(.callerNotAuthorized) = await send(.passkeyRegister(registration), to: server, caller: caller)
+      else {
+        Issue.record("expected .callerNotAuthorized for .passkeyRegister from \(caller.bundleIdentifier ?? "?")")
+        continue
+      }
+      guard
+        case .failure(.callerNotAuthorized) = await send(.passkeyAssert(assertion), to: server, caller: caller)
+      else {
+        Issue.record("expected .callerNotAuthorized for .passkeyAssert from \(caller.bundleIdentifier ?? "?")")
+        continue
+      }
+    }
+  }
+
+  /// **851-2442 security fix**, `.deletePasskey`'s half: agents never manage passkeys at all, so
+  /// `lilpass` is rejected with `.callerNotAuthorized` even with write access on (unlike
+  /// `.createItem`/`.updateItem`/`.deleteItem`, which `lilpass` *can* reach once write access is
+  /// enabled) — while the app itself still can, proving this is a real caller-identity gate
+  /// (`isAppCaller(_:)`), not an accidentally-always-false check.
+  @Test func deletePasskeyIsAppOnlyEvenWithWriteAccessOn() async throws {
+    let settingsStore = writeAccessSettingsStore(writeAccessEnabled: true)
+    let (server, _) = try await makeServer(agentSettingsStore: settingsStore)
+    _ = await send(.unlock, to: server, caller: autoFillCaller)
+
+    let registration = PasskeyRegistrationRequest(
+      relyingPartyIdentifier: "webauthn.io",
+      userHandle: Data([1, 2, 3, 4]),
+      userName: "octocat",
+      userDisplayName: "The Octocat"
+    )
+    guard
+      case .success = await send(.passkeyRegister(registration), to: server, caller: autoFillCaller)
+    else {
+      Issue.record("expected .passkeyRegistered")
+      return
+    }
+    guard case .success(.passkeys(let passkeys)) = await send(.passkeys, to: server, caller: appCaller),
+      let id = passkeys.first?.id
+    else {
+      Issue.record("expected a passkey to delete")
+      return
+    }
+
+    guard case .failure(.callerNotAuthorized) = await send(.deletePasskey(id: id), to: server, caller: cliCaller)
+    else {
+      Issue.record("expected .callerNotAuthorized for lilpass")
+      return
+    }
+    guard case .success(.passkeyDeleted) = await send(.deletePasskey(id: id), to: server, caller: appCaller) else {
+      Issue.record("expected the app to still be able to delete its own passkey")
+      return
     }
   }
 
@@ -954,6 +1172,104 @@ private let autoFillCaller = CallerIdentity(
       case .failure(.locked) = await send(.autoFillCredential(id: item.id), to: server, caller: autoFillCaller)
     else {
       Issue.record("expected .locked")
+      return
+    }
+  }
+
+  /// `.passkeys`/`.deletePasskey` for a non-AutoFill caller (the app, `lilpass`) exercise the rest
+  /// of `AgentServer`'s new dispatch: not just that AutoFill can't reach them (covered above), but
+  /// that they actually work — `.passkeys` reduces every registered passkey to ``PasskeyMetadata``
+  /// (never the private key), and `.deletePasskey` removes it for good.
+  @Test func passkeysListsMetadataAndDeletePasskeyRemovesItForGood() async throws {
+    let settingsStore = writeAccessSettingsStore(writeAccessEnabled: true)
+    let (server, _) = try await makeServer(agentSettingsStore: settingsStore)
+    _ = await send(.unlock, to: server)
+
+    let registration = PasskeyRegistrationRequest(
+      relyingPartyIdentifier: "webauthn.io",
+      userHandle: Data([1, 2, 3, 4]),
+      userName: "octocat",
+      userDisplayName: "The Octocat"
+    )
+    guard
+      case .success(.passkeyRegistered(let registered)) = await send(
+        .passkeyRegister(registration),
+        to: server,
+        caller: autoFillCaller
+      )
+    else {
+      Issue.record("expected .passkeyRegistered")
+      return
+    }
+    _ = registered
+
+    guard case .success(.passkeys(let passkeys)) = await send(.passkeys, to: server) else {
+      Issue.record("expected .passkeys")
+      return
+    }
+    #expect(passkeys.count == 1)
+    #expect(passkeys.first?.relyingPartyIdentifier == "webauthn.io")
+    #expect(passkeys.first?.userName == "octocat")
+    guard let metadataId = passkeys.first?.id else {
+      Issue.record("expected a passkey id")
+      return
+    }
+
+    guard case .success(.passkeyDeleted) = await send(.deletePasskey(id: metadataId), to: server) else {
+      Issue.record("expected .passkeyDeleted")
+      return
+    }
+    guard case .success(.passkeys(let afterDelete)) = await send(.passkeys, to: server) else {
+      Issue.record("expected .passkeys")
+      return
+    }
+    #expect(afterDelete.isEmpty)
+  }
+
+  /// `.passkeyIdentities` for a non-AutoFill caller: unlike ``passkeysListsMetadataAndDeletePasskeyRemovesItForGood()``'s
+  /// `.passkeys`, this is the one op that does hand back `credentialId` — powering
+  /// `CredentialIdentityStoreSyncCoordinator`'s `ASPasskeyCredentialIdentity` registration — while
+  /// still never the private key, since `PasskeyIdentity` has no field capable of carrying one.
+  @Test func passkeyIdentitiesIncludesCredentialIdButNeverAPrivateKey() async throws {
+    let settingsStore = writeAccessSettingsStore(writeAccessEnabled: true)
+    let (server, _) = try await makeServer(agentSettingsStore: settingsStore)
+    _ = await send(.unlock, to: server)
+
+    let registration = PasskeyRegistrationRequest(
+      relyingPartyIdentifier: "webauthn.io",
+      userHandle: Data([1, 2, 3, 4]),
+      userName: "octocat",
+      userDisplayName: "The Octocat"
+    )
+    guard
+      case .success(.passkeyRegistered(let registered)) = await send(
+        .passkeyRegister(registration),
+        to: server,
+        caller: autoFillCaller
+      )
+    else {
+      Issue.record("expected .passkeyRegistered")
+      return
+    }
+
+    guard case .success(.passkeyIdentities(let identities)) = await send(.passkeyIdentities, to: server) else {
+      Issue.record("expected .passkeyIdentities")
+      return
+    }
+    #expect(identities.count == 1)
+    #expect(identities.first?.relyingPartyIdentifier == "webauthn.io")
+    #expect(identities.first?.userName == "octocat")
+    #expect(identities.first?.userHandle == Data([1, 2, 3, 4]))
+    #expect(identities.first?.credentialId == registered.credentialId)
+  }
+
+  @Test func deletePasskeyFailsWithNotFoundForAnUnknownId() async throws {
+    let settingsStore = writeAccessSettingsStore(writeAccessEnabled: true)
+    let (server, _) = try await makeServer(agentSettingsStore: settingsStore)
+    _ = await send(.unlock, to: server)
+
+    guard case .failure(.notFound) = await send(.deletePasskey(id: UUID()), to: server) else {
+      Issue.record("expected .notFound")
       return
     }
   }

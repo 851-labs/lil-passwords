@@ -50,13 +50,16 @@ public final class CredentialIdentityStoreSyncCoordinator {
     }
   }
 
-  /// Fetches the vault's current items over XPC and hands them to ``CredentialIdentityStoreSyncing``.
-  /// Silently does nothing on any failure — locked, helper unreachable, anything else
-  /// `AgentClient.list()` can throw — rather than surfacing an error: there's no UI for this
-  /// coordinator to report to, and the next vault change or unlock will simply try again with a
-  /// fresh snapshot.
+  /// Fetches the vault's current items and passkey identities over XPC and hands them to
+  /// ``CredentialIdentityStoreSyncing``. Silently does nothing on any failure — locked, helper
+  /// unreachable, anything else `AgentClient.list()` can throw — rather than surfacing an error:
+  /// there's no UI for this coordinator to report to, and the next vault change or unlock will
+  /// simply try again with a fresh snapshot. `.passkeyIdentities()` failing on its own (unlikely,
+  /// since `.list()` just proved the vault unlocked and readable) still syncs the password
+  /// identities that did succeed, rather than failing the whole refresh over a passkey-only op.
   public func refresh() async {
     guard let items = try? await agentClient.list() else { return }
-    await syncer.sync(items: items)
+    let passkeys = (try? await agentClient.passkeyIdentities()) ?? []
+    await syncer.sync(items: items, passkeys: passkeys)
   }
 }

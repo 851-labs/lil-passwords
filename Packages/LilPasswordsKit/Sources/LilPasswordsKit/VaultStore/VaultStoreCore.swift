@@ -20,6 +20,11 @@ final class VaultStoreCore {
   /// change; kept incrementally up to date by `create`/`update`/`delete` in between.
   private var decryptedItems: [UUID: PasswordItem] = [:]
 
+  /// The passkey analog of `decryptedItems` (851-2442): every non-tombstoned `PasskeyItem`'s
+  /// plaintext, keyed by id, including its `privateKeyPKCS8`. Lives only in this process's memory
+  /// while unlocked — see `PasskeyItem`'s documentation for why that key must never leave here.
+  private var decryptedPasskeys: [UUID: PasskeyItem] = [:]
+
   init(storage: any VaultRecordStorage, deviceId: UUID) {
     self.storage = storage
     self.deviceId = deviceId
@@ -134,6 +139,7 @@ final class VaultStoreCore {
   func lock() {
     vaultKey = nil
     decryptedItems.removeAll()
+    decryptedPasskeys.removeAll()
   }
 
   /// Re-derives `decryptedItems` from `storage` from scratch. Called after `open`/`createVault`,
@@ -148,10 +154,17 @@ final class VaultStoreCore {
     guard let vaultKey else { return }
     let records = try storage.loadAllRecords()
     var items: [UUID: PasswordItem] = [:]
+    var passkeys: [UUID: PasskeyItem] = [:]
     for record in records where !record.deleted {
-      items[record.id] = try RecordCodec.open(record, key: vaultKey)
+      switch record.type {
+      case .passwordItem:
+        items[record.id] = try RecordCodec.open(record, key: vaultKey)
+      case .passkeyItem:
+        passkeys[record.id] = try PasskeyRecordCodec.open(record, key: vaultKey)
+      }
     }
     decryptedItems = items
+    decryptedPasskeys = passkeys
   }
 
   // MARK: - CRUD
@@ -253,6 +266,7 @@ final class VaultStoreCore {
     )
     try storage.upsertRecord(tombstone)
     decryptedItems.removeValue(forKey: id)
+    decryptedPasskeys.removeValue(forKey: id)
     return try storage.appendChangeLogEntry(recordId: id, version: nextVersion, at: now)
   }
 
@@ -300,6 +314,64 @@ final class VaultStoreCore {
       }
       return false
     }
+  }
+
+  // MARK: - Passkey CRUD (851-2442)
+
+  /// Inserts `item` at revision 1. Throws `VaultStoreError.itemAlreadyExists` if `item.id`
+  /// already has a row, or `VaultStoreError.locked` if the store isn't unlocked.
+  ///
+  /// There is no passkey counterpart to `create(_:)`'s sibling `restore(id:)`/soft-delete pair —
+  /// unlike `PasswordItem`, `PasskeyItem` has no "Recently Deleted" stage (see the ticket:
+  /// the detail card's one destructive action is a direct, permanent Delete), so
+  /// `deletePasskeyPermanently(id:)` is the only removal path.
+  func createPasskey(_ item: PasskeyItem) throws -> VaultChangeLogEntry {
+    guard let vaultKey else { throw VaultStoreError.locked }
+    guard try storage.loadRecord(id: item.id) == nil else {
+      throw VaultStoreError.itemAlreadyExists(item.id)
+    }
+
+    let record = try PasskeyRecordCodec.seal(item, version: 1, deviceId: deviceId, key: vaultKey)
+    try storage.upsertRecord(record)
+    decryptedPasskeys[item.id] = item
+    return try storage.appendChangeLogEntry(recordId: item.id, version: 1, at: record.modifiedAt)
+  }
+
+  /// Replaces the existing row for `item.id` with `item`, incrementing its revision — used after
+  /// `passkeyAssert` updates `signCount`/`lastUsedAt`. Throws `VaultStoreError.itemNotFound` if
+  /// there's no existing row, or `VaultStoreError.locked` if the store isn't unlocked.
+  func updatePasskey(_ item: PasskeyItem) throws -> VaultChangeLogEntry {
+    guard let vaultKey else { throw VaultStoreError.locked }
+    guard let existing = try storage.loadRecord(id: item.id) else {
+      throw VaultStoreError.itemNotFound(item.id)
+    }
+
+    let nextVersion = existing.version + 1
+    let record = try PasskeyRecordCodec.seal(item, version: nextVersion, deviceId: deviceId, key: vaultKey)
+    try storage.upsertRecord(record)
+    decryptedPasskeys[item.id] = item
+    return try storage.appendChangeLogEntry(recordId: item.id, version: nextVersion, at: record.modifiedAt)
+  }
+
+  /// Permanently erases the passkey at `id` — the Passkeys detail card's Delete button. Writes
+  /// the same wiped-ciphertext `VaultRecord` tombstone `deletePermanently(id:)` writes for
+  /// passwords, so it shares that method's implementation rather than duplicating it.
+  ///
+  /// Throws `VaultStoreError.itemNotFound` if there's no row for `id`, or
+  /// `VaultStoreError.locked` if the store isn't unlocked.
+  @discardableResult
+  func deletePasskeyPermanently(id: UUID) throws -> VaultChangeLogEntry {
+    try deletePermanently(id: id)
+  }
+
+  func passkey(id: UUID) throws -> PasskeyItem? {
+    guard vaultKey != nil else { throw VaultStoreError.locked }
+    return decryptedPasskeys[id]
+  }
+
+  func allPasskeys() throws -> [PasskeyItem] {
+    guard vaultKey != nil else { throw VaultStoreError.locked }
+    return Array(decryptedPasskeys.values)
   }
 
   // MARK: - Change log

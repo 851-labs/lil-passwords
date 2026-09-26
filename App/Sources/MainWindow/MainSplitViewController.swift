@@ -7,12 +7,13 @@ import LilPasswordsKit
 /// Codes/Security/Deleted (851-2418/851-2419/851-2420) are single full-width views in Apple
 /// Passwords, not list+detail splits, so for those three categories the list column collapses and
 /// `detailItem`'s hosted content is swapped (via `DetailContainerViewController`) to the matching
-/// full-width controller; selecting `.all`/`.passkeys` restores the normal `PasswordItem`
-/// list+detail layout. `.wifi` (851-2444) is a third case: it keeps a visible two-column
-/// list+detail split like `.all`/`.passkeys`, but that split is backed by `WiFiNetwork`, not
+/// full-width controller; selecting `.all` restores the normal `PasswordItem` list+detail layout.
+/// `.wifi` (851-2444) and `.passkeys` (851-2442) are a third kind of case: each keeps a visible
+/// two-column list+detail split like `.all`, but backed by `WiFiNetwork`/`PasskeyMetadata`, not
 /// `PasswordItem`, so both `listItem` and `detailItem`'s hosted content are swapped (via a second
-/// `DetailContainerViewController`, `listContainerViewController`) to `wifiListViewController` /
-/// `wifiDetailViewController` instead of reusing `listViewController`/`detailViewController`.
+/// `DetailContainerViewController`, `listContainerViewController`) to `wifiListViewController`/
+/// `wifiDetailViewController` or `passkeysListViewController`/`passkeysDetailViewController`
+/// instead of reusing `listViewController`/`detailViewController`.
 /// Neither `listItem.viewController` nor `detailItem.viewController` is ever reassigned after
 /// `addSplitViewItem` — see `DetailContainerViewController`'s doc comment for why.
 @MainActor
@@ -26,13 +27,16 @@ final class MainSplitViewController: NSSplitViewController {
   let wifiViewModel: WiFiNetworkViewModel
   let wifiListViewController: WiFiListViewController
   let wifiDetailViewController: WiFiDetailViewController
+  let passkeysViewModel: PasskeysViewModel
+  let passkeysListViewController: PasskeysListViewController
+  let passkeysDetailViewController: PasskeyDetailViewController
 
   /// Fires whenever the sidebar selection changes, naming which toolbar layout now applies —
   /// `MainWindowController` wires this to `MainToolbarController.setToolbarLayoutMode(_:)`.
   /// `.fullWidth` for Codes/Security/Deleted (none of the list/detail-column chrome has anything
-  /// to apply to over a single full-width view); `.wifi` for the Wi-Fi category (its own reduced
-  /// layout — list title and search, but no sort/"+" capsule); `.splitView` (the default) for
-  /// `.all`/`.passkeys`.
+  /// to apply to over a single full-width view); `.wifi`/`.passkeys` for those categories (their
+  /// own reduced layout — list title and search, but no sort/"+" capsule); `.splitView` (the
+  /// default) for `.all`.
   var onToolbarLayoutModeChange: ((ToolbarLayoutMode) -> Void)?
 
   /// Fires alongside `onToolbarLayoutModeChange` with whichever list controller should now
@@ -52,7 +56,7 @@ final class MainSplitViewController: NSSplitViewController {
   // New Password sheet saves through this rather than a second, private vault access path.
   private let dataSource: VaultViewModel
 
-  init(store: VaultSnapshotStore, dataSource: VaultViewModel) {
+  init(store: VaultSnapshotStore, dataSource: VaultViewModel, agentClient: AgentClient) {
     self.dataSource = dataSource
     sidebarViewController = SidebarViewController(store: store)
     listViewController = ItemListViewController(dataSource: dataSource)
@@ -64,6 +68,10 @@ final class MainSplitViewController: NSSplitViewController {
     self.wifiViewModel = wifiViewModel
     wifiListViewController = WiFiListViewController(viewModel: wifiViewModel)
     wifiDetailViewController = WiFiDetailViewController(viewModel: wifiViewModel)
+    let passkeysViewModel = PasskeysViewModel(agentClient: agentClient)
+    self.passkeysViewModel = passkeysViewModel
+    passkeysListViewController = PasskeysListViewController(viewModel: passkeysViewModel)
+    passkeysDetailViewController = PasskeyDetailViewController(viewModel: passkeysViewModel)
     super.init(nibName: nil, bundle: nil)
   }
 
@@ -77,6 +85,7 @@ final class MainSplitViewController: NSSplitViewController {
     sidebarViewController.delegate = self
     listViewController.delegate = self
     wifiListViewController.delegate = self
+    passkeysListViewController.delegate = self
 
     splitView.autosaveName = "MainSplitView"
     splitView.identifier = NSUserInterfaceItemIdentifier("MainSplitView")
@@ -126,9 +135,10 @@ final class MainSplitViewController: NSSplitViewController {
   }
 
   /// The full-width controller for a category that replaces the list+detail split, or `nil` for
-  /// categories that use a list+detail layout. `.wifi` is handled separately, before this is ever
-  /// consulted — see `sidebarViewController(_:didSelect:)` — since it needs its own list+detail
-  /// pair rather than either a full-width controller or `PasswordItem`'s list+detail controllers.
+  /// categories that use a list+detail layout. `.wifi`/`.passkeys` are handled separately, before
+  /// this is ever consulted — see `sidebarViewController(_:didSelect:)` — since each needs its own
+  /// list+detail pair rather than either a full-width controller or `PasswordItem`'s list+detail
+  /// controllers.
   private func fullWidthViewController(for category: SidebarCategory) -> NSViewController? {
     switch category {
     case .codes: return codesViewController
@@ -156,6 +166,17 @@ extension MainSplitViewController: SidebarViewControllerDelegate {
       detailViewController.showNoSelection(for: category)
       onToolbarLayoutModeChange?(.wifi)
       onSearchDelegateChange?(wifiListViewController)
+    } else if category == .passkeys {
+      // Same shape as the `.wifi` branch above: a real list+detail split, backed by
+      // `PasskeyMetadata` rather than `PasswordItem`, so it gets its own pair of view controllers
+      // swapped into both containers.
+      listContainerViewController.setContentViewController(passkeysListViewController)
+      detailContainerViewController.setContentViewController(passkeysDetailViewController)
+      listItem.isCollapsed = false
+      passkeysDetailViewController.show(passkey: nil)
+      detailViewController.showNoSelection(for: category)
+      onToolbarLayoutModeChange?(.passkeys)
+      onSearchDelegateChange?(passkeysListViewController)
     } else if let fullWidthViewController = fullWidthViewController(for: category) {
       listContainerViewController.setContentViewController(listViewController)
       detailContainerViewController.setContentViewController(fullWidthViewController)
@@ -185,6 +206,12 @@ extension MainSplitViewController: SidebarViewControllerDelegate {
 extension MainSplitViewController: WiFiListViewControllerDelegate {
   func wifiListViewController(_ controller: WiFiListViewController, didSelect network: WiFiNetwork?) {
     wifiDetailViewController.show(network: network)
+  }
+}
+
+extension MainSplitViewController: PasskeysListViewControllerDelegate {
+  func passkeysListViewController(_ controller: PasskeysListViewController, didSelect passkey: PasskeyMetadata?) {
+    passkeysDetailViewController.show(passkey: passkey)
   }
 }
 

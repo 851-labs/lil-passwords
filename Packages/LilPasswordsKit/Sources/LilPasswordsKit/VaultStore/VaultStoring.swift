@@ -150,6 +150,37 @@ public protocol VaultStoring: Actor {
   /// Throws `VaultStoreError.locked` if the store isn't unlocked.
   func items(matching query: String) async throws -> [PasswordItem]
 
+  // MARK: - Passkey CRUD (851-2442)
+
+  /// Inserts `item` at revision 1. Throws `VaultStoreError.itemAlreadyExists` if `item.id`
+  /// already has a row, or `VaultStoreError.locked` if the store isn't unlocked.
+  func createPasskey(_ item: PasskeyItem) async throws
+
+  /// Replaces the existing row for `item.id` with `item`, incrementing its revision — how
+  /// `passkeyAssert` persists an updated `signCount`/`lastUsedAt` after every assertion. Throws
+  /// `VaultStoreError.itemNotFound` if there's no existing row, or `VaultStoreError.locked` if
+  /// the store isn't unlocked.
+  func updatePasskey(_ item: PasskeyItem) async throws
+
+  /// Permanently erases the passkey at `id` — passkeys have no "Recently Deleted" stage, so this
+  /// is the only removal path (the Passkeys detail card's Delete button). Throws
+  /// `VaultStoreError.itemNotFound` if there's no existing row, or `VaultStoreError.locked` if
+  /// the store isn't unlocked.
+  func deletePasskeyPermanently(id: UUID) async throws
+
+  /// The passkey at `id`, or `nil` if there's no row for it. Throws `VaultStoreError.locked` if
+  /// the store isn't unlocked.
+  ///
+  /// The returned `PasskeyItem` includes `privateKeyPKCS8` — callers on this protocol are
+  /// `LilPasswordsAgent`-internal (`VaultStore`/`InMemoryVaultStore` conformers only run inside
+  /// the helper); anything crossing the XPC boundary must go through `AgentServer`'s narrow
+  /// `PasskeyMetadata` wire type instead, never this type directly.
+  func passkey(id: UUID) async throws -> PasskeyItem?
+
+  /// Every passkey in the vault. Throws `VaultStoreError.locked` if the store isn't unlocked. See
+  /// `passkey(id:)`'s note on `privateKeyPKCS8` — the same applies here.
+  func allPasskeys() async throws -> [PasskeyItem]
+
   // MARK: - Change log
 
   /// Every change-log entry with `seq` strictly greater than `seq`, oldest first. A future sync
