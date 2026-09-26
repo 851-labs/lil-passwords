@@ -64,6 +64,33 @@ targets:
         copy:
           destination: wrapper
           subpath: Contents/Helpers
+    # 851-2465: `codeSign: true` above re-signs each embedded helper tool right after copying it
+    # into Contents/Helpers, but that re-sign doesn't know about (and so discards) the `-i`
+    # identifier `LilPasswordsAgent`/`lilpass`'s own `OTHER_CODE_SIGN_FLAGS` gave it — both bare
+    # `com.apple.product-type.tool` binaries with no Info.plist, so codesign has nothing but the
+    # file name to fall back to. Re-sign them again here, explicitly, with the identifiers
+    # `AgentConnectionSecurity` (Packages/LilPasswordsKit) actually requires from a real signed
+    # build — see that file, and the matching comment on each tool target's
+    # `OTHER_CODE_SIGN_FLAGS`, for what silently breaks otherwise: the app and the agent reject
+    # every connection from each other, surfacing as the "Couldn't reach lil passwords' background
+    # helper." error and `lilpass`'s "connection ... was invalidated". Runs as `postBuildScripts` —
+    # after the embed/copy phase above, but still before Xcode's own final CodeSign of the app
+    # itself, so the app's seal covers these corrected signatures, not the discarded ones.
+    postBuildScripts:
+      - name: Re-sign embedded helpers with their own bundle identifiers (851-2465)
+        script: |
+          set -euo pipefail
+          HELPERS="$TARGET_BUILD_DIR/$WRAPPER_NAME/Contents/Helpers"
+          IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:-$CODE_SIGN_IDENTITY}"
+          codesign --force -o runtime --timestamp=none \
+            --sign "$IDENTITY" --identifier com.851labs.lilpasswords.agent \
+            --entitlements "$SRCROOT/Config/Entitlements/Agent.entitlements" \
+            "$HELPERS/LilPasswordsAgent"
+          codesign --force -o runtime --timestamp=none \
+            --sign "$IDENTITY" --identifier com.851labs.lilpasswords.cli \
+            --entitlements "$SRCROOT/Config/Entitlements/CLI.entitlements" \
+            "$HELPERS/lilpass"
+        basedOnDependencyAnalysis: false
     info:
       path: App/Info.plist
       properties:
@@ -87,6 +114,14 @@ targets:
         PRODUCT_NAME: lil passwords
         PRODUCT_BUNDLE_IDENTIFIER: com.851labs.lilpasswords
         CODE_SIGN_ENTITLEMENTS: Config/Entitlements/App.entitlements
+        # 851-2465: the "Re-sign embedded helpers" postBuildScript above needs to read
+        # Config/Entitlements/{Agent,CLI}.entitlements and re-codesign the already-copied helper
+        # binaries in place — Config/Base.xcconfig's project-wide `ENABLE_USER_SCRIPT_SANDBOXING =
+        # YES` blocks exactly that (tried declaring them as the script's `inputFiles`/`outputFiles`
+        # instead: since Xcode's own implicit CodeSign-on-copy step for those same two files already
+        # produces them, declaring this script as also producing them created a dependency cycle).
+        # Scoped to this target only — LilPasswordsAgent/lilpass have no script phases of their own.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
   LilPasswordsAgent:
     type: tool
     platform: macOS
@@ -102,6 +137,43 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Config/Entitlements/Agent.entitlements
         # Embedded by LilPasswords; don't also install a standalone copy into archives.
         SKIP_INSTALL: YES
+        # 851-2465: this target is a bare `com.apple.product-type.tool` with
+        # GENERATE_INFOPLIST_FILE = NO (Config/Base.xcconfig, and turning it on for a `tool`
+        # product type doesn't help either — tried it: Xcode never embeds the resulting Info.plist
+        # into a non-bundle Mach-O, so `otool -s __TEXT __info_plist` on the result is still empty).
+        # With no CFBundleIdentifier anywhere in the binary, codesign silently falls back to the
+        # executable's own file name ("LilPasswordsAgent") as its `-i` identifier instead of
+        # PRODUCT_BUNDLE_IDENTIFIER above.
+        #
+        # That mismatch is invisible in ad-hoc/unsigned DEBUG builds
+        # (`AgentConnectionSecurity.Requirement.developmentFallback` skips the check entirely), but
+        # a real Apple Development/Developer ID-signed build enforces
+        # `identifier "com.851labs.lilpasswords.agent"` (`AgentConnectionSecurity.PeerIdentifier`)
+        # and rejects every connection — surfacing as the app's own "Couldn't reach lil passwords'
+        # background helper." error and `lilpass`'s "connection ... was invalidated" — confirmed via
+        # a real signed install to /Applications during 851-2465's smoke test.
+        #
+        # `OTHER_CODE_SIGN_FLAGS` fixes *this target's own* codesign invocation, which is enough for
+        # anyone running this standalone build product directly — but NOT enough on its own for the
+        # shipped app: `LilPasswords`'s "Embed Dependencies" copy phase below (`codeSign: true`)
+        # re-signs its own copy of this binary from scratch afterward, using the embedding app
+        # target's codesign invocation rather than this one, discarding this `-i` again. See
+        # `LilPasswords`'s `postBuildScripts` (below) for the fix that actually reaches the shipped,
+        # embedded copy at Contents/Helpers.
+        OTHER_CODE_SIGN_FLAGS: -i com.851labs.lilpasswords.agent
+        # 851-2465: the identifier fixes above are necessary but weren't sufficient — a real signed
+        # install still failed with `SMAppService`'s launchd job stuck "spawn scheduled"/"spawn
+        # failed", `last exit reason = OS_REASON_CODESIGNING`, and `launchctl print`'s LWCR showing
+        # an *empty* allowed-cdhash set (`"cdhash" => {"$in" => []}`) — `smd` couldn't compute a
+        # valid lightweight code requirement because this binary has no Info.plist at all
+        # (`codesign -dvv` shows `Info.plist=not bound`), so it produced one that rejects every
+        # signature, including a perfectly valid one, and launchd kills the process before `main()`
+        # ever runs. Linking Agent/Support/Info.plist directly into `__TEXT,__info_plist` — the same
+        # technique Apple's own SMAppService/helper-tool sample code uses for non-bundle executables
+        # — gives `smd` a real CFBundleIdentifier/bundle version to key its LWCR from. Confirmed via
+        # a real signed install: without this, `launchctl print` shows the empty-cdhash LWCR and
+        # `OS_REASON_CODESIGNING` kills; with it, the agent actually spawns and answers XPC calls.
+        OTHER_LDFLAGS: -Wl,-sectcreate,__TEXT,__info_plist,$(SRCROOT)/Agent/Support/Info.plist
   lilpass:
     type: tool
     platform: macOS
@@ -126,6 +198,17 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Config/Entitlements/CLI.entitlements
         # Embedded by LilPasswords; don't also install a standalone copy into archives.
         SKIP_INSTALL: YES
+        # 851-2465: see the matching comment on `LilPasswordsAgent`'s `OTHER_CODE_SIGN_FLAGS`
+        # above — same bare-tool/no-Info.plist gap left this signed as plain "lilpass" instead of
+        # `com.851labs.lilpasswords.cli`, which `AgentConnectionSecurity` (the agent's listener-side
+        # peer check) requires from a real signed build. `LilPasswords`'s `postBuildScripts` fixes
+        # the shipped, embedded copy at Contents/Helpers that this alone doesn't reach.
+        OTHER_CODE_SIGN_FLAGS: -i com.851labs.lilpasswords.cli
+        # 851-2465: see the matching comment on `LilPasswordsAgent`'s `OTHER_LDFLAGS` above. `lilpass`
+        # isn't SMAppService-managed itself so the empty-LWCR/OS_REASON_CODESIGNING failure doesn't
+        # apply to it directly, but it gets the same treatment for consistency and so its identifier
+        # doesn't depend solely on `OTHER_CODE_SIGN_FLAGS -i`.
+        OTHER_LDFLAGS: -Wl,-sectcreate,__TEXT,__info_plist,$(SRCROOT)/CLI/Support/Info.plist
 schemes:
   LilPasswords:
     build:

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	851-2465: see the matching comment on Agent/Support/Info.plist — `lilpass` is the same kind of
+	bare `com.apple.product-type.tool` target with no Info.plist otherwise, which left it both
+	mis-identified to codesign (fell back to "lilpass") and inconsistent with `LilPasswordsAgent`.
+	Not SMAppService-managed itself, but built the same way for consistency, and so its identifier
+	no longer depends solely on `OTHER_CODE_SIGN_FLAGS -i`.
+	-->
+	<key>CFBundleIdentifier</key>
+	<string>com.851labs.lilpasswords.cli</string>
+	<key>CFBundleExecutable</key>
+	<string>lilpass</string>
+	<key>CFBundleName</key>
+	<string>lilpass</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+</dict>
+</plist>

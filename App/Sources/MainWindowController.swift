@@ -36,6 +36,12 @@ final class MainWindowController: NSWindowController {
   /// of sync with each other.
   let lockCoordinator: LockCoordinator
   private var lockStateObserver: LockStateObserver?
+  // 851-2465: consulted (never registered again here — `AppDelegate` already did that once at
+  // launch) only to decide whether a helper-unreachable `UnlockFailure` should show the Login
+  // Items hint, i.e. whether `.status` is currently `.requiresApproval`. Shared with `AppDelegate`
+  // rather than owning a second `SMAppServiceHelperAgent` — `status` is a live query, so either
+  // instance reports the same thing, but sharing one avoids the reader wondering why there are two.
+  private let helperAgentRegistrar: any HelperAgentRegistering
 
   /// Guards against starting the first-run `setUpVault()` flow twice — `applyState(.needsVaultSetup)`
   /// can run again (e.g. a second `LockStateObserver` firing before the first `setUpVault()` call
@@ -51,8 +57,9 @@ final class MainWindowController: NSWindowController {
     private var hasRequestedAutoUnlock = false
   #endif
 
-  init(agentClient: AgentClient) {
+  init(agentClient: AgentClient, helperAgentRegistrar: any HelperAgentRegistering) {
     self.agentClient = agentClient
+    self.helperAgentRegistrar = helperAgentRegistrar
     self.lockCoordinator = LockCoordinator(
       agent: MainWindowController.makeAgent(real: agentClient),
       authenticator: MainWindowController.makeAuthenticator()
@@ -208,22 +215,63 @@ final class MainWindowController: NSWindowController {
   private func applyState(_ state: LockState) {
     switch state {
     case .checking:
-      lockScreenViewController.setUnlockFailureMessage(nil)
+      lockScreenViewController.applyFailurePresentation(nil)
       presentLockScreen()
     case .locked:
-      lockScreenViewController.setUnlockFailureMessage(nil)
+      lockScreenViewController.applyFailurePresentation(nil)
       presentLockScreen()
       #if DEBUG
         requestAutoUnlockIfNeeded()
       #endif
-    case .unlockFailed(let message):
-      lockScreenViewController.setUnlockFailureMessage(message)
+    case .unlockFailed(let failure):
+      lockScreenViewController.applyFailurePresentation(failurePresentation(for: failure))
       presentLockScreen()
     case .unlocked:
       presentUnlockedContent()
     case .needsVaultSetup:
       startFirstRunVaultSetupIfNeeded()
     }
+  }
+
+  /// 851-2465: turns an `UnlockFailure` (`LilPasswordsKit`, no AppKit/UI knowledge) into the
+  /// `LockScreenViewController.FailurePresentation` (App target, no `LilPasswordsKit`/XPC
+  /// knowledge) that actually renders it — the one place those two deliberately-decoupled halves
+  /// meet. Not helper-unreachable failures (a `.remote(AgentError)`, or a cancelled `LAContext`
+  /// prompt) pass their message through unchanged, with no "Try Again"/hint/Login Items affordance
+  /// — those already have their own specific, actionable description.
+  private func failurePresentation(for failure: UnlockFailure) -> LockScreenViewController.FailurePresentation {
+    guard failure.isHelperUnreachable else {
+      return LockScreenViewController.FailurePresentation(
+        message: failure.message,
+        showsTryAgain: false,
+        hint: nil,
+        showsOpenLoginItems: false
+      )
+    }
+
+    let requiresApproval = helperAgentRegistrar.status == .requiresApproval
+    var hint: String?
+    if requiresApproval {
+      hint =
+        "\(LilPasswordsKit.productName) needs to be turned on in Login Items for its helper to run."
+    }
+    #if DEBUG
+      // Only reachable in a DEBUG build with no team identifier on its own signature (unsigned,
+      // or ad-hoc — see `AgentConnectionSecurity.Requirement.developmentFallback`'s
+      // documentation) — a signed DEBUG build (this ticket's Apple Development smoke test) gets
+      // `.enforce` instead and never shows this. Login Items guidance, when both apply, is the
+      // more actionable of the two, so it takes priority.
+      if hint == nil, case .developmentFallback = AgentConnectionSecurity.requirement(acceptingPeers: [.agent]) {
+        hint = "Running an unsigned/ad-hoc DEBUG build? See docs/tophat.md to run against a real helper."
+      }
+    #endif
+
+    return LockScreenViewController.FailurePresentation(
+      message: failure.message,
+      showsTryAgain: true,
+      hint: hint,
+      showsOpenLoginItems: requiresApproval
+    )
   }
 
   private func presentLockScreen() {
@@ -319,5 +367,13 @@ final class MainWindowController: NSWindowController {
 extension MainWindowController: LockScreenViewControllerDelegate {
   func lockScreenViewControllerDidRequestUnlock(_ controller: LockScreenViewController) {
     Task { await lockCoordinator.unlock() }
+  }
+
+  func lockScreenViewControllerDidRequestTryAgain(_ controller: LockScreenViewController) {
+    Task { await lockCoordinator.refresh() }
+  }
+
+  func lockScreenViewControllerDidRequestOpenLoginItems(_ controller: LockScreenViewController) {
+    helperAgentRegistrar.openSystemSettingsLoginItems()
   }
 }

@@ -57,6 +57,22 @@ codesign_with_entitlements() {
   codesign --force $RUNTIME_FLAG $TIMESTAMP_FLAG --sign "$IDENTITY" --entitlements "$entitlements" "$target"
 }
 
+# 851-2465: `LilPasswordsAgent` and `lilpass` are bare `com.apple.product-type.tool` binaries with
+# no Info.plist (see project.yml's matching comment on their `OTHER_CODE_SIGN_FLAGS`) — with no
+# CFBundleIdentifier anywhere in the binary, a plain `codesign` here would silently fall back to
+# each executable's own file name ("LilPasswordsAgent"/"lilpass") as its signing identifier instead
+# of the bundle identifier `AgentConnectionSecurity` (Packages/LilPasswordsKit) actually checks for
+# (`com.851labs.lilpasswords.agent`/`.cli`). That's invisible with ad hoc signing (no Team ID to
+# check against in the first place — `AgentConnectionSecurity.Requirement.developmentFallback`
+# accepts anything), but the moment this runs with a real identity, the app and the agent reject
+# every connection from each other — confirmed via a real Apple Development-signed install to
+# /Applications during 851-2465's real-install smoke test.
+codesign_with_entitlements_and_identifier() {
+  local target="$1" entitlements="$2" identifier="$3"
+  log "codesign: ${target#"$APP_PATH"/} ($entitlements, -i $identifier)"
+  codesign --force $RUNTIME_FLAG $TIMESTAMP_FLAG --sign "$IDENTITY" --identifier "$identifier" --entitlements "$entitlements" "$target"
+}
+
 # --- 1. Sparkle.framework's bundled helper tools ---------------------------
 # Sparkle ships its own Autoupdate tool, a small Updater.app, and two XPC
 # services alongside its versioned dylib. These are independent code objects
@@ -84,8 +100,8 @@ AGENT_PATH="$APP_PATH/Contents/Helpers/LilPasswordsAgent"
 CLI_PATH="$APP_PATH/Contents/Helpers/lilpass"
 [[ -f "$AGENT_PATH" ]] || die "$AGENT_PATH not found — was LilPasswordsAgent embedded?"
 [[ -f "$CLI_PATH" ]] || die "$CLI_PATH not found — was lilpass embedded?"
-codesign_with_entitlements "$AGENT_PATH" "Config/Entitlements/Agent.entitlements"
-codesign_with_entitlements "$CLI_PATH" "Config/Entitlements/CLI.entitlements"
+codesign_with_entitlements_and_identifier "$AGENT_PATH" "Config/Entitlements/Agent.entitlements" "com.851labs.lilpasswords.agent"
+codesign_with_entitlements_and_identifier "$CLI_PATH" "Config/Entitlements/CLI.entitlements" "com.851labs.lilpasswords.cli"
 
 # --- 3. The app itself, last ------------------------------------------------
 codesign_with_entitlements "$APP_PATH" "Config/Entitlements/App.entitlements"

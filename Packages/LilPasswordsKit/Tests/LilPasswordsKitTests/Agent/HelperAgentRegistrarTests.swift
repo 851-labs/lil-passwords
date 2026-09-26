@@ -81,10 +81,43 @@ import Testing
     #expect(registrar.registerCallCount == 0)
   }
 
-  @Test func notFoundIsReportedWithoutCallingRegister() {
+  // 851-2465: a real, signed-and-installed-to-`/Applications` smoke test found `.notFound`
+  // reported by `SMAppService.status` for a build whose plist was present, valid, and correctly
+  // sealed in the code signature — simply because `servicemanagementd` had never recorded this
+  // service before. Calling `register()` anyway succeeded immediately. So `.notFound` is now
+  // treated like `.notRegistered`: attempt `register()` rather than reporting a false negative.
+
+  @Test func notFoundRegistersAndReportsRegisteredWhenApprovalIsntNeeded() {
     let registrar = FakeRegistrar(status: .notFound)
+    registrar.statusAfterRegister = .enabled
+    let outcome = HelperAgentRegistrar.registerIfNeeded(using: registrar)
+    #expect(outcome == .registered)
+    #expect(registrar.registerCallCount == 1)
+  }
+
+  @Test func notFoundRegistersAndReportsRequiresApprovalWhenItLandsThatWay() {
+    let registrar = FakeRegistrar(status: .notFound)
+    registrar.statusAfterRegister = .requiresApproval
+    let outcome = HelperAgentRegistrar.registerIfNeeded(using: registrar)
+    #expect(outcome == .requiresApproval)
+    #expect(registrar.registerCallCount == 1)
+  }
+
+  @Test func notFoundReportsRegistrationFailedWhenRegisterThrows() {
+    let registrar = FakeRegistrar(status: .notFound)
+    registrar.registerError = FakeRegistrar.RegisterFailure()
+    let outcome = HelperAgentRegistrar.registerIfNeeded(using: registrar)
+    #expect(outcome == .registrationFailed(message: "\(FakeRegistrar.RegisterFailure())"))
+    #expect(registrar.registerCallCount == 1)
+  }
+
+  @Test func notFoundStillReportsNotFoundWhenRegisterSucceedsButStatusDoesntChange() {
+    // The genuine "broken build" case this status exists for: `register()` doesn't throw, but the
+    // plist truly isn't found, so `status` reads `.notFound` again immediately afterward too.
+    let registrar = FakeRegistrar(status: .notFound)
+    registrar.statusAfterRegister = .notFound
     let outcome = HelperAgentRegistrar.registerIfNeeded(using: registrar)
     #expect(outcome == .notFound)
-    #expect(registrar.registerCallCount == 0)
+    #expect(registrar.registerCallCount == 1)
   }
 }

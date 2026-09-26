@@ -30,7 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       applyForcedAppearanceOverrideIfNeeded()
     #endif
     NSApp.mainMenu = MainMenu.make()
-    let controller = MainWindowController(agentClient: agentClient)
+    let controller = MainWindowController(agentClient: agentClient, helperAgentRegistrar: helperAgentRegistrar)
     controller.showWindow(nil)
     mainWindowController = controller
     NSApp.activate(ignoringOtherApps: true)
@@ -79,11 +79,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       presentHelperAgentApprovalSheet()
 
     case .notFound:
-      // Shouldn't happen in a correctly-built app — see `HelperAgentStatus.notFound`'s
-      // documentation. Logged (not surfaced to the user) since there's no user action that
-      // fixes a broken bundle; a developer reading Console.app is who this is for.
+      // `HelperAgentRegistrar.registerIfNeeded(using:)` already retried `register()` once for us
+      // here (851-2465: an initial `.notFound` status can be a one-time "never seen this service
+      // before" quirk, not a broken build — see `HelperAgentStatus.notFound`'s documentation), so
+      // reaching this case means it's still `.notFound` after that attempt: a genuinely broken
+      // bundle (missing/invalid plist). Logged (not surfaced to the user) since there's no user
+      // action that fixes that; a developer reading Console.app is who this is for.
       Self.helperAgentRegistrationLogger.error(
-        "LilPasswordsAgent's launchd plist wasn't found in the app bundle (expected at Contents/Library/LaunchAgents) — this build is broken; unlock and vault setup will fail."
+        "LilPasswordsAgent's launchd plist wasn't found in the app bundle (expected at Contents/Library/LaunchAgents) even after attempting registration — this build is broken; unlock and vault setup will fail."
       )
 
     case .registrationFailed(let message):
