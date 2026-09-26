@@ -62,7 +62,32 @@ instead of failing** — see [What happens with no secrets configured at all](#w
 
 The workflow then publishes (creates if missing) a GitHub Release at the
 pushed tag and uploads `dist/*.dmg` and `dist/appcast.xml` (if generated) as
-release assets.
+release assets, then bumps the Homebrew cask — see
+[Homebrew cask](#homebrew-cask) below.
+
+## Homebrew cask
+
+851-2438: `brew install --cask 851-labs/tap/lil-passwords` installs from
+`Casks/lil-passwords.rb` in [851-labs/homebrew-tap](https://github.com/851-labs/homebrew-tap),
+a separate repo shared with 851 Labs' other tools. After the GitHub Release
+is published, the release workflow's "Bump Homebrew cask" step clones that
+tap, rewrites the cask's `version` and `sha256` to match the just-published
+DMG, and opens a PR against it (`bump-lil-passwords-<version>` →
+`homebrew-tap`'s `main`) — it deliberately doesn't push straight to `main`
+or merge that PR itself.
+
+This step needs a `HOMEBREW_TAP_TOKEN` secret: a token with write access to
+851-labs/homebrew-tap (a fine-grained PAT scoped to that repo with Contents
+and Pull requests write, or a classic PAT with `repo`) — the job's own
+`GITHUB_TOKEN` only has access to this repo, not the tap. Like every other
+secret in this pipeline, it's optional and the step **warns and no-ops
+instead of failing** if it's unset, logging a workflow warning annotation
+and leaving the tap's cask untouched.
+
+The cask itself (`app`, `binary` for the `lilpass` CLI link, `zap`, Sparkle
+`auto_updates`, etc.) is documented in its own comments in
+`Casks/lil-passwords.rb`; it carries an ad hoc-signing caveat identical in
+spirit to the DMG's own — see the note above — until 851-2436 lands.
 
 ## Secrets
 
@@ -76,6 +101,7 @@ All optional; the pipeline degrades gracefully without each one.
 | `NOTARY_APPLE_ID` + `NOTARY_PASSWORD` | An Apple ID (with an [app-specific password](https://support.apple.com/en-us/102654)) enrolled in the team, for `notarytool`. Alternative to the API key below. |
 | `NOTARY_API_KEY_ID` + `NOTARY_API_ISSUER_ID` + `NOTARY_API_KEY_P8` | An App Store Connect API key instead of an Apple ID/password, for `notarytool`. |
 | `SPARKLE_ED_PRIVATE_KEY` | The EdDSA private key Sparkle uses to sign appcast entries — see [Sparkle keys](#sparkle-keys). |
+| `HOMEBREW_TAP_TOKEN` | A token with write access to 851-labs/homebrew-tap, used to open the cask-bump PR — see [Homebrew cask](#homebrew-cask). |
 
 `DEVELOPER_ID_CERT_P12`/`DEVELOPER_ID_CERT_PASSWORD` gate Developer ID
 signing (`lib.sh`'s `has_developer_id_cert`); `APPLE_TEAM_ID` isn't part of

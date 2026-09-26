@@ -80,3 +80,58 @@ jobs:
             echo "::warning::dist/appcast.xml was not generated (SPARKLE_ED_PRIVATE_KEY unset?) — Sparkle feed not updated for $TAG."
           fi
           gh release upload "$TAG" "${ASSETS[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+
+      # 851-2438: keeps 851-labs/homebrew-tap's Casks/lil-passwords.rb in sync
+      # with each release. Same "degrade gracefully" pattern as the rest of
+      # this pipeline (see docs/releasing.md) — HOMEBREW_TAP_TOKEN is
+      # optional, and its absence is a warning, not a failure. It needs to be
+      # a token (fine-grained PAT with contents + pull-requests write on
+      # 851-labs/homebrew-tap, or a classic PAT with `repo`) rather than the
+      # job's own GITHUB_TOKEN, which has no access outside this repo.
+      - name: Bump Homebrew cask
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::warning::HOMEBREW_TAP_TOKEN not set — skipping the 851-labs/homebrew-tap cask bump for ${GITHUB_REF_NAME}. See docs/releasing.md."
+            exit 0
+          fi
+
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          DMG="dist/LilPasswords-${VERSION}.dmg"
+          if [[ ! -f "$DMG" ]]; then
+            echo "::error::$DMG not found — did the build step run?"
+            exit 1
+          fi
+          SHA256="$(shasum -a 256 "$DMG" | awk '{print $1}')"
+
+          TAP_DIR="$(mktemp -d)"
+          gh repo clone 851-labs/homebrew-tap "$TAP_DIR"
+          cd "$TAP_DIR"
+
+          CASK="Casks/lil-passwords.rb"
+          if [[ ! -f "$CASK" ]]; then
+            echo "::error::$CASK not found in 851-labs/homebrew-tap."
+            exit 1
+          fi
+
+          sed -i '' -E "s/^( *version \")[^\"]*(\")/\1${VERSION}\2/" "$CASK"
+          sed -i '' -E "s/^( *sha256 \")[^\"]*(\")/\1${SHA256}\2/" "$CASK"
+
+          if git diff --quiet -- "$CASK"; then
+            echo "$CASK is already at ${VERSION} — nothing to bump."
+            exit 0
+          fi
+
+          git config user.name "851 Labs Release Bot"
+          git config user.email "release-bot@851labs.dev"
+
+          BRANCH="bump-lil-passwords-${VERSION}"
+          git checkout -b "$BRANCH"
+          git commit -am "lil-passwords ${VERSION}"
+          git push origin "$BRANCH"
+          gh pr create --repo 851-labs/homebrew-tap \
+            --title "lil-passwords ${VERSION}" \
+            --body "Automated bump from 851-labs/lil-passwords@${TAG}." \
+            --head "$BRANCH" --base main
