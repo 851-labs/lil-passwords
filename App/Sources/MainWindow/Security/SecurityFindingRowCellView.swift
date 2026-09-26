@@ -47,7 +47,11 @@ final class SecurityFindingRowCellView: NSTableCellView {
     reasonField.translatesAutoresizingMaskIntoConstraints = false
     reasonField.font = .systemFont(ofSize: 11)
     reasonField.textColor = .secondaryLabelColor
-    reasonField.maximumNumberOfLines = 3
+    // Was capped at 3 lines, which clipped the (longer) reused-password reason text mid-sentence
+    // — "…change your password on each" (851-2426 review note). Unlimited lines plus
+    // `height(for:availableWidth:)` below sizing the row to match is the actual fix; the cap
+    // alone was never the right tool here since the row's height was still fixed regardless.
+    reasonField.maximumNumberOfLines = 0
 
     changePasswordButton.translatesAutoresizingMaskIntoConstraints = false
     changePasswordButton.title = "Change Password on Website"
@@ -98,6 +102,10 @@ final class SecurityFindingRowCellView: NSTableCellView {
     titleField.stringValue = item.title
     reasonField.stringValue = kind.reasonText
     changePasswordButton.isEnabled = item.changePasswordURL != nil
+
+    // A meaningful VoiceOver description for the whole row (851-2426), not just the title.
+    setAccessibilityElement(true)
+    setAccessibilityLabel("\(item.title), \(kind.groupTitle.lowercased()): \(kind.reasonText)")
   }
 
   @objc
@@ -108,5 +116,49 @@ final class SecurityFindingRowCellView: NSTableCellView {
   @objc
   private func hideWarningTapped() {
     onHideWarningTapped?()
+  }
+
+  // MARK: - Height measurement
+
+  /// A reusable, never-displayed button whose `fittingSize` stands in for the real button row's
+  /// height in ``height(for:availableWidth:)`` below — `.small`/`.rounded` push buttons have a
+  /// fixed height independent of their title, so one instance covers both real buttons.
+  private static let sampleButton: NSButton = {
+    let button = NSButton(title: "Change Password on Website", target: nil, action: nil)
+    button.bezelStyle = .rounded
+    button.controlSize = .small
+    return button
+  }()
+
+  /// This row's exact height for `kind`'s reason text wrapped to fit `availableWidth` (the
+  /// table's own width, since the single column tracks it) — mirrors `configureSubviews()`'s
+  /// layout constants exactly, so `SecurityViewController.tableView(_:heightOfRow:)` can size the
+  /// row to actually fit the text instead of guessing a fixed height that clips it.
+  static func height(for kind: SecurityIssueKind, availableWidth: CGFloat) -> CGFloat {
+    let topInset: CGFloat = 10
+    let bottomInset: CGFloat = 10
+    let titleReasonGap: CGFloat = 4
+    let reasonButtonGap: CGFloat = 8
+    // leading(8) + icon(28) + icon-to-text gap(8) + reason's own trailing inset(12).
+    let horizontalInset: CGFloat = 8 + 28 + 8 + 12
+    let reasonWidth = max(0, availableWidth - horizontalInset)
+
+    let titleHeight = measuredHeight(
+      for: "Title", font: .systemFont(ofSize: 13, weight: .semibold), width: .greatestFiniteMagnitude)
+    let reasonHeight = measuredHeight(for: kind.reasonText, font: .systemFont(ofSize: 11), width: reasonWidth)
+    let buttonRowHeight = sampleButton.fittingSize.height
+    let iconHeight: CGFloat = 28
+
+    let textColumnHeight = titleHeight + titleReasonGap + reasonHeight + reasonButtonGap + buttonRowHeight
+    return ceil(topInset + max(iconHeight, textColumnHeight) + bottomInset)
+  }
+
+  private static func measuredHeight(for text: String, font: NSFont, width: CGFloat) -> CGFloat {
+    guard width > 0 else { return 0 }
+    let bounds = NSAttributedString(string: text, attributes: [.font: font])
+      .boundingRect(
+        with: NSSize(width: width, height: .greatestFiniteMagnitude),
+        options: [.usesLineFragmentOrigin, .usesFontLeading])
+    return ceil(bounds.height)
   }
 }

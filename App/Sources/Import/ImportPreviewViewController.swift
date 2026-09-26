@@ -65,6 +65,11 @@ final class ImportPreviewViewController: NSViewController {
     importButton.title = "Import"
     importButton.bezelStyle = .rounded
     importButton.keyEquivalent = "\r"
+    // `keyEquivalent = "\r"` alone doesn't reliably paint this blue for a plain NSButton hosted
+    // in a custom sheet the way it does for NSAlert's own default button — review note (851-2426):
+    // "make Import the default (blue) button." `bezelColor` is the explicit, focus-independent way
+    // to opt a push button into that "prominent/default" tint.
+    importButton.bezelColor = .controlAccentColor
     importButton.target = self
     importButton.action = #selector(importTapped)
     importButton.isEnabled = !rows.isEmpty
