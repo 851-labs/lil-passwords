@@ -62,6 +62,10 @@ one into a chat.
   Developer Program provisioning profile (tracked in
   [`docs/adr/0005-autofill-credential-provider.md`](docs/adr/0005-autofill-credential-provider.md));
   an ad-hoc/local build can compile it but macOS won't let it register as a credential provider.
+  **Passkeys** (macOS 14+) ride the same extension and the same provisioning-profile requirement —
+  registering and signing in with one always happens inside `LilPasswordsAgent`, triggered only by
+  the AutoFill extension's own system-presented UI, never by `lilpass` or any agent; see
+  [`docs/adr/0008-passkeys.md`](docs/adr/0008-passkeys.md) and [`SECURITY.md`](SECURITY.md).
 - **A recovery key**, shown once when you set one up and re-generatable at any time from the app, that
   can restore the vault if you ever lose access to it any other way — see
   [`docs/adr/0002-crypto.md`](docs/adr/0002-crypto.md).

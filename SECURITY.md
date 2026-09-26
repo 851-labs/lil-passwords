@@ -80,6 +80,21 @@ distrust the CLI" split anywhere in here.
   [`docs/releasing.md`](docs/releasing.md)), this requirement isn't enforced at all
   (`.developmentFallback`); it only starts doing real work once the app is built with a real team
   identity.
+- **Passkeys are never reachable by `lilpass`, `lilpass mcp`, or any agent, at all.** A passkey's
+  private key is sealed inside the vault exactly like a password (see
+  [`docs/adr/0002-crypto.md`](docs/adr/0002-crypto.md)), and every operation that touches it in
+  decrypted form — creating one (`passkeyRegister`) or signing in with one (`passkeyAssert`) — only
+  ever runs inside `LilPasswordsAgent`, never in the app, never in `lilpass`, never on the XPC wire.
+  Both operations are hard-restricted, at the connection-dispatch level
+  (`AgentServer.isRequestPermitted(_:for:)`), to the verified AutoFill extension caller specifically
+  — refused with `.callerNotAuthorized` for every other caller, including the app and `lilpass`,
+  **even with agent write access turned on**. That's a structural refusal before the write-access
+  toggle is even consulted, not a permission the toggle could grant: the toggle governs ordinary
+  password CRUD, not "sign a WebAuthn assertion for an arbitrary relying party." Deleting a passkey
+  is app-only the same way rotating the recovery key is. As of today, no `lilpass` command and no
+  MCP tool exposes passkeys in any form (not even read-only listing) — agent access, however wide
+  open, has no path to a passkey at all. See
+  [`docs/adr/0008-passkeys.md`](docs/adr/0008-passkeys.md).
 - **Wi-Fi network passwords are never reachable from any of this**, on purpose, not as an
   oversight: they're stored in the System keychain rather than the vault, aren't part of the
   `PasswordItem` model `lilpass`/the XPC protocol/the MCP server operate on at all, and are only ever
