@@ -58,4 +58,21 @@ import Testing
   @Test func renderFirstPagePNGRejectsInvalidPDFData() {
     #expect(RecoveryKitDocument.renderFirstPagePNG(from: Data("not a pdf".utf8)) == nil)
   }
+
+  /// The regression test for the blurry-QR bug: rendering at a large enough width that a blurred,
+  /// anti-aliased QR code would fail to decode, then feeding the rendered page straight through
+  /// `QRCodeReader` (the same detector the app uses to import TOTP QR codes) — a crisp QR should
+  /// round-trip back to exactly the key that was encoded.
+  @Test func qrCodeInRenderedPDFDecodesBackToTheDisplayKey() throws {
+    let displayKey = VaultCrypto.RecoveryKey.generate().displayString
+    let content = makeContent(displayKey: displayKey)
+    let data = RecoveryKitDocument.renderPDF(content)
+
+    let png = try #require(RecoveryKitDocument.renderFirstPagePNG(from: data, width: 1200))
+    let bitmap = try #require(NSBitmapImageRep(data: png))
+    let cgImage = try #require(bitmap.cgImage)
+
+    let decoded = QRCodeReader.decode(cgImage)
+    #expect(decoded.contains(displayKey))
+  }
 }

@@ -78,6 +78,15 @@ public actor VaultStore: VaultStoring {
     try core.vaultExists()
   }
 
+  @discardableResult
+  public func rotateRecoveryKey() throws -> VaultCrypto.RecoveryKey {
+    // Only `meta`'s wrapped key changes here — no item is re-sealed and no change-log entry is
+    // written, so there's nothing for another process's `observeChanges()`/Darwin-notification
+    // subscribers to react to; unlike `create`/`update`/etc., this doesn't call
+    // `notifyOfLocalChange()`.
+    try core.rotateRecoveryKey()
+  }
+
   public func lock() {
     core.lock()
   }

@@ -118,6 +118,22 @@ import Testing
     #expect(statusAfterUnlock.locked == false)
   }
 
+  @Test func rotateRecoveryKeyRoundTripsOverXPCAndTheVaultRemainsUsable() async throws {
+    let harness = try await Harness(preseedVault: false)
+
+    let originalRecoveryKeyDisplayString = try await harness.client.createVault()
+
+    let newRecoveryKeyDisplayString = try await harness.client.rotateRecoveryKey()
+    #expect(newRecoveryKeyDisplayString != originalRecoveryKeyDisplayString)
+
+    // The vault key itself didn't change — only its wrapped copy in `meta` did — so lock/unlock
+    // and ordinary status reporting still work exactly as before rotation.
+    try await harness.client.lock()
+    try await harness.unlock()
+    let status = try await harness.client.status()
+    #expect(status.locked == false)
+  }
+
   @Test func unlockListCreateUpdateDeleteRoundTripOverXPC() async throws {
     // `AgentWireCoding` encodes dates as ISO 8601 without fractional seconds, so a `PasswordItem`
     // built with the default `Date()` timestamps wouldn't round-trip back to an `==` value once it

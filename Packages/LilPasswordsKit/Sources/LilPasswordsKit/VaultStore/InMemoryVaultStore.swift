@@ -43,6 +43,11 @@ public actor InMemoryVaultStore: VaultStoring {
     try core.vaultExists()
   }
 
+  @discardableResult
+  public func rotateRecoveryKey() throws -> VaultCrypto.RecoveryKey {
+    try core.rotateRecoveryKey()
+  }
+
   public func lock() {
     core.lock()
   }

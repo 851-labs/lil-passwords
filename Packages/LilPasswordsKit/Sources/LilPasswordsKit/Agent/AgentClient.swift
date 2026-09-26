@@ -94,6 +94,21 @@ public actor AgentClient {
     guard case .locked = try await send(.lock) else { throw RequestError.connection(.invalidReply) }
   }
 
+  /// Regenerates the vault's recovery key: the helper generates a new `VaultCrypto.RecoveryKey`,
+  /// re-wraps the current vault key under it, and replaces the wrapped copy in `meta` — the
+  /// previous recovery key stops working immediately. Returns the new recovery key, rendered for
+  /// display — the app's only chance to show it (see `AgentResponse.recoveryKeyRotated`).
+  /// Restricted to the app itself by the helper; see `AgentError.callerNotAuthorized`. The caller
+  /// is expected to perform `LAContext` authentication before sending this, the same as before
+  /// `.unlock`.
+  @discardableResult
+  public func rotateRecoveryKey() async throws -> String {
+    guard case .recoveryKeyRotated(let recoveryKeyDisplayString) = try await send(.rotateRecoveryKey) else {
+      throw RequestError.connection(.invalidReply)
+    }
+    return recoveryKeyDisplayString
+  }
+
   public func list() async throws -> [PasswordItem] {
     guard case .items(let items) = try await send(.list) else { throw RequestError.connection(.invalidReply) }
     return items
