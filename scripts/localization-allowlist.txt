@@ -1,0 +1,13 @@
+# Allowlist for scripts/check-localization.py (851-2466).
+#
+# One entry per line:
+#   path/to/File.swift        exempts every violation in the whole file
+#   path/to/File.swift:123    exempts only line 123
+#
+# Blank lines and lines starting with # are ignored. Prefer a `// l10n-ignore` comment at the call
+# site over adding an entry here — it stays visible right next to the code it exempts, instead of in
+# a file someone has to go look up. Use this file only when that isn't practical (e.g. exempting an
+# entire generated or vendored file).
+#
+# Empty as of 851-2466 — every current call site in the repo either doesn't need localizing (debug-
+# only NSLog strings, non-UI internal identifiers) or already goes through String(localized:).

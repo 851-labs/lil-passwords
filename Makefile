@@ -25,3 +25,4 @@ format:
 
 lint:
 	xcrun swift-format lint --strict --recursive App Agent CLI AutoFillExtension Packages
+	scripts/check-localization.sh
