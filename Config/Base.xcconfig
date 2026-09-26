@@ -1,0 +1,18 @@
+// Shared build settings for every target.
+MACOSX_DEPLOYMENT_TARGET = 13.0
+SWIFT_VERSION = 6.0
+SWIFT_STRICT_CONCURRENCY = complete
+MARKETING_VERSION = 0.0.1
+CURRENT_PROJECT_VERSION = 1
+ENABLE_HARDENED_RUNTIME = YES
+ENABLE_USER_SCRIPT_SANDBOXING = YES
+DEAD_CODE_STRIPPING = YES
+GENERATE_INFOPLIST_FILE = NO
+
+// Signing: unsigned/ad-hoc by default so anyone can build. The real team
+// (851-2400) goes in Config/Local.xcconfig, which is gitignored.
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = -
+DEVELOPMENT_TEAM =
+
+#include? "Local.xcconfig"

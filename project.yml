@@ -1,0 +1,75 @@
+# Source of truth for LilPasswords.xcodeproj. After editing, run `make project`.
+name: LilPasswords
+options:
+  bundleIdPrefix: com.851labs
+  deploymentTarget:
+    macOS: "13.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+configFiles:
+  Debug: Config/Base.xcconfig
+  Release: Config/Base.xcconfig
+packages:
+  LilPasswordsKit:
+    path: Packages/LilPasswordsKit
+targets:
+  LilPasswords:
+    type: application
+    platform: macOS
+    sources:
+      - path: App/Sources
+        type: syncedFolder
+    dependencies:
+      - package: LilPasswordsKit
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Lil Passwords
+        CFBundleName: Lil Passwords
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.utilities
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSPrincipalClass: NSApplication
+        NSHumanReadableCopyright: Copyright © 2026 851 Labs. MIT License.
+    settings:
+      base:
+        PRODUCT_NAME: Lil Passwords
+        PRODUCT_BUNDLE_IDENTIFIER: com.851labs.lilpasswords
+  LilPasswordsAgent:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Agent/Sources
+        type: syncedFolder
+    dependencies:
+      - package: LilPasswordsKit
+    settings:
+      base:
+        PRODUCT_NAME: LilPasswordsAgent
+        PRODUCT_BUNDLE_IDENTIFIER: com.851labs.lilpasswords.agent
+  lilpw:
+    type: tool
+    platform: macOS
+    sources:
+      - path: CLI/Sources
+        type: syncedFolder
+    dependencies:
+      - package: LilPasswordsKit
+    settings:
+      base:
+        PRODUCT_NAME: lilpw
+        PRODUCT_BUNDLE_IDENTIFIER: com.851labs.lilpasswords.cli
+schemes:
+  LilPasswords:
+    build:
+      targets:
+        LilPasswords: all
+        LilPasswordsAgent: all
+        lilpw: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+    archive:
+      config: Release

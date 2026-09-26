@@ -1,0 +1,583 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		75DF806B28149C6EA83418AE /* LilPasswordsKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1C98477EB7D07F3015822E98 /* LilPasswordsKit */; };
+		78FFF7FF14F6A9EACB0E37E6 /* LilPasswordsKit in Frameworks */ = {isa = PBXBuildFile; productRef = B41A41E642B0A614A5A75DA7 /* LilPasswordsKit */; };
+		C68E97F864E0BE5A9CD3AAE3 /* LilPasswordsKit in Frameworks */ = {isa = PBXBuildFile; productRef = E539F5199FCE7076CD81B5FA /* LilPasswordsKit */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		1552750737D8BD27B57FCF51 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		9752809980BB70168B33CB2C /* LilPasswordsKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LilPasswordsKit; path = Packages/LilPasswordsKit; sourceTree = SOURCE_ROOT; };
+		E16AB1A3115C01ADF6D2E139 /* LilPasswords.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LilPasswords.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E987E5C00D681F00EA3D6EAD /* lilpw */ = {isa = PBXFileReference; includeInIndex = 0; path = lilpw; sourceTree = BUILT_PRODUCTS_DIR; };
+		F2BF470827AD396CCE39BD0D /* LilPasswordsAgent */ = {isa = PBXFileReference; includeInIndex = 0; path = LilPasswordsAgent; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		027A1C65B96B36F2C7C8C45F /* Sources */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			name = Sources;
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		1565B1A364AC5FCD3D16BA04 /* Sources */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			name = Sources;
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		8BD3E7C9863E5099B2172F5C /* Sources */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			name = Sources;
+			path = Sources;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		3069302E6B0D78ABFB4C2DA3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				75DF806B28149C6EA83418AE /* LilPasswordsKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		36CCC4E76E3367C3AD14AC69 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C68E97F864E0BE5A9CD3AAE3 /* LilPasswordsKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A2F1AEB4C361F8100314A4A6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				78FFF7FF14F6A9EACB0E37E6 /* LilPasswordsKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		09FEC2AB3FC76EC862908F1E /* CLI */ = {
+			isa = PBXGroup;
+			children = (
+				027A1C65B96B36F2C7C8C45F /* Sources */,
+			);
+			path = CLI;
+			sourceTree = "<group>";
+		};
+		0F446391754462A9B5945A5C /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				9752809980BB70168B33CB2C /* LilPasswordsKit */,
+			);
+			path = Packages;
+			sourceTree = "<group>";
+		};
+		6997AE3F21BA4CCC1AB800C3 /* Agent */ = {
+			isa = PBXGroup;
+			children = (
+				1565B1A364AC5FCD3D16BA04 /* Sources */,
+			);
+			path = Agent;
+			sourceTree = "<group>";
+		};
+		7947B44B282CBC4A3964C805 = {
+			isa = PBXGroup;
+			children = (
+				6997AE3F21BA4CCC1AB800C3 /* Agent */,
+				C1EAD955654A56F5F33FB756 /* App */,
+				09FEC2AB3FC76EC862908F1E /* CLI */,
+				9275A01A6D7DC0966E1710B4 /* Config */,
+				0F446391754462A9B5945A5C /* Packages */,
+				A903EE70C6B646F3E5436F31 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		9275A01A6D7DC0966E1710B4 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				1552750737D8BD27B57FCF51 /* Base.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		A903EE70C6B646F3E5436F31 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				E16AB1A3115C01ADF6D2E139 /* LilPasswords.app */,
+				F2BF470827AD396CCE39BD0D /* LilPasswordsAgent */,
+				E987E5C00D681F00EA3D6EAD /* lilpw */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		C1EAD955654A56F5F33FB756 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				8BD3E7C9863E5099B2172F5C /* Sources */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0E0291E7D58CBE39A251C44B /* lilpw */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7C9C8683C652A3B3AAD4CB40 /* Build configuration list for PBXNativeTarget "lilpw" */;
+			buildPhases = (
+				FD35CB94712B97E7E68D06A3 /* Sources */,
+				629D63ADFF8F950F3A746381 /* Resources */,
+				3069302E6B0D78ABFB4C2DA3 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				027A1C65B96B36F2C7C8C45F /* Sources */,
+			);
+			name = lilpw;
+			packageProductDependencies = (
+				1C98477EB7D07F3015822E98 /* LilPasswordsKit */,
+			);
+			productName = lilpw;
+			productReference = E987E5C00D681F00EA3D6EAD /* lilpw */;
+			productType = "com.apple.product-type.tool";
+		};
+		4807B7DB294ECA66F2907C7F /* LilPasswordsAgent */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D1DE33B9C08B5F49AC883F2E /* Build configuration list for PBXNativeTarget "LilPasswordsAgent" */;
+			buildPhases = (
+				3BF069C1EDB02361F5C88559 /* Sources */,
+				0DB8585D9D8A1480654CC131 /* Resources */,
+				A2F1AEB4C361F8100314A4A6 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				1565B1A364AC5FCD3D16BA04 /* Sources */,
+			);
+			name = LilPasswordsAgent;
+			packageProductDependencies = (
+				B41A41E642B0A614A5A75DA7 /* LilPasswordsKit */,
+			);
+			productName = LilPasswordsAgent;
+			productReference = F2BF470827AD396CCE39BD0D /* LilPasswordsAgent */;
+			productType = "com.apple.product-type.tool";
+		};
+		C6C645DBFB45116D7AB9C120 /* LilPasswords */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 44D2149F85D073AC5C682A41 /* Build configuration list for PBXNativeTarget "LilPasswords" */;
+			buildPhases = (
+				BE53D78528ED91F53C2E8911 /* Sources */,
+				356C51E02DF16EF3CEFCAEF4 /* Resources */,
+				36CCC4E76E3367C3AD14AC69 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				8BD3E7C9863E5099B2172F5C /* Sources */,
+			);
+			name = LilPasswords;
+			packageProductDependencies = (
+				E539F5199FCE7076CD81B5FA /* LilPasswordsKit */,
+			);
+			productName = LilPasswords;
+			productReference = E16AB1A3115C01ADF6D2E139 /* LilPasswords.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		9DD56955C3C8D41688239CF2 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					0E0291E7D58CBE39A251C44B = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					4807B7DB294ECA66F2907C7F = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					C6C645DBFB45116D7AB9C120 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 421137312003CE382C4C37BB /* Build configuration list for PBXProject "LilPasswords" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 7947B44B282CBC4A3964C805;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				71839368EC70ECC54454B357 /* XCLocalSwiftPackageReference "Packages/LilPasswordsKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = A903EE70C6B646F3E5436F31 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				C6C645DBFB45116D7AB9C120 /* LilPasswords */,
+				4807B7DB294ECA66F2907C7F /* LilPasswordsAgent */,
+				0E0291E7D58CBE39A251C44B /* lilpw */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		0DB8585D9D8A1480654CC131 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		356C51E02DF16EF3CEFCAEF4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		629D63ADFF8F950F3A746381 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		3BF069C1EDB02361F5C88559 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BE53D78528ED91F53C2E8911 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FD35CB94712B97E7E68D06A3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		2EC5B3E941AC41F6AE05C591 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 1552750737D8BD27B57FCF51 /* Base.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+		5B1418CDC302F6E1BC9488C1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.851labs.lilpasswords.agent;
+				PRODUCT_NAME = LilPasswordsAgent;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		5B4A8887142F7D57DA04A301 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.851labs.lilpasswords.agent;
+				PRODUCT_NAME = LilPasswordsAgent;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		88773AF7766897C03ECA82F1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.851labs.lilpasswords;
+				PRODUCT_NAME = "Lil Passwords";
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		9DC7D475B78C4D582B126663 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.851labs.lilpasswords.cli;
+				PRODUCT_NAME = lilpw;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		A3014E95082860AD0C915A49 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 1552750737D8BD27B57FCF51 /* Base.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		B4264596ED7EFC693AFCC2AC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.851labs.lilpasswords;
+				PRODUCT_NAME = "Lil Passwords";
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		F1F318EAF2D7BE557BC80582 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.851labs.lilpasswords.cli;
+				PRODUCT_NAME = lilpw;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		421137312003CE382C4C37BB /* Build configuration list for PBXProject "LilPasswords" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A3014E95082860AD0C915A49 /* Debug */,
+				2EC5B3E941AC41F6AE05C591 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		44D2149F85D073AC5C682A41 /* Build configuration list for PBXNativeTarget "LilPasswords" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B4264596ED7EFC693AFCC2AC /* Debug */,
+				88773AF7766897C03ECA82F1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		7C9C8683C652A3B3AAD4CB40 /* Build configuration list for PBXNativeTarget "lilpw" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9DC7D475B78C4D582B126663 /* Debug */,
+				F1F318EAF2D7BE557BC80582 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D1DE33B9C08B5F49AC883F2E /* Build configuration list for PBXNativeTarget "LilPasswordsAgent" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5B1418CDC302F6E1BC9488C1 /* Debug */,
+				5B4A8887142F7D57DA04A301 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		71839368EC70ECC54454B357 /* XCLocalSwiftPackageReference "Packages/LilPasswordsKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/LilPasswordsKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		1C98477EB7D07F3015822E98 /* LilPasswordsKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LilPasswordsKit;
+		};
+		B41A41E642B0A614A5A75DA7 /* LilPasswordsKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LilPasswordsKit;
+		};
+		E539F5199FCE7076CD81B5FA /* LilPasswordsKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LilPasswordsKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 9DD56955C3C8D41688239CF2 /* Project object */;
+}
