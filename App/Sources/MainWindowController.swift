@@ -55,6 +55,10 @@ final class MainWindowController: NSWindowController {
 
     /// Guards `-AutoUnlockForTophat` (see `requestAutoUnlockIfNeeded()`) so it only fires once.
     private var hasRequestedAutoUnlock = false
+
+    /// Guards `-InitialSelectedItemTitle` (see `applyInitialSelectedItemOverrideIfNeeded()`) so it
+    /// only fires the first time unlocked content is shown.
+    private var hasAppliedInitialSelectedItemOverride = false
   #endif
 
   init(agentClient: AgentClient, helperAgentRegistrar: any HelperAgentRegistering) {
@@ -299,6 +303,7 @@ final class MainWindowController: NSWindowController {
     window?.toolbar?.isVisible = true
     #if DEBUG
       applyInitialSidebarCategoryOverrideIfNeeded()
+      applyInitialSelectedItemOverrideIfNeeded()
     #endif
   }
 
@@ -320,6 +325,19 @@ final class MainWindowController: NSWindowController {
       else { return }
       hasAppliedInitialSidebarCategoryOverride = true
       splitViewController.sidebarViewController.selectCategory(category)
+    }
+
+    /// `-InitialSelectedItemTitle <title>` (e.g. `-InitialSelectedItemTitle Amazon`) selects the
+    /// matching row in the item list as soon as the vault unlocks, DEBUG-only — same rationale and
+    /// same "no System Events/AX" constraint as `-InitialSidebarCategory` above, but for producing
+    /// a deterministic "row selected" tophat screenshot (851-2463) instead of driving a live click.
+    /// Applied after `applyInitialSidebarCategoryOverrideIfNeeded()` so the list is already showing
+    /// whichever category the row is expected to be found in. Never compiled into Release builds.
+    private func applyInitialSelectedItemOverrideIfNeeded() {
+      guard !hasAppliedInitialSelectedItemOverride else { return }
+      guard let title = UserDefaults.standard.string(forKey: "InitialSelectedItemTitle") else { return }
+      hasAppliedInitialSelectedItemOverride = true
+      splitViewController.listViewController.selectItem(withTitle: title)
     }
 
     /// `-AutoUnlockForTophat YES` drives `lockCoordinator.unlock()` as soon as `.locked` is

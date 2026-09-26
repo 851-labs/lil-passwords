@@ -50,7 +50,19 @@ final class DetailSectionContainerView: NSView {
     }
     for (index, row) in rows.enumerated() {
       if index > 0 {
-        stack.addArrangedSubview(makeDivider())
+        let divider = makeDivider()
+        stack.addArrangedSubview(divider)
+        // Without explicit width constraints, a vertical `NSStackView` sizes each arranged
+        // subview along the non-stacking axis to its own fitting size and centers it (the
+        // default `.centerX` alignment) — for a 1pt-tall `NSBox` separator with no intrinsic
+        // width of its own, that collapsed the divider down to a few points wide, floating in
+        // the middle of the row instead of spanning it (851-2463 review: dividers were all but
+        // invisible). Pin it to the same edges as the rows so it reads as a real full-width
+        // hairline, matching Apple Passwords.
+        NSLayoutConstraint.activate([
+          divider.leadingAnchor.constraint(equalTo: stack.leadingAnchor),
+          divider.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
+        ])
       }
       row.translatesAutoresizingMaskIntoConstraints = false
       stack.addArrangedSubview(row)

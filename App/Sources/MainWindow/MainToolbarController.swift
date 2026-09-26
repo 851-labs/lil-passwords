@@ -182,6 +182,13 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
       item.view = listTitleView
       item.label = "Category"
       item.visibilityPriority = .high
+      // Since macOS 26 ("Tahoe"), NSToolbar puts a Liquid Glass "platter" behind every item by
+      // default — appropriate for interactive controls (buttons, the search field), but Apple's
+      // own WWDC25 guidance ("Build an AppKit app with the new design") explicitly calls out
+      // non-interactive custom titles as a case that should opt out via `isBordered = false`.
+      // Without this, the category name/count rendered inside a gray glass capsule instead of
+      // plain text (851-2463 review feedback), unlike Apple Passwords' own toolbar title.
+      item.isBordered = false
       return item
 
     case ItemIdentifier.listActions:

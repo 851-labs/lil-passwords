@@ -62,12 +62,16 @@ final class DetailIdentityView: NSView {
       titleLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
       titleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 16),
       titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -16),
-      titleLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -24),
+      // 16pt, not the 24pt this shipped with: with the divider immediately below now actually
+      // spanning full-width (see `DetailSectionContainerView.setRows`'s fix), 24pt read as a
+      // noticeably bigger gap under the header than between any other two rows (851-2463 review:
+      // "tighten the gap between the header and the rows").
+      titleLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -16),
 
       titleField.topAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 12),
       titleField.centerXAnchor.constraint(equalTo: centerXAnchor),
       titleField.widthAnchor.constraint(equalToConstant: 240),
-      titleField.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -24),
+      titleField.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -16),
     ])
   }
 

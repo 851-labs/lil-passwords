@@ -159,6 +159,26 @@ final class ItemListViewController: NSViewController {
     rebuildRows(preservingSelection: false)
   }
 
+  #if DEBUG
+    /// Selects the row whose title case-insensitively matches `title`, if one is currently
+    /// showing — used by `MainWindowController`'s `-InitialSelectedItemTitle` DEBUG launch arg to
+    /// produce a deterministic "row selected" tophat screenshot (851-2463) without driving a live
+    /// click through System Events/AX. `rows` may still be empty at the moment this is first
+    /// called (the vault's items load asynchronously, slightly after unlock), so this retries a
+    /// few times a beat apart rather than silently giving up on the first miss.
+    func selectItem(withTitle title: String, remainingAttempts: Int = 10) {
+      if let index = rows.firstIndex(where: { $0.title.caseInsensitiveCompare(title) == .orderedSame }) {
+        tableView.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
+        tableView.scrollRowToVisible(index)
+        return
+      }
+      guard remainingAttempts > 0 else { return }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+        self?.selectItem(withTitle: title, remainingAttempts: remainingAttempts - 1)
+      }
+    }
+  #endif
+
   /// Focuses and selects-all in the toolbar's search field, in response to ⌘F (851-2417),
   /// forwarded here by `MainWindowController`'s local event monitor. The field itself lives in the
   /// toolbar, owned by `MainToolbarController`; `searchField` above is just a weak reference to it.
@@ -525,8 +545,15 @@ fileprivate extension SidebarCategory {
 private final class InsetTableRowView: NSTableRowView {
   override func drawSelection(in dirtyRect: NSRect) {
     guard selectionHighlightStyle != .none else { return }
-    let insetRect = bounds.insetBy(dx: 8, dy: 1)
-    let path = NSBezierPath(roundedRect: insetRect, xRadius: 6, yRadius: 6)
+    // At this row's 56pt height, a small fixed radius with almost no vertical inset (as this
+    // originally shipped: dy: 1, radius 6) reads as a barely-softened square at a glance — the
+    // 851-2463 review's "square gray block" callout — since the sidebar's own `.sourceList`
+    // selection is short enough (~28pt rows) that a similar radius already looks like a full
+    // pill. Matching that *look* here means insetting on all four sides enough to visibly float
+    // the highlight off the row's edges, with a radius large enough to read as clearly rounded
+    // rather than just corner-nicked, instead of matching the sidebar's exact numbers.
+    let insetRect = bounds.insetBy(dx: 8, dy: 4)
+    let path = NSBezierPath(roundedRect: insetRect, xRadius: 10, yRadius: 10)
     (isEmphasized ? NSColor.controlAccentColor : NSColor.unemphasizedSelectedContentBackgroundColor).setFill()
     path.fill()
   }
