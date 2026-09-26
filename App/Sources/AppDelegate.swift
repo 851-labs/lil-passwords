@@ -1,8 +1,14 @@
 import AppKit
 import LilPasswordsKit
+import os
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+  private static let helperAgentRegistrationLogger = Logger(
+    subsystem: "com.851labs.lilpasswords",
+    category: "HelperAgentRegistration"
+  )
+
   // Owned here, rather than by `MainWindowController`, so the "on quit" auto-lock trigger below
   // (851-2411) can send `.lock()` over the same connection the window controller has been using —
   // there's no correctness requirement that it be the same `AgentClient` (a second connection to
@@ -13,12 +19,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   // import/export actions) reads this from a separate file in the same module.
   private(set) var mainWindowController: MainWindowController?
 
+  // The real `SMAppService`-backed conformer in every build — `HelperAgentRegistering` exists as
+  // a seam for `HelperAgentRegistrarTests` (in `LilPasswordsKit`), not for anything this app
+  // target itself substitutes at runtime.
+  private let helperAgentRegistrar: any HelperAgentRegistering = SMAppServiceHelperAgent()
+
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.mainMenu = MainMenu.make()
     let controller = MainWindowController(agentClient: agentClient)
     controller.showWindow(nil)
     mainWindowController = controller
     NSApp.activate(ignoringOtherApps: true)
+
+    // Must happen on every launch, before anything else here relies on the helper — first-run
+    // vault setup and every unlock attempt (both kicked off by `MainWindowController`'s own
+    // `LockCoordinator.refresh()`, already running by this point) go straight to
+    // `NSXPCConnection(machServiceName:)`, which has nothing to resolve against until launchd
+    // knows about `LilPasswordsAgent` at all. See `HelperAgentRegistrar`'s documentation.
+    registerHelperAgentAndHandleOutcome()
 
     #if DEBUG
       RecoveryKitDebugMenu.install { [weak self] in self?.mainWindowController?.window }
@@ -29,6 +47,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         RecoveryKitDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
       }
     #endif
+  }
+
+  /// 851-2411: registers `LilPasswordsAgent` with launchd if it isn't already, and handles each
+  /// possible outcome — see `HelperAgentRegistrationOutcome`'s cases for what each one means.
+  private func registerHelperAgentAndHandleOutcome() {
+    let outcome = HelperAgentRegistrar.registerIfNeeded(using: helperAgentRegistrar)
+    switch outcome {
+    case .alreadyEnabled, .registered:
+      break
+
+    case .requiresApproval:
+      presentHelperAgentApprovalSheet()
+
+    case .notFound:
+      // Shouldn't happen in a correctly-built app — see `HelperAgentStatus.notFound`'s
+      // documentation. Logged (not surfaced to the user) since there's no user action that
+      // fixes a broken bundle; a developer reading Console.app is who this is for.
+      Self.helperAgentRegistrationLogger.error(
+        "LilPasswordsAgent's launchd plist wasn't found in the app bundle (expected at Contents/Library/LaunchAgents) — this build is broken; unlock and vault setup will fail."
+      )
+
+    case .registrationFailed(let message):
+      Self.helperAgentRegistrationLogger.error(
+        "Failed to register LilPasswordsAgent with launchd: \(message, privacy: .public)"
+      )
+    }
+  }
+
+  /// Shown when `SMAppService.register()` succeeds but launchd is still waiting on the user to
+  /// approve it in System Settings → General → Login Items & Extensions — until they do,
+  /// launchd won't actually run `LilPasswordsAgent`, so every `AgentClient` call (unlock
+  /// included) would otherwise fail with no explanation visible anywhere in this app's own UI.
+  private func presentHelperAgentApprovalSheet() {
+    guard let window = mainWindowController?.window else { return }
+    let alert = NSAlert()
+    alert.alertStyle = .informational
+    alert.messageText = "Allow \(LilPasswordsKit.productName) to Run in the Background"
+    alert.informativeText =
+      "\(LilPasswordsKit.productName) needs its helper turned on in Login Items to lock and unlock your vault. Open System Settings and enable it, then reopen \(LilPasswordsKit.productName)."
+    alert.addButton(withTitle: "Open System Settings")
+    alert.addButton(withTitle: "Not Now")
+    alert.beginSheetModal(for: window) { [helperAgentRegistrar] response in
+      guard response == .alertFirstButtonReturn else { return }
+      helperAgentRegistrar.openSystemSettingsLoginItems()
+    }
   }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
