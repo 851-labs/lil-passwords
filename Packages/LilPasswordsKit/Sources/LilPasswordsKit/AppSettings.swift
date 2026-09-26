@@ -110,6 +110,8 @@ public final class AppSettings: @unchecked Sendable {
     static let defaultPasswordLength = "AppSettings.defaultPasswordLength"
     static let includeSymbolsInGeneratedPasswords = "AppSettings.includeSymbolsInGeneratedPasswords"
     static let warnAboutCompromisedPasswords = "AppSettings.warnAboutCompromisedPasswords"
+    static let detectCompromisedPasswords = "AppSettings.detectCompromisedPasswords"
+    static let showWebsiteIcons = "AppSettings.showWebsiteIcons"
     static let showInMenuBar = "AppSettings.showInMenuBar"
     static let menuBarBrowserSuggestionsEnabled = "AppSettings.menuBarBrowserSuggestionsEnabled"
     static let itemListSortField = "AppSettings.itemListSortField"
@@ -135,6 +137,8 @@ public final class AppSettings: @unchecked Sendable {
       Key.defaultPasswordLength: 20,
       Key.includeSymbolsInGeneratedPasswords: true,
       Key.warnAboutCompromisedPasswords: true,
+      Key.detectCompromisedPasswords: false,
+      Key.showWebsiteIcons: false,
       Key.showInMenuBar: true,
       Key.menuBarBrowserSuggestionsEnabled: false,
       Key.itemListSortField: PasswordItemSortField.title.rawValue,
@@ -178,6 +182,28 @@ public final class AppSettings: @unchecked Sendable {
   public var warnAboutCompromisedPasswords: Bool {
     get { defaults.bool(forKey: Key.warnAboutCompromisedPasswords) }
     set { set(newValue, forKey: Key.warnAboutCompromisedPasswords) }
+  }
+
+  /// Settings → General → Security Recommendations → "Detect compromised passwords" (851-2458):
+  /// whether the Security view is allowed to run ``CompromisedPasswordChecker`` at all. **Off by
+  /// default** — unlike ``warnAboutCompromisedPasswords`` above (an on-device-only, always-safe
+  /// check of weak/reused passwords), turning this on sends network requests (a 5-character hash
+  /// prefix per unique password, via k-anonymity) to a third party, so it needs an explicit,
+  /// opt-in choice rather than shipping on.
+  public var detectCompromisedPasswords: Bool {
+    get { defaults.bool(forKey: Key.detectCompromisedPasswords) }
+    set { set(newValue, forKey: Key.detectCompromisedPasswords) }
+  }
+
+  /// Settings → General → "Show website icons" (851-2459): whether the list, detail pane, menu
+  /// bar extra, and New Password sheet are allowed to fetch and cache a site's real icon via
+  /// ``IconFetcher`` instead of always showing ``MonogramIcon``'s generated monogram. **Off by
+  /// default** — fetching an icon reveals to that site (and anything on the network path to it)
+  /// that this Mac has an account there, which is exactly the kind of network request the MVP's
+  /// local-first design avoids making without the user opting in first.
+  public var showWebsiteIcons: Bool {
+    get { defaults.bool(forKey: Key.showWebsiteIcons) }
+    set { set(newValue, forKey: Key.showWebsiteIcons) }
   }
 
   // Settings → Agents' two toggles ("Allow agents to access passwords" and "keep agent access
