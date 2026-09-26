@@ -124,22 +124,30 @@ final class MainWindowController: NSWindowController {
 
     toolbarController.splitView = splitViewController.splitView
     // The search field lives in the toolbar, spanning the detail column (851-2463), but
-    // `ItemListViewController` still owns query handling/focus — hand it the field and make it
-    // the delegate.
+    // `ItemListViewController`/`WiFiListViewController` still own query handling/focus — hand
+    // each the field, and swap which one is the delegate as the sidebar selection changes (see
+    // `onSearchDelegateChange` below), starting with `.all`'s `listViewController`, the initial
+    // sidebar selection.
     toolbarController.searchField.delegate = splitViewController.listViewController
     splitViewController.listViewController.searchField = toolbarController.searchField
+    splitViewController.wifiListViewController.searchField = toolbarController.searchField
     // The sort button now lives in the toolbar's list-actions capsule (851-2463); targeted
     // directly at `ItemListViewController` rather than through the responder chain, matching
     // `MainSplitViewController.newPassword`'s own reasoning for preferring an explicit target.
     toolbarController.sortButton.target = splitViewController.listViewController
     toolbarController.sortButton.action = #selector(ItemListViewController.showSortMenu(_:))
     splitViewController.listViewController.listTitleView = toolbarController.listTitleView
+    splitViewController.wifiListViewController.listTitleView = toolbarController.listTitleView
     splitViewController.detailViewController.editControl = toolbarController.editControl
     // Codes/Security/Deleted (851-2418/851-2419/851-2420) replace the list+detail split with a
-    // full-width view; none of this toolbar's list/detail-column chrome applies to those, so it's
-    // added/removed to match (851-2463) — see `MainToolbarController.setFullWidthModeActive(_:)`.
-    splitViewController.onFullWidthModeChange = { [weak toolbarController] isFullWidth in
-      toolbarController?.setFullWidthModeActive(isFullWidth)
+    // full-width view, and Wi-Fi (851-2444) keeps its own reduced list+detail chrome; none of
+    // this toolbar's list/detail-column chrome applies the same way across all of these, so it's
+    // swapped to match (851-2463) — see `MainToolbarController.setToolbarLayoutMode(_:)`.
+    splitViewController.onToolbarLayoutModeChange = { [weak toolbarController] mode in
+      toolbarController?.setToolbarLayoutMode(mode)
+    }
+    splitViewController.onSearchDelegateChange = { [weak toolbarController] delegate in
+      toolbarController?.searchField.delegate = delegate
     }
     window.toolbar = toolbarController.makeToolbar()
     window.toolbar?.isVisible = false

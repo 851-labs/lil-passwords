@@ -2,24 +2,27 @@ import AppKit
 import LilPasswordsKit
 
 /// The Wi-Fi category's detail column: the selected network's name, security type, a
-/// reveal-to-see password row, a "Show Network QR Code" button, and Copy — matching Apple
-/// Passwords' Wi-Fi detail card. Non-editable throughout (`DetailIdentityView.configure(isEditing:
-/// false)` always): unlike a saved password item, a Wi-Fi network's name/security/password all
-/// come from macOS itself (see `docs/adr/0005-wifi-passwords.md`), so there's nothing here for a
-/// person to type in and save back.
+/// reveal-to-see password row, and a "Show Network QR Code" row — matching Apple Passwords' Wi-Fi
+/// detail card. Non-editable throughout (`DetailIdentityView.configure(isEditing: false)` always):
+/// unlike a saved password item, a Wi-Fi network's name/security/password all come from macOS
+/// itself (see `docs/adr/0005-wifi-passwords.md`), so there's nothing here for a person to type in
+/// and save back.
+///
+/// Top-aligned under the toolbar, like `DetailViewController` (851-2444's rework to match
+/// 851-2463's Apple-parity chrome — this previously centered its card vertically instead).
 @MainActor
 final class WiFiDetailViewController: NSViewController {
   private let viewModel: WiFiNetworkViewModel
   private var network: WiFiNetwork?
 
   private let emptyStateView = EmptyStateView()
+  private let contentContainer = NSView()
   private let scrollView = NSScrollView()
   private let contentStack = NSStackView()
   private let identityView = DetailIdentityView()
   private let cardView = CardView()
   private let securityValueField = NSTextField(labelWithString: "")
   private let passwordRowView = WiFiPasswordRowView()
-  private let showQRCodeButton = NSButton()
 
   init(viewModel: WiFiNetworkViewModel) {
     self.viewModel = viewModel
@@ -41,39 +44,72 @@ final class WiFiDetailViewController: NSViewController {
       message: String(localized: "Select a Wi-Fi network to see its details.")
     )
 
-    configureContentStack()
-
-    scrollView.documentView = contentStack
-    scrollView.hasVerticalScroller = true
-    scrollView.drawsBackground = false
-    scrollView.translatesAutoresizingMaskIntoConstraints = false
+    configureContentContainer(in: view)
 
     view.addSubview(emptyStateView)
-    view.addSubview(scrollView)
-
     NSLayoutConstraint.activate([
       emptyStateView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
       emptyStateView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
       emptyStateView.topAnchor.constraint(equalTo: view.topAnchor),
       emptyStateView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-
-      scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-      scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-      scrollView.topAnchor.constraint(equalTo: view.topAnchor),
-      scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-
-      contentStack.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
     ])
 
     self.view = view
     showNoSelection()
   }
 
+  private func configureContentContainer(in view: NSView) {
+    contentContainer.translatesAutoresizingMaskIntoConstraints = false
+    contentContainer.isHidden = true
+    view.addSubview(contentContainer)
+    NSLayoutConstraint.activate([
+      contentContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      contentContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      // `safeAreaLayoutGuide`, not `view.topAnchor` — see `DetailViewController.configureContentContainer(in:)`'s
+      // matching comment: this split item's own initializer doesn't pre-inset content below the
+      // unified toolbar, so this keeps the card top-aligned just under it (851-2444 review point
+      // 3) rather than scrolling its top edge up underneath the toolbar's translucent background.
+      contentContainer.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+      contentContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+    ])
+
+    scrollView.hasVerticalScroller = true
+    scrollView.drawsBackground = false
+    scrollView.translatesAutoresizingMaskIntoConstraints = false
+
+    configureContentStack()
+
+    let flippedDocumentView = FlippedView()
+    flippedDocumentView.translatesAutoresizingMaskIntoConstraints = false
+    flippedDocumentView.addSubview(contentStack)
+    NSLayoutConstraint.activate([
+      contentStack.leadingAnchor.constraint(equalTo: flippedDocumentView.leadingAnchor),
+      contentStack.trailingAnchor.constraint(equalTo: flippedDocumentView.trailingAnchor),
+      contentStack.topAnchor.constraint(equalTo: flippedDocumentView.topAnchor),
+      contentStack.bottomAnchor.constraint(equalTo: flippedDocumentView.bottomAnchor),
+    ])
+    scrollView.documentView = flippedDocumentView
+    NSLayoutConstraint.activate([
+      flippedDocumentView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor)
+    ])
+
+    contentContainer.addSubview(scrollView)
+    NSLayoutConstraint.activate([
+      scrollView.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
+      scrollView.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
+      scrollView.topAnchor.constraint(equalTo: contentContainer.topAnchor),
+      scrollView.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor),
+    ])
+  }
+
   private func configureContentStack() {
     contentStack.orientation = .vertical
     contentStack.alignment = .leading
     contentStack.spacing = 20
-    contentStack.edgeInsets = NSEdgeInsets(top: 24, left: 24, bottom: 24, right: 24)
+    // Matches `DetailViewController.documentStack`'s insets (851-2463/851-2444): a small top inset
+    // (the toolbar itself already provides the visual breathing room above) with the usual 24pt on
+    // the other three sides.
+    contentStack.edgeInsets = NSEdgeInsets(top: 8, left: 24, bottom: 24, right: 24)
     contentStack.translatesAutoresizingMaskIntoConstraints = false
 
     securityValueField.font = .systemFont(ofSize: 13)
@@ -91,25 +127,23 @@ final class WiFiDetailViewController: NSViewController {
       Pasteboard.copySecret(password)
     }
 
-    cardView.setContent(header: identityView, rows: [securityRow, passwordRowView])
-    cardView.widthAnchor.constraint(greaterThanOrEqualToConstant: 280).isActive = true
+    // "Show Network QR Code" now lives inside the card as its own row (851-2444 review point 3),
+    // rather than a separate button centered below it — its action reads `self.network` at tap
+    // time (see `showQRCodeTapped()`), same as `passwordRowView.onReveal` above, so this one row
+    // instance stays correct across every `show(network:)` call without being rebuilt.
+    let qrCodeRow = AddRowView(
+      title: String(localized: "Show Network QR Code"),
+      symbolName: "qrcode",
+      action: { [weak self] in self?.showQRCodeTapped() }
+    )
 
-    showQRCodeButton.title = String(localized: "Show Network QR Code")
-    showQRCodeButton.image = NSImage(systemSymbolName: "qrcode", accessibilityDescription: nil)
-    showQRCodeButton.imagePosition = .imageLeading
-    showQRCodeButton.bezelStyle = .rounded
-    showQRCodeButton.controlSize = .large
-    showQRCodeButton.target = self
-    showQRCodeButton.action = #selector(showQRCodeTapped)
-    showQRCodeButton.translatesAutoresizingMaskIntoConstraints = false
+    cardView.setContent(header: identityView, rows: [securityRow, passwordRowView, qrCodeRow])
 
     contentStack.addArrangedSubview(cardView)
-    contentStack.addArrangedSubview(showQRCodeButton)
-    NSLayoutConstraint.activate([
-      cardView.leadingAnchor.constraint(equalTo: contentStack.leadingAnchor, constant: 24),
-      cardView.trailingAnchor.constraint(equalTo: contentStack.trailingAnchor, constant: -24),
-      showQRCodeButton.centerXAnchor.constraint(equalTo: contentStack.centerXAnchor),
-    ])
+    // Matches `DetailViewController`'s card-width pattern: the stack's own `alignment = .leading`
+    // plus `edgeInsets` positions the card at the 24pt leading inset; this constant (-48) accounts
+    // for both the leading and trailing insets so the card's trailing edge lines up too.
+    cardView.widthAnchor.constraint(equalTo: contentStack.widthAnchor, constant: -48).isActive = true
   }
 
   func show(network: WiFiNetwork?) {
@@ -122,7 +156,7 @@ final class WiFiDetailViewController: NSViewController {
     }
 
     emptyStateView.isHidden = true
-    scrollView.isHidden = false
+    contentContainer.isHidden = false
 
     identityView.configure(title: network.ssid, icon: Self.wifiIcon(), isEditing: false)
     securityValueField.stringValue = network.security?.displayName ?? String(localized: "Unknown")
@@ -131,16 +165,15 @@ final class WiFiDetailViewController: NSViewController {
 
   private func showNoSelection() {
     emptyStateView.isHidden = false
-    scrollView.isHidden = true
+    contentContainer.isHidden = true
     view.setAccessibilityLabel(nil)
   }
 
-  @objc
   private func showQRCodeTapped() {
     guard let network, let window = view.window else { return }
     Task {
       // Showing the QR code always needs the password (an SSID-only, `nopass` code is only ever
-      // for open networks, which don't apply here), so tapping this button triggers the same
+      // for open networks, which don't apply here), so tapping this row triggers the same
       // admin-authentication reveal the password row's own reveal button would — mirroring Apple
       // Passwords, which likewise authenticates before showing this sheet.
       let password = try? await viewModel.revealPassword(for: network)

@@ -578,26 +578,6 @@ fileprivate extension SidebarCategory {
   }
 }
 
-/// A row view that draws its own rounded, inset selection highlight — matching the sidebar's
-/// `.sourceList` look — since `NSTableView.Style.inset` doesn't produce that shape by itself for a
-/// plain single-column table view (see `configureTableView()` above for why).
-private final class InsetTableRowView: NSTableRowView {
-  override func drawSelection(in dirtyRect: NSRect) {
-    guard selectionHighlightStyle != .none else { return }
-    // At this row's 56pt height, a small fixed radius with almost no vertical inset (as this
-    // originally shipped: dy: 1, radius 6) reads as a barely-softened square at a glance — the
-    // 851-2463 review's "square gray block" callout — since the sidebar's own `.sourceList`
-    // selection is short enough (~28pt rows) that a similar radius already looks like a full
-    // pill. Matching that *look* here means insetting on all four sides enough to visibly float
-    // the highlight off the row's edges, with a radius large enough to read as clearly rounded
-    // rather than just corner-nicked, instead of matching the sidebar's exact numbers.
-    let insetRect = bounds.insetBy(dx: 8, dy: 4)
-    let path = NSBezierPath(roundedRect: insetRect, xRadius: 10, yRadius: 10)
-    (isEmphasized ? NSColor.controlAccentColor : NSColor.unemphasizedSelectedContentBackgroundColor).setFill()
-    path.fill()
-  }
-}
-
 /// A plain `NSTableView` that turns the standard Delete/Backspace key bindings into a callback,
 /// so the item list can support keyboard delete without needing a custom `NSResponder` subclass
 /// elsewhere in the app.

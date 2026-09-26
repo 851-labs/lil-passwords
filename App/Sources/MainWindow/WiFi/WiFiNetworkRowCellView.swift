@@ -3,7 +3,8 @@ import LilPasswordsKit
 
 /// One row in ``WiFiListViewController``'s table: the network name, its security type (when
 /// known), and a "Current" badge for whichever network this Mac is presently associated with —
-/// matching Apple Passwords' own Wi-Fi list.
+/// matching Apple Passwords' own Wi-Fi list. Same rounded-inset-selection/hairline-separator
+/// metrics as ``ItemRowCellView`` (851-2444's rework to match 851-2463's Apple-parity chrome).
 final class WiFiNetworkRowCellView: NSTableCellView {
   static let reuseIdentifier = NSUserInterfaceItemIdentifier("WiFiNetworkRow")
 
@@ -11,6 +12,7 @@ final class WiFiNetworkRowCellView: NSTableCellView {
   private let ssidField = NSTextField(labelWithString: "")
   private let securityField = NSTextField(labelWithString: "")
   private let currentBadge = NSTextField(labelWithString: String(localized: "Current"))
+  private let separator = NSBox()
 
   static func dequeue(from tableView: NSTableView, owner: Any?) -> WiFiNetworkRowCellView {
     if let existing = tableView.makeView(withIdentifier: reuseIdentifier, owner: owner) as? WiFiNetworkRowCellView {
@@ -60,9 +62,13 @@ final class WiFiNetworkRowCellView: NSTableCellView {
     textStack.spacing = 2
     textStack.translatesAutoresizingMaskIntoConstraints = false
 
+    separator.boxType = .separator
+    separator.translatesAutoresizingMaskIntoConstraints = false
+
     addSubview(iconView)
     addSubview(textStack)
     addSubview(currentBadge)
+    addSubview(separator)
 
     NSLayoutConstraint.activate([
       iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
@@ -78,13 +84,25 @@ final class WiFiNetworkRowCellView: NSTableCellView {
       currentBadge.centerYAnchor.constraint(equalTo: centerYAnchor),
       currentBadge.widthAnchor.constraint(greaterThanOrEqualToConstant: 52),
       currentBadge.heightAnchor.constraint(equalToConstant: 16),
+
+      // Inset to start at the text, not under the icon, matching `ItemRowCellView` (851-2463).
+      separator.leadingAnchor.constraint(equalTo: textStack.leadingAnchor),
+      separator.trailingAnchor.constraint(equalTo: trailingAnchor),
+      separator.bottomAnchor.constraint(equalTo: bottomAnchor),
+      separator.heightAnchor.constraint(equalToConstant: 1),
     ])
   }
 
-  func configure(with network: WiFiNetwork) {
+  /// - Parameter hidesSeparator: Whether this row's bottom hairline should be hidden — true when
+  ///   this row, or the row immediately below it, is selected, so no hairline ever cuts through a
+  ///   rounded selection highlight (851-2463, mirroring `ItemRowCellView`). Kept in sync after the
+  ///   initial `configure` call by `setSeparatorHidden(_:)`, since selection changes don't
+  ///   re-invoke `configure`.
+  func configure(with network: WiFiNetwork, hidesSeparator: Bool) {
     ssidField.stringValue = network.ssid
     securityField.stringValue = network.security?.displayName ?? String(localized: "Unknown Security")
     currentBadge.isHidden = !network.isCurrentNetwork
+    separator.isHidden = hidesSeparator
 
     setAccessibilityElement(true)
     setAccessibilityLabel(
@@ -92,5 +110,9 @@ final class WiFiNetworkRowCellView: NSTableCellView {
         ? String(localized: "\(network.ssid), \(securityField.stringValue), current network")
         : String(localized: "\(network.ssid), \(securityField.stringValue)")
     )
+  }
+
+  func setSeparatorHidden(_ hidden: Bool) {
+    separator.isHidden = hidden
   }
 }

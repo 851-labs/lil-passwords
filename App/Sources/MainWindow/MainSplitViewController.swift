@@ -27,14 +27,19 @@ final class MainSplitViewController: NSSplitViewController {
   let wifiListViewController: WiFiListViewController
   let wifiDetailViewController: WiFiDetailViewController
 
-  /// Fires whenever selecting a sidebar category switches into or out of a full-width category
-  /// view (Codes/Security/Deleted) — `MainWindowController` wires this to
-  /// `MainToolbarController.setFullWidthModeActive(_:)` so the toolbar's list/detail-column items
-  /// (which have nothing to apply to over a full-width view) come and go with it. Also fired
-  /// (`true`) for `.wifi`: it keeps its own two-column list+detail split rather than collapsing to
-  /// one full-width view, but none of the list/detail toolbar chrome built for `PasswordItem`
-  /// (sort menu, "+", Edit, search) applies to it either, so it hides the same way.
-  var onFullWidthModeChange: ((Bool) -> Void)?
+  /// Fires whenever the sidebar selection changes, naming which toolbar layout now applies —
+  /// `MainWindowController` wires this to `MainToolbarController.setToolbarLayoutMode(_:)`.
+  /// `.fullWidth` for Codes/Security/Deleted (none of the list/detail-column chrome has anything
+  /// to apply to over a single full-width view); `.wifi` for the Wi-Fi category (its own reduced
+  /// layout — list title and search, but no sort/"+" capsule); `.splitView` (the default) for
+  /// `.all`/`.passkeys`.
+  var onToolbarLayoutModeChange: ((ToolbarLayoutMode) -> Void)?
+
+  /// Fires alongside `onToolbarLayoutModeChange` with whichever list controller should now
+  /// receive the toolbar search field's delegate callbacks (`nil` while a full-width category
+  /// view, which has no search, is showing) — `MainWindowController` wires this to
+  /// `MainToolbarController.searchField.delegate`.
+  var onSearchDelegateChange: ((NSSearchFieldDelegate?) -> Void)?
 
   private let listContainerViewController = DetailContainerViewController()
   private let detailContainerViewController = DetailContainerViewController()
@@ -145,7 +150,12 @@ extension MainSplitViewController: SidebarViewControllerDelegate {
       detailContainerViewController.setContentViewController(wifiDetailViewController)
       listItem.isCollapsed = false
       wifiDetailViewController.show(network: nil)
-      onFullWidthModeChange?(true)
+      // `detailViewController` isn't on screen while Wi-Fi is showing, but its toolbar Edit
+      // control lives independently in the toolbar (see the full-width branch below) — disable it
+      // here the same way, since editing a `PasswordItem` makes no sense over a Wi-Fi selection.
+      detailViewController.showNoSelection(for: category)
+      onToolbarLayoutModeChange?(.wifi)
+      onSearchDelegateChange?(wifiListViewController)
     } else if let fullWidthViewController = fullWidthViewController(for: category) {
       listContainerViewController.setContentViewController(listViewController)
       detailContainerViewController.setContentViewController(fullWidthViewController)
@@ -158,14 +168,16 @@ extension MainSplitViewController: SidebarViewControllerDelegate {
       // Return/Esc keypress meant for the full-width view, and so Edit itself is disabled rather
       // than reopening an editor for content that isn't on screen.
       detailViewController.showNoSelection(for: category)
-      onFullWidthModeChange?(true)
+      onToolbarLayoutModeChange?(.fullWidth)
+      onSearchDelegateChange?(nil)
     } else {
       listContainerViewController.setContentViewController(listViewController)
       detailContainerViewController.setContentViewController(detailViewController)
       listItem.isCollapsed = false
       listViewController.select(category: category)
       detailViewController.showNoSelection(for: category)
-      onFullWidthModeChange?(false)
+      onToolbarLayoutModeChange?(.splitView)
+      onSearchDelegateChange?(listViewController)
     }
   }
 }
