@@ -10,8 +10,8 @@ final class MainWindowController: NSWindowController {
   private let splitViewController: MainSplitViewController
   private let toolbarController = MainToolbarController()
 
-  init() {
-    splitViewController = MainSplitViewController(store: store)
+  init(vaultViewModel: VaultViewModel) {
+    splitViewController = MainSplitViewController(store: store, vaultViewModel: vaultViewModel)
 
     let window = NSWindow(
       contentRect: NSRect(x: 0, y: 0, width: 920, height: 560),

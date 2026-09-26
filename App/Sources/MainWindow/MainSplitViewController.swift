@@ -8,10 +8,15 @@ final class MainSplitViewController: NSSplitViewController {
   let listViewController: ItemListViewController
   let detailViewController: DetailViewController
 
-  init(store: VaultSnapshotStore) {
+  private let vaultViewModel: VaultViewModel
+  private var didPerformInitialSelection = false
+  private var lastHandledCategory: SidebarCategory?
+
+  init(store: VaultSnapshotStore, vaultViewModel: VaultViewModel) {
+    self.vaultViewModel = vaultViewModel
     sidebarViewController = SidebarViewController(store: store)
     listViewController = ItemListViewController(store: store)
-    detailViewController = DetailViewController()
+    detailViewController = DetailViewController(vaultViewModel: vaultViewModel)
     super.init(nibName: nil, bundle: nil)
   }
 
@@ -53,6 +58,26 @@ final class MainSplitViewController: NSSplitViewController {
 extension MainSplitViewController: SidebarViewControllerDelegate {
   func sidebarViewController(_ controller: SidebarViewController, didSelect category: SidebarCategory) {
     listViewController.select(category: category)
+
+    // The sidebar re-selects its current row (and calls back here again) every time
+    // `VaultSnapshotStore` publishes a new snapshot, not just once at launch — so this fires
+    // repeatedly with the same category. Only react when the category actually changes, or the
+    // repeat firings would clobber the detail pane right back to the empty state after the
+    // one-time "select the first item" default below runs.
+    guard category != lastHandledCategory else { return }
+    lastHandledCategory = category
+
+    // The sidebar's initial callback (selecting "All" as soon as its own view loads) is the
+    // moment to apply Apple Passwords' "always show something selected" default, rather than the
+    // empty state; a later, genuine category change still clears the detail pane, since real item
+    // selection isn't wired up yet (851-2414).
+    if !didPerformInitialSelection {
+      didPerformInitialSelection = true
+      if let first = vaultViewModel.items.first {
+        detailViewController.show(item: first)
+        return
+      }
+    }
     detailViewController.showNoSelection(for: category)
   }
 }
