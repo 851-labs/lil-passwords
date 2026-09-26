@@ -1,4 +1,5 @@
 import AppKit
+import LilPasswordsKit
 
 /// Draws the colored rounded-square monogram icons Apple Passwords shows next to each item in the
 /// list when a site has no favicon: a flat tinted square with the item's first letter centered
@@ -44,10 +45,21 @@ enum MonogramIcon {
 
   /// A stable tint for `title`, deterministically hashed into ``palette`` so the same title
   /// always gets the same color across launches, but different titles are spread across the
-  /// whole palette rather than clustering.
+  /// whole palette rather than clustering. The hashing itself is ``MonogramPalette/colorIndex(for:paletteCount:)``
+  /// (LilPasswordsKit) — a fixed, unseeded FNV-1a hash, not Swift's `String.hashValue` (which is
+  /// randomly reseeded every launch, so the same title used to get a different color each time the
+  /// app ran). Kept as a public entry point via ``colorIndex(for:)`` below so the detail pane
+  /// (851-2414, detail PR #14) can agree on the same color for a title without duplicating this
+  /// palette.
   static func tint(for title: String) -> NSColor {
-    let hash = abs(title.hashValue)
-    return palette[hash % palette.count]
+    palette[colorIndex(for: title)]
+  }
+
+  /// The stable index into ``palette`` for `title` — see ``tint(for:)``. Exposed separately (in
+  /// addition to `tint(for:)`) so callers that just need to agree on *which* color a title maps to
+  /// (e.g. a test, or another view reusing this exact palette) don't need an `NSColor` comparison.
+  static func colorIndex(for title: String) -> Int {
+    MonogramPalette.colorIndex(for: title, paletteCount: palette.count)
   }
 
   /// - Parameters:
