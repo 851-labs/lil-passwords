@@ -24,11 +24,13 @@ test:
 # disposable, in-memory-vault-backed helper (LilpassE2EHelper) over a real, uniquely-named XPC Mach
 # service — never the real "lil passwords" app, its real vault store, or the real keychain item.
 # Depends on `build` so `LILPASS_E2E_BINARY_PATH` always points at a freshly built lilpass.
+# E2E_EXTRA_ARGS is empty by default (kept out of normal local runs' output) — CI sets it to
+# `--verbose` for extra `swift test` diagnostics while chasing 851-2434's CI-only hang.
 e2e: build
 	swift build --package-path Packages/LilpassE2E --product LilpassE2EHelper
 	LILPASS_E2E_BINARY_PATH="$(CURDIR)/build/Build/Products/Debug/lil passwords.app/Contents/Helpers/lilpass" \
 	LILPASS_E2E_HELPER_BINARY_PATH="$$(swift build --package-path Packages/LilpassE2E --product LilpassE2EHelper --show-bin-path)/LilpassE2EHelper" \
-	swift test --package-path Packages/LilpassE2E
+	swift test --package-path Packages/LilpassE2E $(E2E_EXTRA_ARGS)
 
 format:
 	xcrun swift-format format --in-place --recursive App Agent CLI AutoFillExtension Packages

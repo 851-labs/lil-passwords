@@ -57,5 +57,31 @@ jobs:
       - name: Build app, helper, and CLI (unsigned)
         run: make build
 
+      - name: Diagnose launchd GUI domain before E2E tests
+        # This suite's helper process registers as an on-demand Mach service via `launchctl
+        # bootstrap gui/<uid>` (see Packages/LilpassE2E/Tests/LilpassE2ETests/Support/
+        # E2EHelperProcess.swift) — the same domain a real, GUI-logged-in user's LaunchAgents use.
+        # Two prior CI runs hung the E2E step for its full 30-minute timeout with zero test output
+        # right after the test binary linked, which is consistent with that domain (or the Mach
+        # service registered in it) never becoming reachable on this runner. This step doesn't fix
+        # anything — it just dumps the runner's session/domain state into the log unconditionally,
+        # so if the E2E step below still hangs or times out, the run's log has this evidence
+        # instead of nothing.
+        run: |
+          id
+          who
+          echo "--- launchctl print gui/$(id -u) ---"
+          launchctl print "gui/$(id -u)" || echo "launchctl print exited $?"
+          echo "--- launchctl print user/$(id -u) ---"
+          launchctl print "user/$(id -u)" || echo "launchctl print exited $?"
+
       - name: End-to-end tests (built lilpass binary + disposable in-memory helper)
+        # 10 minutes, not the job's full 30: every test in Packages/LilpassE2E now also carries its
+        # own `.timeLimit(.minutes(1))` (see each suite's doc comment), so a genuine hang should
+        # fail fast and name the offending test on its own — this is only a backstop in case
+        # something outside any individual test (e.g. the `swift build` step before tests start
+        # running) is what actually hangs.
+        timeout-minutes: 10
+        env:
+          E2E_EXTRA_ARGS: --verbose
         run: make e2e

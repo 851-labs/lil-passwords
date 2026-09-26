@@ -8,7 +8,13 @@ import Testing
 /// visible from `LilpassRun`'s own unit tests (`LilpassCoreTests`) the same way — those call
 /// `LilpassRun.resolveEnvironment`/`LilpassRun.run` directly as plain functions; this suite instead
 /// checks what a *child process the real `lilpass` binary execs* actually observes and returns.
-@Suite struct RunCommandTests {
+///
+/// `.timeLimit(.minutes(1))`: every test here talks to a real subprocess over real XPC, and
+/// this suite has twice hung a CI job for its full 30-minute timeout with zero output when one
+/// of those calls never returned — a per-test time limit turns that into a fast, attributable
+/// failure (naming exactly which test timed out) instead of another silent freeze.
+@Suite(.timeLimit(.minutes(1)))
+struct RunCommandTests {
   @Test func injectsAResolvedSecretIntoTheChildsEnvironmentWithoutPrintingIt() throws {
     let item = makeE2ETestItem(title: "GitHub", password: "hunter2")
     let helper = try E2EHelperProcess.start(helperBinaryPath: LilpassBinary.helperPath, items: [item])

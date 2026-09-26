@@ -16,7 +16,13 @@ import Testing
 /// is the stdio-transport analog of `LilpassMCPServerTests` in `LilpassMCPTests`, which exercises the
 /// same tool logic in-process over `InMemoryTransport` — here nothing is in-process: `lilpass mcp` is
 /// a genuine child process, backed by a disposable `LilpassE2EHelper` over real XPC.
-@Suite struct MCPStdioSessionTests {
+///
+/// `.timeLimit(.minutes(1))`: every test here talks to a real subprocess over real XPC, and
+/// this suite has twice hung a CI job for its full 30-minute timeout with zero output when one
+/// of those calls never returned — a per-test time limit turns that into a fast, attributable
+/// failure (naming exactly which test timed out) instead of another silent freeze.
+@Suite(.timeLimit(.minutes(1)))
+struct MCPStdioSessionTests {
   /// Starts a `LilpassE2EHelper` plus a `lilpass mcp` child process wired to it, connects an MCP
   /// `Client` over their shared stdio pipes, and returns everything the caller needs to talk to it
   /// and clean it up.

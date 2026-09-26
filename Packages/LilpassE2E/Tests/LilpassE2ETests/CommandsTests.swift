@@ -7,7 +7,13 @@ import Testing
 /// `LilpassE2EHelper` over a real cross-process XPC connection (via `E2EHelperProcess`) — not the
 /// in-process harness `LilpassCoreTests`/`LilpassMCPTests` use. Covers every command's plain-text
 /// stdout, its `--json` output, and its exit code, per 851-2434.
-@Suite struct CommandsTests {
+///
+/// `.timeLimit(.minutes(1))`: every test here talks to a real subprocess over real XPC, and
+/// this suite has twice hung a CI job for its full 30-minute timeout with zero output when one
+/// of those calls never returned — a per-test time limit turns that into a fast, attributable
+/// failure (naming exactly which test timed out) instead of another silent freeze.
+@Suite(.timeLimit(.minutes(1)))
+struct CommandsTests {
   @Test func statusReportsUnlockedAndEnabled() throws {
     let helper = try E2EHelperProcess.start(helperBinaryPath: LilpassBinary.helperPath)
     defer { helper.stop() }

@@ -8,7 +8,13 @@ import Testing
 /// throwaway temp directory — never anywhere near a real project checkout) and the real binary,
 /// including the atomicity guarantee `LilpassInject.inject` documents: a template that fails to
 /// resolve must leave `-o`'s file untouched.
-@Suite struct InjectCommandTests {
+///
+/// `.timeLimit(.minutes(1))`: every test here talks to a real subprocess over real XPC, and
+/// this suite has twice hung a CI job for its full 30-minute timeout with zero output when one
+/// of those calls never returned — a per-test time limit turns that into a fast, attributable
+/// failure (naming exactly which test timed out) instead of another silent freeze.
+@Suite(.timeLimit(.minutes(1)))
+struct InjectCommandTests {
   @Test func substitutesEveryPlaceholderAndWritesTheOutputFile() throws {
     let item = makeE2ETestItem(title: "GitHub", usernames: ["octocat"], password: "hunter2")
     let helper = try E2EHelperProcess.start(helperBinaryPath: LilpassBinary.helperPath, items: [item])
