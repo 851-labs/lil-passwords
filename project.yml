@@ -19,8 +19,30 @@ targets:
     sources:
       - path: App/Sources
         type: syncedFolder
+      # SMAppService looks for an agent's launchd plist at exactly this path
+      # inside the app bundle. See Agent/Support/com.851labs.lilpasswords.agent.plist.
+      - path: Agent/Support/com.851labs.lilpasswords.agent.plist
+        buildPhase:
+          copyFiles:
+            destination: wrapper
+            subpath: Contents/Library/LaunchAgents
     dependencies:
       - package: LilPasswordsKit
+      # Embed the helper next to the app's own executable, matching the
+      # BundleProgram path in its launchd plist.
+      - target: LilPasswordsAgent
+        embed: true
+        codeSign: true
+        copy:
+          destination: executables
+      # Embed the CLI under Contents/Helpers rather than alongside the app's
+      # own executable in Contents/MacOS, so it reads as a secondary tool.
+      - target: lilpw
+        embed: true
+        codeSign: true
+        copy:
+          destination: wrapper
+          subpath: Contents/Helpers
     info:
       path: App/Info.plist
       properties:
@@ -36,6 +58,7 @@ targets:
       base:
         PRODUCT_NAME: Lil Passwords
         PRODUCT_BUNDLE_IDENTIFIER: com.851labs.lilpasswords
+        CODE_SIGN_ENTITLEMENTS: Config/Entitlements/App.entitlements
   LilPasswordsAgent:
     type: tool
     platform: macOS
@@ -48,6 +71,9 @@ targets:
       base:
         PRODUCT_NAME: LilPasswordsAgent
         PRODUCT_BUNDLE_IDENTIFIER: com.851labs.lilpasswords.agent
+        CODE_SIGN_ENTITLEMENTS: Config/Entitlements/Agent.entitlements
+        # Embedded by LilPasswords; don't also install a standalone copy into archives.
+        SKIP_INSTALL: YES
   lilpw:
     type: tool
     platform: macOS
@@ -60,6 +86,9 @@ targets:
       base:
         PRODUCT_NAME: lilpw
         PRODUCT_BUNDLE_IDENTIFIER: com.851labs.lilpasswords.cli
+        CODE_SIGN_ENTITLEMENTS: Config/Entitlements/CLI.entitlements
+        # Embedded by LilPasswords; don't also install a standalone copy into archives.
+        SKIP_INSTALL: YES
 schemes:
   LilPasswords:
     build:
