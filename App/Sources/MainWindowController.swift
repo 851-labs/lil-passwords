@@ -15,6 +15,11 @@ final class MainWindowController: NSWindowController {
   private var itemsDidChangeCancellable: AnyCancellable?
   private var searchKeyMonitor: Any?
 
+  /// Read access to the vault for surfaces that live outside `MainSplitViewController` — the
+  /// import/export flows (851-2410), which present sheets over this window rather than being part
+  /// of the split view itself.
+  var vaultViewModel: VaultViewModel { dataSource }
+
   init() {
     // `InMemoryVaultStore` is a real `VaultStoring` conformance (851-2404) — real crypto, real
     // CRUD/change-log semantics — just without a SQLite file or cross-process Darwin
