@@ -91,6 +91,9 @@ final class RestoreVaultSheetController: NSWindowController {
     let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelTapped))
     let restore = NSButton(title: "Restore", target: self, action: #selector(restoreTapped))
     restore.keyEquivalent = "\r"
+    // Same fix as `ImportPreviewViewController.importButton` (851-2426 tophat visual audit):
+    // `keyEquivalent = "\r"` alone doesn't reliably paint this blue in a custom sheet.
+    restore.bezelColor = .controlAccentColor
     restore.isEnabled = false
     restoreButton = restore
 

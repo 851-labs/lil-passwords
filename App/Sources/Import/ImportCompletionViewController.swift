@@ -57,6 +57,9 @@ final class ImportCompletionViewController: NSViewController {
     doneButton.translatesAutoresizingMaskIntoConstraints = false
     doneButton.bezelStyle = .rounded
     doneButton.keyEquivalent = "\r"
+    // Same fix as `ImportPreviewViewController.importButton` (851-2426 tophat visual audit):
+    // `keyEquivalent = "\r"` alone doesn't reliably paint this blue in a custom sheet.
+    doneButton.bezelColor = .controlAccentColor
 
     let buttonRow = NSStackView(views: [trashButton, NSView(), doneButton])
     buttonRow.translatesAutoresizingMaskIntoConstraints = false

@@ -133,6 +133,9 @@ final class AddVerificationCodeSheetController: NSWindowController {
     let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelTapped))
     let next = NSButton(title: "Continue", target: self, action: #selector(continueTapped))
     next.keyEquivalent = "\r"
+    // Same fix as `ImportPreviewViewController.importButton` (851-2426 tophat visual audit):
+    // `keyEquivalent = "\r"` alone doesn't reliably paint this blue in a custom sheet.
+    next.bezelColor = .controlAccentColor
     next.isEnabled = false
     continueButton = next
 
@@ -191,6 +194,7 @@ final class AddVerificationCodeSheetController: NSWindowController {
       image: NSImage(systemSymbolName: "chevron.left", accessibilityDescription: "Back") ?? NSImage(),
       target: self, action: #selector(backToPickItem))
     backButton.isBordered = false
+    backButton.setAccessibilityLabel("Back")
 
     let titleField = NSTextField(labelWithString: "Add Code for \(item.title)")
     titleField.font = .boldSystemFont(ofSize: 15)
@@ -283,6 +287,7 @@ final class AddVerificationCodeSheetController: NSWindowController {
       image: NSImage(systemSymbolName: "chevron.left", accessibilityDescription: "Back") ?? NSImage(),
       target: self, action: #selector(backToChooseMethod))
     backButton.isBordered = false
+    backButton.setAccessibilityLabel("Back")
 
     let titleField = NSTextField(labelWithString: "Enter Setup Key")
     titleField.font = .boldSystemFont(ofSize: 15)
@@ -311,6 +316,9 @@ final class AddVerificationCodeSheetController: NSWindowController {
     let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelTapped))
     let add = NSButton(title: "Add", target: self, action: #selector(addSetupKeyTapped))
     add.keyEquivalent = "\r"
+    // Same fix as `ImportPreviewViewController.importButton` (851-2426 tophat visual audit):
+    // `keyEquivalent = "\r"` alone doesn't reliably paint this blue in a custom sheet.
+    add.bezelColor = .controlAccentColor
     add.isEnabled = false
     addButton = add
 

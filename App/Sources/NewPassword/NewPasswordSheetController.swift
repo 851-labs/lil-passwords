@@ -115,6 +115,7 @@ final class NewPasswordSheetController: NSWindowController {
     regenerateButton.isBordered = false
     regenerateButton.imagePosition = .imageOnly
     regenerateButton.contentTintColor = .secondaryLabelColor
+    regenerateButton.setAccessibilityLabel("Password Options")
     // `accessory` here, not `KeyValueRow`'s own accessory slot: see `PasswordCardValueView`'s
     // documentation for why (851-2416 review — that slot was silently shrinking the value column,
     // pulling the dots' right edge in from where every other row's value lines up).
@@ -154,6 +155,10 @@ final class NewPasswordSheetController: NSWindowController {
     let save = NSButton(title: "Save", target: self, action: #selector(saveTapped))
     save.bezelStyle = .rounded
     save.keyEquivalent = "\r"
+    // Same fix as `ImportPreviewViewController.importButton` (851-2426 tophat visual audit):
+    // `keyEquivalent = "\r"` alone doesn't reliably paint this blue for a plain `NSButton` hosted
+    // in a custom sheet; `bezelColor` does, independent of window-key state.
+    save.bezelColor = .controlAccentColor
     saveButton = save
 
     let spacer = NSView()

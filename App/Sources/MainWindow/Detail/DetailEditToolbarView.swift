@@ -49,6 +49,9 @@ final class DetailEditToolbarView: NSView {
     doneButton.bezelStyle = .rounded
     doneButton.controlSize = .regular
     doneButton.keyEquivalent = "\r"
+    // Same fix as `ImportPreviewViewController.importButton` (851-2426 tophat visual audit):
+    // `keyEquivalent = "\r"` alone doesn't reliably paint this blue in a custom sheet/toolbar.
+    doneButton.bezelColor = .controlAccentColor
     doneButton.target = self
     doneButton.action = #selector(doneTapped)
     doneButton.isHidden = true

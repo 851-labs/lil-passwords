@@ -61,6 +61,9 @@ final class RecoveryKitRevealViewController: NSViewController {
     let continueButton = NSButton(title: "Continue…", target: self, action: #selector(continueTapped))
     continueButton.keyEquivalent = "\r"
     continueButton.bezelStyle = .rounded
+    // Same fix as `ImportPreviewViewController.importButton` (851-2426 tophat visual audit):
+    // `keyEquivalent = "\r"` alone doesn't reliably paint this blue in a custom sheet.
+    continueButton.bezelColor = .controlAccentColor
 
     let spacer = NSView()
     spacer.setContentHuggingPriority(NSLayoutConstraint.Priority(1), for: .horizontal)

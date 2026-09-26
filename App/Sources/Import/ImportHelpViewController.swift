@@ -57,6 +57,9 @@ final class ImportHelpViewController: NSViewController {
     chooseButton.translatesAutoresizingMaskIntoConstraints = false
     chooseButton.bezelStyle = .rounded
     chooseButton.keyEquivalent = "\r"
+    // Same fix as `ImportPreviewViewController.importButton` (851-2426 tophat visual audit):
+    // `keyEquivalent = "\r"` alone doesn't reliably paint this blue in a custom sheet.
+    chooseButton.bezelColor = .controlAccentColor
 
     let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelTapped))
     cancelButton.translatesAutoresizingMaskIntoConstraints = false

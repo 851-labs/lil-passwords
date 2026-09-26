@@ -70,12 +70,18 @@ final class LockScreenViewController: NSViewController {
     // The small circular Touch ID badge overlapping the icon's bottom-right corner, matching
     // Apple Passwords' own lock screen exactly (see the reference screenshots this ticket
     // shipped with). There's no system-provided "app icon + Touch ID badge" composite, so this
-    // draws the badge itself: a plain white (light) / secondary-system-fill (dark) circle behind
-    // an SF Symbol fingerprint glyph.
+    // draws the badge itself: a light circle behind a dark SF Symbol fingerprint glyph — a small
+    // photoreal stand-in for a physical Touch ID sensor, so unlike the rest of this screen it's
+    // deliberately *not* using dynamic/semantic colors that flip with the system appearance.
+    //
+    // This originally used `.windowBackgroundColor`/`.secondaryLabelColor` (both dynamic), which
+    // inverted the badge to a dark circle with a light glyph in Dark Mode — the 851-2426 tophat
+    // visual audit caught this as a contrast inversion versus Apple's badge, which stays
+    // light-circle/dark-glyph in both appearances.
     let badgeBackground = NSView()
     badgeBackground.translatesAutoresizingMaskIntoConstraints = false
     badgeBackground.wantsLayer = true
-    badgeBackground.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+    badgeBackground.layer?.backgroundColor = NSColor.white.cgColor
     badgeBackground.layer?.cornerRadius = 28
     badgeBackground.layer?.shadowColor = NSColor.black.cgColor
     badgeBackground.layer?.shadowOpacity = 0.2
@@ -88,7 +94,7 @@ final class LockScreenViewController: NSViewController {
       accessibilityDescription: "Touch ID"
     )
     badgeImageView.symbolConfiguration = .init(pointSize: 30, weight: .regular)
-    badgeImageView.contentTintColor = .secondaryLabelColor
+    badgeImageView.contentTintColor = NSColor.black.withAlphaComponent(0.85)
     badgeImageView.translatesAutoresizingMaskIntoConstraints = false
 
     let iconContainer = NSView()

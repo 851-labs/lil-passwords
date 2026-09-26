@@ -63,6 +63,9 @@ final class RecoveryKitConfirmViewController: NSViewController {
     let backButton = NSButton(title: "Back", target: self, action: #selector(backTapped))
     let confirm = NSButton(title: "Confirm", target: self, action: #selector(confirmTapped))
     confirm.keyEquivalent = "\r"
+    // Same fix as `ImportPreviewViewController.importButton` (851-2426 tophat visual audit):
+    // `keyEquivalent = "\r"` alone doesn't reliably paint this blue in a custom sheet.
+    confirm.bezelColor = .controlAccentColor
     confirm.isEnabled = false
     confirmButton = confirm
 

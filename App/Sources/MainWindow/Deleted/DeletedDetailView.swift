@@ -66,6 +66,9 @@ final class DeletedDetailView: NSView {
     // Recover is the safe, reversible action here, so it (not Delete Permanently) gets the
     // sheet/pane's default-button treatment — Return recovers the selection.
     recoverButton.keyEquivalent = "\r"
+    // `keyEquivalent = "\r"` alone doesn't reliably paint this blue here (851-2426 tophat visual
+    // audit) — same fix as `ImportPreviewViewController.importButton`.
+    recoverButton.bezelColor = .controlAccentColor
     recoverButton.target = self
     recoverButton.action = #selector(recoverTapped)
     recoverButton.setAccessibilityLabel("Recover")
