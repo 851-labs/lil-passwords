@@ -170,7 +170,10 @@ final class PasskeyDetailViewController: NSViewController {
       self?.identityView.setIcon(icon)
     }
 
-    websiteValueField.stringValue = passkey.website?.host ?? passkey.relyingPartyIdentifier
+    // Same string as `title` above (and its monogram) — `PasskeyMetadata.displayTitle` already
+    // strips a leading "www." so this field doesn't show `www.amazon.com` right underneath a
+    // title/monogram that already read "amazon.com".
+    websiteValueField.stringValue = title
     userNameValueField.stringValue = passkey.displayName
     createdValueField.stringValue = Self.dateFormatter.string(from: passkey.createdAt)
 

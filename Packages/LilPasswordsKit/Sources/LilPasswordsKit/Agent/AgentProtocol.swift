@@ -313,6 +313,22 @@ public struct PasskeyMetadata: Sendable, Codable, Equatable, Identifiable {
   public var displayName: String {
     userDisplayName.isEmpty ? userName : userDisplayName
   }
+
+  /// The title to show in list rows, the detail card, and the detail card's "Website" field —
+  /// `website`'s host with a leading "www." stripped (`www.amazon.com` reads as `amazon.com`,
+  /// which is how a person actually refers to the site), falling back to the raw
+  /// `relyingPartyIdentifier` when no website URL was ever resolved. This is also what drives the
+  /// row/detail monogram: `MonogramIcon.letter(for:)`/`tint(for:)` both take this same string, so
+  /// the monogram's letter and its `MonogramPalette` color always agree with the text next to it
+  /// — the same one-string-drives-both-letter-and-color contract `PasswordItem.title` already has
+  /// for the password list.
+  ///
+  /// Only strips a leading "www." label — this codebase has no public-suffix-list/eTLD+1
+  /// computation (see `String.strippingLeadingWWW`), so a multi-label host like
+  /// `accounts.google.com` is shown as-is rather than reduced further.
+  public var displayTitle: String {
+    (website?.host ?? relyingPartyIdentifier).strippingLeadingWWW
+  }
 }
 
 extension PasskeyMetadata {

@@ -105,10 +105,11 @@ final class PasskeysViewModel: ObservableObject {
     await refresh()
   }
 
-  /// The list/detail title for a passkey: its website's host when known, falling back to the raw
-  /// relying party identifier (e.g. a passkey registered before a website URL was ever resolved).
+  /// The list/detail title for a passkey — see `PasskeyMetadata.displayTitle` (851-2442) for the
+  /// "www."-stripped host / relying-party-identifier-fallback / monogram-agreement contract this
+  /// forwards to.
   static func title(for passkey: PasskeyMetadata) -> String {
-    passkey.website?.host ?? passkey.relyingPartyIdentifier
+    passkey.displayTitle
   }
 
   #if DEBUG
