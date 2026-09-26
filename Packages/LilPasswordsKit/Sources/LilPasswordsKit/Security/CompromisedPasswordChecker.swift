@@ -167,7 +167,12 @@ public actor CompromisedPasswordChecker {
   /// purposes) — into the set of suffixes present.
   static func parseSuffixes(fromResponseBody body: String) -> Set<String> {
     var suffixes = Set<String>()
-    for line in body.split(whereSeparator: { $0 == "\n" || $0 == "\r" }) {
+    // `isNewline`, not `== "\n" || == "\r"`: HIBP terminates lines with CRLF, and Swift's
+    // `Character` treats "\r\n" as a single extended grapheme cluster that is equal to neither
+    // "\n" nor "\r" alone, so comparing against those two literals never splits a CRLF-terminated
+    // body at all — every suffix but the first silently vanished into one giant unparsed "line".
+    // `Character.isNewline` recognizes CR, LF, and CRLF (as the one cluster it is) alike.
+    for line in body.split(whereSeparator: { $0.isNewline }) {
       guard let colonIndex = line.firstIndex(of: ":") else { continue }
       suffixes.insert(String(line[line.startIndex..<colonIndex]))
     }

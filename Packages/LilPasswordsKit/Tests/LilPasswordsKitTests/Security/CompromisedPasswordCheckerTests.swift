@@ -15,14 +15,18 @@ import Testing
 
   private static func rangeResponse(for prefix: String) -> (HTTPURLResponse, Data) {
     var body = ""
+    // Padding-shaped lines (851-2458: `Add-Padding: true`) *before* the real match, not after —
+    // a real HIBP response returns suffixes in an order this checker must not depend on (it's
+    // effectively lexical, and plenty of hashes sort ahead of `pwnedSuffix`'s "C6008F9C..."), and
+    // `parseSuffixes` previously only recovered whichever line happened to come first in the body
+    // (see its doc comment on `Character.isNewline` vs `"\r\n"`), which every one of these fixtures
+    // masked by putting the real match first. Padding first here means a passing test actually
+    // proves every line got parsed, not just the first one.
+    body += "0000000000000000000000000000000000000000:0\r\n"
+    body += "1111111111111111111111111111111111111111:0\r\n"
     if prefix == pwnedPrefix {
       body += "\(pwnedSuffix):3722468\r\n"
     }
-    // A couple of padding-shaped lines (851-2458: `Add-Padding: true`), which a real response
-    // would also include and which `parseSuffixes` must tolerate without misinterpreting them as
-    // a match for anything callers actually asked about.
-    body += "0000000000000000000000000000000000000000:0\r\n"
-    body += "1111111111111111111111111111111111111111:0\r\n"
     let url = URL(string: "https://api.pwnedpasswords.com/range/\(prefix)")!
     let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
     return (response, Data(body.utf8))
@@ -135,9 +139,29 @@ import Testing
   }
 
   @Test func parseSuffixesIgnoresMalformedLines() {
-    let body = "ABCDEF0123456789ABCDEF0123456789ABCDEF01:5\r\nnotaline\r\n\r\n"
+    let body = "notaline\r\nABCDEF0123456789ABCDEF0123456789ABCDEF01:5\r\n\r\n"
     let suffixes = CompromisedPasswordChecker.parseSuffixes(fromResponseBody: body)
     #expect(suffixes == ["ABCDEF0123456789ABCDEF0123456789ABCDEF01"])
+  }
+
+  /// HIBP terminates every line with CRLF. Swift's `Character` treats "\r\n" as a single extended
+  /// grapheme cluster equal to neither "\n" nor "\r" alone, so a naive
+  /// `split(whereSeparator: { $0 == "\n" || $0 == "\r" })` never splits a CRLF-terminated body at
+  /// all — every suffix but the first would silently vanish into one unparsed "line". This is a
+  /// regression test for exactly that bug (fixed by switching to `Character.isNewline`).
+  @Test func parseSuffixesRecoversEveryLineFromACRLFTerminatedBodyNotJustTheFirst() {
+    let body =
+      "0000000000000000000000000000000000000000:0\r\n"
+      + "1111111111111111111111111111111111111111:0\r\n"
+      + "2222222222222222222222222222222222222222:0\r\n"
+    let suffixes = CompromisedPasswordChecker.parseSuffixes(fromResponseBody: body)
+    #expect(
+      suffixes
+        == [
+          "0000000000000000000000000000000000000000",
+          "1111111111111111111111111111111111111111",
+          "2222222222222222222222222222222222222222",
+        ])
   }
 
   @Test func sha1HexMatchesTheKnownDigest() {

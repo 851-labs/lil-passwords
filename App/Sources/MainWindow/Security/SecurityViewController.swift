@@ -38,6 +38,14 @@ final class SecurityViewController: NSViewController {
   private var compromisedIDs: Set<UUID> = []
   private var compromisedCheckTask: Task<Void, Never>?
   private var settingsObserver: NSObjectProtocol?
+  /// The exact `(id, password)` pairs the current/most recently started `compromisedCheckTask` was
+  /// kicked off for — lets ``refreshCompromisedStatusIfNeeded()`` tell a genuine vault change from
+  /// a benign re-emission of `dataSource.itemsDidChange` carrying the same items (observed during
+  /// startup/seeding, where the publisher can fire more than once in quick succession). Without
+  /// this, every re-emission would cancel and restart the HIBP lookup from scratch, and with
+  /// enough items (each unique password prefix rate-limited 1.5s apart) it could keep getting
+  /// restarted before ever surviving to completion.
+  private var lastCheckedPasswordsByID: [UUID: String]?
 
   private let headerBar = NSView()
   private let countLabel = NSTextField(labelWithString: "")
@@ -200,11 +208,13 @@ final class SecurityViewController: NSViewController {
   /// Only ``rebuildRows()`` runs synchronously off `currentItems`/``compromisedIDs`` — this method
   /// never calls it recursively on its own account beyond the one completion update below, so
   /// toggling the setting or the vault contents changing can't spin up overlapping refresh loops.
+  /// A re-entrant call carrying the exact same `(id, password)` pairs as the in-flight/most recent
+  /// call is a no-op — see ``lastCheckedPasswordsByID``.
   private func refreshCompromisedStatusIfNeeded() {
-    compromisedCheckTask?.cancel()
-    compromisedCheckTask = nil
-
     guard AppSettings.shared.detectCompromisedPasswords else {
+      compromisedCheckTask?.cancel()
+      compromisedCheckTask = nil
+      lastCheckedPasswordsByID = nil
       if !compromisedIDs.isEmpty {
         compromisedIDs = []
         rebuildRows()
@@ -213,6 +223,11 @@ final class SecurityViewController: NSViewController {
     }
 
     let items = currentItems
+    let passwordsByID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0.password) })
+    guard passwordsByID != lastCheckedPasswordsByID else { return }
+    lastCheckedPasswordsByID = passwordsByID
+
+    compromisedCheckTask?.cancel()
     let checker = compromisedChecker
     compromisedCheckTask = Task { @MainActor [weak self] in
       let inputs = items.map { CompromisedPasswordChecker.Input(id: $0.id, password: $0.password) }
