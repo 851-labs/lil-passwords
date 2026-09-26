@@ -75,6 +75,21 @@ enum LilpassBinary {
 
     try process.run()
 
+    // Guards against a hung `lilpass` subprocess (e.g. blocked indefinitely establishing its XPC
+    // connection to the helper) silently eating the whole CI job's timeout with zero diagnostic
+    // output — the exact failure mode a `launchctl bootstrap`-domain bug once caused (see
+    // `E2EHelperProcess`'s documentation). Killing it after a generous deadline turns that into a
+    // fast, clear test failure instead. 15s is generous headroom, not a tuned budget — every
+    // command in this suite normally completes in well under a second.
+    let timeoutState = TimeoutState()
+    let watchdog = DispatchWorkItem {
+      if process.isRunning {
+        timeoutState.markTimedOut()
+        process.terminate()
+      }
+    }
+    DispatchQueue.global().asyncAfter(deadline: .now() + 15, execute: watchdog)
+
     // Drain both pipes concurrently with waiting for exit: a child that writes enough output to
     // fill a pipe's kernel buffer before anyone reads it would otherwise deadlock against
     // `waitUntilExit()`. None of this suite's commands produce that much output, but reading
@@ -83,12 +98,40 @@ enum LilpassBinary {
     let stderrData = try stderrPipe.fileHandleForReading.readToEndCompat()
 
     process.waitUntilExit()
+    watchdog.cancel()
+
+    if timeoutState.hasTimedOut {
+      throw TimedOut(description: "lilpass \(arguments.joined(separator: " ")) timed out after 15s and was killed")
+    }
 
     return Result(
       stdout: String(data: stdoutData, encoding: .utf8) ?? "",
       stderr: String(data: stderrData, encoding: .utf8) ?? "",
       exitCode: process.terminationStatus
     )
+  }
+
+  struct TimedOut: Error, CustomStringConvertible {
+    let description: String
+  }
+
+  /// Thread-safe flag the watchdog in `run(_:extraEnvironment:workingDirectory:)` sets from a
+  /// background queue while the main path is still blocked in `readToEndCompat()`.
+  private final class TimeoutState {
+    private let lock = NSLock()
+    private var didTimeOut = false
+
+    func markTimedOut() {
+      lock.lock()
+      didTimeOut = true
+      lock.unlock()
+    }
+
+    var hasTimedOut: Bool {
+      lock.lock()
+      defer { lock.unlock() }
+      return didTimeOut
+    }
   }
 
   /// Starts `lilpass mcp` as a long-lived subprocess with pipe-backed stdio, for
