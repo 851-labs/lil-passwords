@@ -1,9 +1,9 @@
 import AppKit
 import LilPasswordsKit
 
-/// Settings → General: preferences for newly generated passwords and security nudges. Auto-lock
-/// and clipboard timing live in `SecuritySettingsViewController`; agent access lives in
-/// `AgentsSettingsViewController` (851-2424).
+/// Settings → General: preferences for newly generated passwords, security nudges, and the menu
+/// bar extra (851-2425). Auto-lock and clipboard timing live in `SecuritySettingsViewController`;
+/// agent access lives in `AgentsSettingsViewController` (851-2424).
 @MainActor
 final class GeneralSettingsViewController: NSViewController {
   private let settings: AppSettings
@@ -13,6 +13,12 @@ final class GeneralSettingsViewController: NSViewController {
   private let symbolsCheckbox = NSButton(checkboxWithTitle: "Include symbols (!@#$…)", target: nil, action: nil)
   private let warnCheckbox = NSButton(
     checkboxWithTitle: "Warn about compromised or reused passwords",
+    target: nil,
+    action: nil
+  )
+  private let showInMenuBarCheckbox = NSButton(checkboxWithTitle: "Show in menu bar", target: nil, action: nil)
+  private let menuBarBrowserSuggestionsCheckbox = NSButton(
+    checkboxWithTitle: "Suggest passwords for the current website",
     target: nil,
     action: nil
   )
@@ -47,6 +53,12 @@ final class GeneralSettingsViewController: NSViewController {
     warnCheckbox.target = self
     warnCheckbox.action = #selector(warnToggled(_:))
 
+    showInMenuBarCheckbox.target = self
+    showInMenuBarCheckbox.action = #selector(showInMenuBarToggled(_:))
+
+    menuBarBrowserSuggestionsCheckbox.target = self
+    menuBarBrowserSuggestionsCheckbox.action = #selector(menuBarBrowserSuggestionsToggled(_:))
+
     view = SettingsLayout.makeStack([
       SettingsLayout.sectionHeader("New Passwords"),
       lengthRow,
@@ -55,6 +67,15 @@ final class GeneralSettingsViewController: NSViewController {
         "Applies to the custom password format; Apple's Strong Password suggestion is always 20 characters."),
       SettingsLayout.sectionHeader("Security Recommendations"),
       warnCheckbox,
+      // 851-2425. "Show in menu bar" is the actual visibility toggle for the `NSStatusItem`;
+      // browser suggestions are a separate opt-in since they need the app to read another app's
+      // frontmost tab via AppleScript, which prompts for Automation permission the first time.
+      SettingsLayout.sectionHeader("Menu Bar"),
+      showInMenuBarCheckbox,
+      menuBarBrowserSuggestionsCheckbox,
+      SettingsLayout.caption(
+        "Suggestions ask Safari, Chrome, Arc, or Brave for the site in the frontmost tab, and may prompt for "
+          + "Automation permission the first time."),
     ])
   }
 
@@ -69,6 +90,8 @@ final class GeneralSettingsViewController: NSViewController {
     lengthValueLabel.stringValue = "\(settings.defaultPasswordLength) characters"
     symbolsCheckbox.state = settings.includeSymbolsInGeneratedPasswords ? .on : .off
     warnCheckbox.state = settings.warnAboutCompromisedPasswords ? .on : .off
+    showInMenuBarCheckbox.state = settings.showInMenuBar ? .on : .off
+    menuBarBrowserSuggestionsCheckbox.state = settings.menuBarBrowserSuggestionsEnabled ? .on : .off
   }
 
   @objc private func lengthChanged(_ sender: NSStepper) {
@@ -82,5 +105,13 @@ final class GeneralSettingsViewController: NSViewController {
 
   @objc private func warnToggled(_ sender: NSButton) {
     settings.warnAboutCompromisedPasswords = sender.state == .on
+  }
+
+  @objc private func showInMenuBarToggled(_ sender: NSButton) {
+    settings.showInMenuBar = sender.state == .on
+  }
+
+  @objc private func menuBarBrowserSuggestionsToggled(_ sender: NSButton) {
+    settings.menuBarBrowserSuggestionsEnabled = sender.state == .on
   }
 }

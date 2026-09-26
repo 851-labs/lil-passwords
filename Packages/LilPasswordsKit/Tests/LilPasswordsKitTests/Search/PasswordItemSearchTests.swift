@@ -82,4 +82,24 @@ import Testing
   @Test func titleSectionKeyIgnoresLeadingWhitespace() {
     #expect(makeItem(title: "  Zebra").titleSectionKey == "Z")
   }
+
+  @Test func matchesHostIgnoresSchemeAndPath() {
+    let item = makeItem(title: "Netflix", websites: [URL(string: "https://www.netflix.com/browse")!])
+    #expect(item.matchesHost(of: URL(string: "https://netflix.com/login")!))
+  }
+
+  @Test func matchesHostIsCaseInsensitive() {
+    let item = makeItem(title: "Netflix", websites: [URL(string: "https://Netflix.com")!])
+    #expect(item.matchesHost(of: URL(string: "https://NETFLIX.COM")!))
+  }
+
+  @Test func matchesHostReturnsFalseForUnrelatedSites() {
+    let item = makeItem(title: "Netflix", websites: [URL(string: "https://netflix.com")!])
+    #expect(item.matchesHost(of: URL(string: "https://example.com")!) == false)
+  }
+
+  @Test func matchesHostReturnsFalseWhenItemHasNoWebsites() {
+    let item = makeItem(title: "Netflix")
+    #expect(item.matchesHost(of: URL(string: "https://netflix.com")!) == false)
+  }
 }

@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   // `private(set)`, not plain `private`: `AppDelegate+MenuActions.swift` (851-2410's CSV
   // import/export actions) reads this from a separate file in the same module.
   private(set) var mainWindowController: MainWindowController?
+  private var menuBarExtraController: MenuBarExtraController?
 
   // The real `SMAppService`-backed conformer in every build — `HelperAgentRegistering` exists as
   // a seam for `HelperAgentRegistrarTests` (in `LilPasswordsKit`), not for anything this app
@@ -34,6 +35,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     mainWindowController = controller
     NSApp.activate(ignoringOtherApps: true)
 
+    // 851-2425: shares `controller`'s `vaultViewModel`/`lockCoordinator` rather than owning its
+    // own copies, so the popover's contents and locked/unlocked state always agree with the main
+    // window's — see `MenuBarRootViewController`'s documentation.
+    menuBarExtraController = MenuBarExtraController(
+      vaultViewModel: controller.vaultViewModel,
+      lockCoordinator: controller.lockCoordinator,
+      openMainWindow: { [weak self] in
+        self?.mainWindowController?.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+      }
+    )
+
     // Must happen on every launch, before anything else here relies on the helper — first-run
     // vault setup and every unlock attempt (both kicked off by `MainWindowController`'s own
     // `LockCoordinator.refresh()`, already running by this point) go straight to
@@ -47,6 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // `RecoveryKitDebugMenu.runTophatCapture` calls `exit(0)` once it's done, so anything meant
         // to run in the same headless capture pass has to go before it, not after.
         ImportExportDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
+        MenuBarExtraDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
         RecoveryKitDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
       }
     #endif

@@ -29,7 +29,12 @@ final class MainWindowController: NSWindowController {
   var vaultViewModel: VaultViewModel { dataSource }
 
   private let agentClient: AgentClient
-  private let lockCoordinator: LockCoordinator
+
+  /// Shared with `MenuBarExtraController` (851-2425) so the popover's locked/unlocked UI and the
+  /// main window's lock screen always agree — both are just different views onto this one state
+  /// machine's `stateChanges()` stream, never two independent coordinators that could drift out
+  /// of sync with each other.
+  let lockCoordinator: LockCoordinator
   private var lockStateObserver: LockStateObserver?
 
   /// Guards against starting the first-run `setUpVault()` flow twice — `applyState(.needsVaultSetup)`
