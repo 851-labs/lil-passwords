@@ -37,7 +37,8 @@ import Testing
     let item = makeItem()
     let requests: [AgentRequest] = [
       .status,
-      .unlock(UnlockPayload(sessionKey: Data([0x01, 0x02, 0x03]), keyId: UUID())),
+      .createVault,
+      .unlock,
       .lock,
       .list,
       .search(query: "github"),
@@ -58,7 +59,8 @@ import Testing
   @Test func everyResponseCaseRoundTrips() throws {
     let item = makeItem()
     let responses: [AgentResponse] = [
-      .status(AgentStatus(locked: true, agentAccessEnabled: false)),
+      .status(AgentStatus(locked: true, agentAccessEnabled: false, vaultExists: true)),
+      .vaultCreated(recoveryKeyDisplayString: "4S9K-D2XQ-7RTN-8YCB-J3WM"),
       .unlocked,
       .locked,
       .items([item]),
@@ -82,6 +84,7 @@ import Testing
       .notFound,
       .ambiguous,
       .unsupportedProtocolVersion(requested: 99, supported: AgentProtocolVersion.current),
+      .callerNotAuthorized,
       .internal(message: "something went wrong"),
     ]
 

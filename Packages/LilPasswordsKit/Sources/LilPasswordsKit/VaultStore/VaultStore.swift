@@ -74,6 +74,10 @@ public actor VaultStore: VaultStoring {
     try core.currentKey()
   }
 
+  public func vaultExists() throws -> Bool {
+    try core.vaultExists()
+  }
+
   public func lock() {
     core.lock()
   }

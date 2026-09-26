@@ -5,9 +5,11 @@ import Foundation
 /// **Never carries a secret value.** This is a structural guarantee, not a convention:
 /// `AgentServer` only ever constructs an `AccessEvent` from the vault-operation branch of request
 /// handling (`list`/`search`/`getItem`/`createItem`/`updateItem`/`deleteItem`/`generatePassword`
-/// /`totpCode`) — `status`, `unlock`, and `lock` never reach ``AccessLogging/record(_:)`` at all,
-/// specifically because `unlock`'s `UnlockPayload.sessionKey` is the raw vault key and must never
-/// be handed to logging code, not even code that's currently a no-op. `request`'s other cases can
+/// /`totpCode`) — `status`, `createVault`, `unlock`, and `lock` never reach
+/// ``AccessLogging/record(_:)`` at all: `unlock` is payload-less (the helper reads the vault key
+/// itself from the Keychain — see `VaultKeyStoring` — so there's never any key material in the
+/// request to begin with), but these four are excluded uniformly as a matter of scope, not because
+/// any one of them individually happens to carry a secret. `request`'s other cases can
 /// carry a full `PasswordItem` (`createItem`/`updateItem`), which does include `password` — the
 /// real 851-2429 conformer is expected to log a summary (operation name, item id/title, which
 /// fields were touched) rather than `request` verbatim; see that ticket's description for the

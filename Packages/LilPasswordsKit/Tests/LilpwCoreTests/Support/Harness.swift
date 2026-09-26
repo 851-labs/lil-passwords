@@ -23,14 +23,23 @@ final class Harness {
   let client: AgentClient
   let key: VaultCrypto.Key
 
+  /// Mirrors `AgentXPCEndToEndTests.Harness` (851-2411): `.unlock` is a payload-less intent, so the
+  /// vault key has to be reachable some other way for the in-process helper to read back — an
+  /// `InMemoryVaultKeyStore` seeded with the same key `store.createVault()` generated, exactly as
+  /// a real `KeychainVaultKeyStore` would already have it by the time a real app sends `.unlock`.
+  /// Likewise, this in-process XPC connection's peer resolves to the *test binary's* own real
+  /// code-signing identity (not `nil`), so `appCallerBundleIdentifier` is told to trust that
+  /// identity as "the app" the same way that harness does.
   init(
     items: [PasswordItem] = [],
     accessPolicy: any AccessPolicyProviding = AlwaysAllowAccessPolicy(),
     unlocked: Bool = true
   ) async throws {
     let store = InMemoryVaultStore()
+    let keyStore = InMemoryVaultKeyStore()
     try await store.createVault()
     key = try await store.currentKey()
+    try keyStore.store(key)
     for item in items {
       try await store.create(item)
     }
@@ -38,7 +47,14 @@ final class Harness {
       await store.lock()
     }
 
-    server = AgentServer(vaultStore: store, accessPolicy: accessPolicy)
+    let selfIdentity = CallerIdentityResolver.resolve(pid: ProcessInfo.processInfo.processIdentifier)
+    server = AgentServer(
+      vaultStore: store,
+      vaultKeyStore: keyStore,
+      accessPolicy: accessPolicy,
+      appCallerBundleIdentifier: selfIdentity.bundleIdentifier
+        ?? AgentConnectionSecurity.PeerIdentifier.app.rawValue
+    )
     listener = NSXPCListener.anonymous()
     delegate = AgentXPCListenerDelegate(server: server, connectionSecurity: .developmentFallback(reason: "test"))
     listener.delegate = delegate
@@ -51,7 +67,7 @@ final class Harness {
   }
 
   func unlock() async throws {
-    try await client.unlock(sessionKey: key.rawData, keyId: key.id)
+    try await client.unlock()
   }
 }
 

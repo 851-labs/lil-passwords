@@ -45,7 +45,11 @@ public final class AgentXPCListenerDelegate: NSObject, NSXPCListenerDelegate, @u
       return false
     }
 
-    let caller = CallerIdentityResolver.resolve(pid: newConnection.processIdentifier)
+    // Resolved from the connection's audit token, not its bare pid — see
+    // `CallerIdentityResolver.resolve(connection:)`'s doc comment for why: a pid can be reused by
+    // a different process between accept time and this resolution, which the audit token isn't
+    // subject to. `pid` itself is still threaded through, but only for display purposes.
+    let caller = CallerIdentityResolver.resolve(connection: newConnection)
     let exportedObject = AgentExportedObject(server: server, caller: caller)
     newConnection.exportedInterface = NSXPCInterface(with: AgentXPCProtocol.self)
     newConnection.exportedObject = exportedObject

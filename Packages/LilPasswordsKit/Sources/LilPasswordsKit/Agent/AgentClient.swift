@@ -69,10 +69,23 @@ public actor AgentClient {
     return status
   }
 
-  /// Hands the vault key to the helper. The app calls this after its `LAContext` evaluation
-  /// succeeds — see docs/adr/0001-storage-and-process-model.md (b).
-  public func unlock(sessionKey: Data, keyId: UUID) async throws {
-    guard case .unlocked = try await send(.unlock(UnlockPayload(sessionKey: sessionKey, keyId: keyId))) else {
+  /// First run: asks the helper to generate a fresh vault key, create the vault, and persist the
+  /// key to the local Keychain. Returns the new vault's recovery key, rendered for display — the
+  /// app's only chance to show it (see `AgentResponse.vaultCreated`). Restricted to the app itself
+  /// by the helper; see `AgentError.callerNotAuthorized`.
+  @discardableResult
+  public func createVault() async throws -> String {
+    guard case .vaultCreated(let recoveryKeyDisplayString) = try await send(.createVault) else {
+      throw RequestError.connection(.invalidReply)
+    }
+    return recoveryKeyDisplayString
+  }
+
+  /// Sends an unlock **intent** — no key material at all. The app calls this after its
+  /// `LAContext` evaluation succeeds; the helper reads the vault key itself from the local
+  /// Keychain. See docs/adr/0001-storage-and-process-model.md (b) and `AgentRequest.unlock`.
+  public func unlock() async throws {
+    guard case .unlocked = try await send(.unlock) else {
       throw RequestError.connection(.invalidReply)
     }
   }
