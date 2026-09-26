@@ -114,6 +114,7 @@ public final class AppSettings: @unchecked Sendable {
     static let menuBarBrowserSuggestionsEnabled = "AppSettings.menuBarBrowserSuggestionsEnabled"
     static let itemListSortField = "AppSettings.itemListSortField"
     static let itemListSortDirection = "AppSettings.itemListSortDirection"
+    static let hasCompletedOnboarding = "AppSettings.hasCompletedOnboarding"
   }
 
   /// Smallest and largest custom password length offered in Settings → General.
@@ -138,6 +139,7 @@ public final class AppSettings: @unchecked Sendable {
       Key.menuBarBrowserSuggestionsEnabled: false,
       Key.itemListSortField: PasswordItemSortField.title.rawValue,
       Key.itemListSortDirection: SortDirection.ascending.rawValue,
+      Key.hasCompletedOnboarding: false,
     ])
   }
 
@@ -224,6 +226,17 @@ public final class AppSettings: @unchecked Sendable {
   public var itemListSortDirection: SortDirection {
     get { SortDirection(rawValue: defaults.string(forKey: Key.itemListSortDirection) ?? "") ?? .ascending }
     set { set(newValue.rawValue, forKey: Key.itemListSortDirection) }
+  }
+
+  /// Whether the first-run onboarding walkthrough (851-2439) has already been shown to
+  /// completion. `MainWindowController` checks this — alongside `LockState.needsVaultSetup`, the
+  /// actual "no vault yet" signal — before presenting the onboarding window instead of going
+  /// straight to the old direct vault-creation path, and sets it once the walkthrough's final
+  /// "Done" step is reached. DEBUG builds can force this back to `false` with `-ResetOnboarding
+  /// YES` (see `AppDelegate`) to re-run the walkthrough without deleting the vault.
+  public var hasCompletedOnboarding: Bool {
+    get { defaults.bool(forKey: Key.hasCompletedOnboarding) }
+    set { set(newValue, forKey: Key.hasCompletedOnboarding) }
   }
 
   private func set(_ value: some Any, forKey key: String) {

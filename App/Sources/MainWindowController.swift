@@ -45,8 +45,15 @@ final class MainWindowController: NSWindowController {
 
   /// Guards against starting the first-run `setUpVault()` flow twice — `applyState(.needsVaultSetup)`
   /// can run again (e.g. a second `LockStateObserver` firing before the first `setUpVault()` call
-  /// has resolved) before `LockCoordinator.state` has moved on to `.unlocked`.
+  /// has resolved) before `LockCoordinator.state` has moved on to `.unlocked`. Only used by
+  /// `startDirectVaultSetupIfNeeded()` — the onboarding path below guards on
+  /// `onboardingWindowController` instead.
   private var isSettingUpVault = false
+
+  /// The first-run onboarding walkthrough (851-2439), while it's up. `nil` the rest of the time —
+  /// including before the very first `.needsVaultSetup`, and again once the walkthrough finishes
+  /// or is closed early. See `presentOnboardingIfNeeded()`.
+  private var onboardingWindowController: OnboardingWindowController?
 
   #if DEBUG
     /// Guards `-InitialSidebarCategory` (see `initialSidebarCategoryOverride()`) so it only fires
@@ -354,12 +361,29 @@ final class MainWindowController: NSWindowController {
     }
   #endif
 
-  /// First run (851-2411): no vault exists yet, so ask the helper to create one, then hand off to
-  /// the real recovery kit "save your recovery key" sheet (851-2447).
+  /// First run (851-2411/851-2439): no vault exists yet. The very first time this happens, that
+  /// means showing the full onboarding walkthrough (851-2439) rather than jumping straight to
+  /// vault creation — it owns calling `setUpVault()` and handing off to the recovery kit sheet
+  /// itself, from its own "Create Your Vault" step. `AppSettings.hasCompletedOnboarding` is what
+  /// tells the two paths apart: once someone's actually been through the walkthrough, landing back
+  /// on `.needsVaultSetup` again (e.g. the vault file went missing out from under the helper) goes
+  /// straight to the old, direct path instead of showing the welcome screens a second time.
   private func startFirstRunVaultSetupIfNeeded() {
+    presentLockScreen()
+
+    if AppSettings.shared.hasCompletedOnboarding {
+      startDirectVaultSetupIfNeeded()
+    } else {
+      presentOnboardingIfNeeded()
+    }
+  }
+
+  /// The pre-851-2439 behavior: ask the helper to create a vault, then hand off to the recovery
+  /// kit "save your recovery key" sheet (851-2447) directly, with none of onboarding's other
+  /// steps.
+  private func startDirectVaultSetupIfNeeded() {
     guard !isSettingUpVault else { return }
     isSettingUpVault = true
-    presentLockScreen()
 
     Task { [weak self] in
       guard let self else { return }
@@ -371,6 +395,31 @@ final class MainWindowController: NSWindowController {
         // `LockCoordinator.setUpVault()` already moved `state` to `.unlockFailed` with this
         // error's description; the `stateChanges()` subscription above will re-render for it.
       }
+    }
+  }
+
+  /// Presents the 851-2439 onboarding window, guarded on `onboardingWindowController` rather than
+  /// a separate bool — `applyState(.needsVaultSetup)` can fire again (see `isSettingUpVault`'s
+  /// documentation) before the window's own "Create Your Vault" step has finished, and
+  /// re-presenting a second window would just be a duplicate.
+  private func presentOnboardingIfNeeded() {
+    guard onboardingWindowController == nil else { return }
+    onboardingWindowController = OnboardingWindowController.present(
+      vaultViewModel: dataSource,
+      lockCoordinator: lockCoordinator,
+      agentClient: agentClient
+    ) { [weak self] finished in
+      guard let self else { return }
+      self.onboardingWindowController = nil
+      if finished {
+        AppSettings.shared.hasCompletedOnboarding = true
+      }
+      // Vault creation (onboarding's own step 2) already moved `lockCoordinator` to `.unlocked`,
+      // which the `stateChanges()` subscription started in `startObservingLockState()` already
+      // swapped this window's content to `splitViewController` for — this just brings that
+      // already-unlocked window to the front now that onboarding's own window is gone.
+      self.window?.makeKeyAndOrderFront(nil)
+      NSApp.activate(ignoringOtherApps: true)
     }
   }
 
