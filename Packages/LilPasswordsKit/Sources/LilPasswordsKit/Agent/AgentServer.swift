@@ -687,8 +687,16 @@ public actor AgentServer {
     case .totpCode: return "wants to read the verification code for"
     case .autoFillIdentities: return "wants to list your passwords"
     case .autoFillCredential: return "wants to read the password for"
+    case .passkeys: return "wants to list your passkeys"
+    // 851-2442: `.passkeyIdentities`/`.deletePasskey` are app-only and `.passkeyRegister`/
+    // `.passkeyAssert` are restricted to the verified AutoFill caller (see
+    // `isRequestPermitted(_:for:)`) — none of the four are ever dispatched for a scoped, non-app,
+    // non-AutoFill caller (the only caller `requestApproval(for:caller:)` runs this description
+    // for), so they fall into the same generic bucket as the lock-lifecycle/helper-configuration
+    // requests below, which are equally unreachable here.
     case .generatePassword, .status, .createVault, .unlock, .lock, .getAgentSettings, .setAgentSettings,
-      .rotateRecoveryKey, .pendingApprovals, .resolveApproval:
+      .rotateRecoveryKey, .pendingApprovals, .resolveApproval, .passkeyIdentities, .deletePasskey,
+      .passkeyRegister, .passkeyAssert:
       return "wants access to your passwords"
     }
   }
