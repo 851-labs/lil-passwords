@@ -36,7 +36,7 @@ public struct PasswordGenerator: Sendable {
   }
 
   /// Character categories a custom password can draw from.
-  public struct CharacterCategories: OptionSet, Sendable, Hashable {
+  public struct CharacterCategories: OptionSet, Sendable, Hashable, Codable {
     public let rawValue: Int
 
     public init(rawValue: Int) {
@@ -65,7 +65,9 @@ public struct PasswordGenerator: Sendable {
   }
 
   /// The shape of password to generate.
-  public enum Format: Sendable, Equatable {
+  ///
+  /// `Codable` so it can travel as part of an ``AgentRequest/generatePassword(_:)`` over XPC.
+  public enum Format: Sendable, Equatable, Codable {
     /// Apple's "Strong Password" format: three six-letter lowercase groups
     /// joined by hyphens, with exactly one letter uppercased and one letter
     /// replaced by a digit, e.g. `abcdef-ghijk2-lmNopq`.
