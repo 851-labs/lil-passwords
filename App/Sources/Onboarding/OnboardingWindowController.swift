@@ -13,8 +13,9 @@ import SwiftUI
 /// to present the existing recovery kit sheet (``RecoveryKitFlow``) *over* this window once the
 /// vault is created, and a window can't sheet over another window that's already a sheet.
 /// Everything this reuses instead of reimplementing — vault creation, the recovery kit, CSV
-/// import, the agent-access toggle — is called exactly the way the rest of the app already calls
-/// it; this file only adds the ordering and the welcome/explanation/done screens around them.
+/// import, the agent-access toggle, the `lilpass` CLI install — is called exactly the way the
+/// rest of the app already calls it; this file only adds the ordering and the
+/// welcome/explanation/done screens around them.
 @MainActor
 final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
   enum Step: CaseIterable {
@@ -25,6 +26,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
   private let lockCoordinator: LockCoordinator
   private let createVaultViewModel: OnboardingCreateVaultViewModel
   private let agentSettingsViewModel: AgentSettingsViewModel
+  private let cliInstallViewModel = CLIInstallViewModel()
 
   /// `true` once `completion` has fired (from `finish(completed:)`, however that was reached), so
   /// a `window.close()` triggered by `finish(completed:true)` itself doesn't turn around and fire
@@ -76,8 +78,9 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
     fatalError("init(coder:) is not supported")
   }
 
-  /// Presents the window and refreshes the agent-access toggle from the helper (`agentSettings()`),
-  /// same as `AgentsSettingsView` does on appear.
+  /// Presents the window and refreshes the agent-access toggle from the helper (`agentSettings()`)
+  /// and the CLI install status (`CLIInstaller.status()`), same as `AgentsSettingsView` does on
+  /// appear.
   static func present(
     vaultViewModel: VaultViewModel,
     lockCoordinator: LockCoordinator,
@@ -89,6 +92,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
     )
     controller.completion = completion
     Task { await controller.agentSettingsViewModel.refresh() }
+    controller.cliInstallViewModel.refresh()
     controller.showWindow(nil)
     NSApp.activate(ignoringOtherApps: true)
     return controller
@@ -129,7 +133,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
       return NSHostingController(
         rootView: OnboardingAgentsView(
           agentSettings: agentSettingsViewModel,
-          onInstallCLI: { [weak self] in self?.presentInstallCLIComingSoon() },
+          cliInstall: cliInstallViewModel,
           onContinue: { [weak self] in self?.show(.done) },
           onSkip: { [weak self] in self?.show(.done) }
         )
@@ -179,21 +183,6 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
     ImportFlow.presentOpenPanel(dataSource: vaultViewModel, from: window) { [weak self] in
       self?.show(.agents)
     }
-  }
-
-  // MARK: - Step 5: agents
-
-  /// The hook 851-2432 ("install the `lilpass` command") replaces. Mirrors
-  /// `AppDelegate+MenuActions.presentComingSoonAlert`'s wording for every other not-yet-built menu
-  /// action in this app, rather than inventing new copy for this one placeholder.
-  private func presentInstallCLIComingSoon() {
-    guard let window else { return }
-    let alert = NSAlert()
-    alert.alertStyle = .informational
-    alert.messageText = "Installing the Command Isn't Available Yet"
-    alert.informativeText =
-      "This will work once 851-2432 is done. You can always add \(LilPasswordsKit.cliName) to your PATH manually for now."
-    alert.beginSheetModal(for: window)
   }
 
   // MARK: - Finishing

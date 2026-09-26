@@ -28,6 +28,8 @@
       let lockCoordinator = LockCoordinator(agent: OfflineDemoAgent(), authenticator: AlwaysSucceedAuthenticator())
       let createVaultViewModel = OnboardingCreateVaultViewModel(lockCoordinator: lockCoordinator)
       let agentSettingsViewModel = AgentSettingsViewModel(client: AgentClient())
+      let cliInstallViewModel = CLIInstallViewModel()
+      cliInstallViewModel.refresh()
 
       let steps: [(name: String, view: AnyView)] = [
         ("welcome", AnyView(OnboardingWelcomeView(onContinue: {}))),
@@ -38,7 +40,7 @@
           "agents",
           AnyView(
             OnboardingAgentsView(
-              agentSettings: agentSettingsViewModel, onInstallCLI: {}, onContinue: {}, onSkip: {}
+              agentSettings: agentSettingsViewModel, cliInstall: cliInstallViewModel, onContinue: {}, onSkip: {}
             )
           )
         ),
