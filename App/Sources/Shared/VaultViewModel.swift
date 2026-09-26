@@ -29,9 +29,15 @@ public protocol VaultViewModel: AnyObject {
 
   /// Moves `item` to "Recently Deleted" by setting its `deletedAt`, mirroring
   /// `VaultStoring.delete(id:)`'s soft delete — or, if it's already there, leaves it as-is.
-  /// There's no user-facing permanent delete yet; `VaultStoring` doesn't expose one (see that
-  /// method's documentation for why).
   func delete(_ item: PasswordItem)
+
+  /// Un-deletes `item` (the Deleted view's "Recover", 851-2420), mirroring
+  /// `VaultStoring.restore(id:)`.
+  func restore(_ item: PasswordItem)
+
+  /// Permanently, unrecoverably erases `item` (the Deleted view's "Delete Permanently",
+  /// 851-2420), mirroring `VaultStoring.deletePermanently(id:)`.
+  func deletePermanently(_ item: PasswordItem)
 }
 
 /// The `VaultViewModel` that backs the whole app: an async, actor-isolated `VaultStoring` wrapped
@@ -49,6 +55,11 @@ public final class VaultStoreViewModel: VaultViewModel {
   }
 
   private var observationTask: Task<Void, Never>?
+  private var purgeTask: Task<Void, Never>?
+
+  /// How often ``start(seeding:)`` re-runs `VaultStoring.purgeExpired(now:)` once it's already
+  /// run it at launch — once a day, per 851-2420.
+  private static let purgeInterval: Duration = .seconds(86_400)
 
   public init(store: any VaultStoring) {
     self.store = store
@@ -77,6 +88,17 @@ public final class VaultStoreViewModel: VaultViewModel {
         await self?.refresh()
       }
     }
+
+    // Recently Deleted's 30-day purge (851-2420): once right away at launch, then once a day for
+    // as long as the app stays running. `Task.sleep` (rather than a repeating `Timer`) keeps this
+    // cancellable the same way `observationTask` above is, from `isolated deinit`.
+    purgeTask = Task { [weak self, store] in
+      while !Task.isCancelled {
+        try? await store.purgeExpired(now: Date())
+        await self?.refresh()
+        try? await Task.sleep(for: Self.purgeInterval)
+      }
+    }
   }
 
   public func save(_ item: PasswordItem) {
@@ -101,6 +123,26 @@ public final class VaultStoreViewModel: VaultViewModel {
     }
   }
 
+  public func restore(_ item: PasswordItem) {
+    Task {
+      do {
+        try await store.restore(id: item.id)
+      } catch {
+        assertionFailure("Failed to restore item \(item.id): \(error)")
+      }
+    }
+  }
+
+  public func deletePermanently(_ item: PasswordItem) {
+    Task {
+      do {
+        try await store.deletePermanently(id: item.id)
+      } catch {
+        assertionFailure("Failed to permanently delete item \(item.id): \(error)")
+      }
+    }
+  }
+
   private func refresh() async {
     items = (try? await store.allItems()) ?? []
     itemsDidChangeSubject.send()
@@ -108,5 +150,6 @@ public final class VaultStoreViewModel: VaultViewModel {
 
   isolated deinit {
     observationTask?.cancel()
+    purgeTask?.cancel()
   }
 }

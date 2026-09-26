@@ -3,11 +3,23 @@ import LilPasswordsKit
 
 /// The three-column layout: sidebar, item list, detail. Mirrors Apple Passwords' split view
 /// sizing so the window feels immediately familiar.
+///
+/// Codes/Security/Deleted (851-2418/851-2419/851-2420) are single full-width views in Apple
+/// Passwords, not list+detail splits, so for those three categories the list column collapses and
+/// `detailItem`'s view controller is swapped to the matching full-width controller; selecting
+/// `.all`/`.passkeys`/`.wifi` restores the normal list+detail layout.
 @MainActor
 final class MainSplitViewController: NSSplitViewController {
   let sidebarViewController: SidebarViewController
   let listViewController: ItemListViewController
   let detailViewController: DetailViewController
+  let codesViewController: CodesViewController
+  let securityViewController: SecurityViewController
+  let deletedViewController: DeletedViewController
+
+  private var sidebarItem: NSSplitViewItem!
+  private var listItem: NSSplitViewItem!
+  private var detailItem: NSSplitViewItem!
 
   // The same `VaultViewModel` the list/detail panes already read from (851-2415) — 851-2416's
   // New Password sheet saves through this rather than a second, private vault access path.
@@ -18,6 +30,9 @@ final class MainSplitViewController: NSSplitViewController {
     sidebarViewController = SidebarViewController(store: store)
     listViewController = ItemListViewController(dataSource: dataSource)
     detailViewController = DetailViewController(vaultViewModel: dataSource)
+    codesViewController = CodesViewController(dataSource: dataSource)
+    securityViewController = SecurityViewController(dataSource: dataSource)
+    deletedViewController = DeletedViewController(dataSource: dataSource)
     super.init(nibName: nil, bundle: nil)
   }
 
@@ -43,13 +58,19 @@ final class MainSplitViewController: NSSplitViewController {
     let listItem = NSSplitViewItem(contentListWithViewController: listViewController)
     listItem.minimumThickness = 240
     listItem.maximumThickness = 420
-    listItem.canCollapse = false
+    // Programmatically collapsed for the full-width categories (Codes/Security/Deleted); see
+    // `sidebarViewController(_:didSelect:)`.
+    listItem.canCollapse = true
     listItem.titlebarSeparatorStyle = .line
 
     let detailItem = NSSplitViewItem(viewController: detailViewController)
     detailItem.minimumThickness = 360
     detailItem.canCollapse = false
     detailItem.titlebarSeparatorStyle = .line
+
+    self.sidebarItem = sidebarItem
+    self.listItem = listItem
+    self.detailItem = detailItem
 
     addSplitViewItem(sidebarItem)
     addSplitViewItem(listItem)
@@ -69,12 +90,30 @@ final class MainSplitViewController: NSSplitViewController {
       self?.detailViewController.show(item: item)
     }
   }
+
+  /// The full-width controller for a category that replaces the list+detail split, or `nil` for
+  /// categories that use the normal list+detail layout.
+  private func fullWidthViewController(for category: SidebarCategory) -> NSViewController? {
+    switch category {
+    case .codes: return codesViewController
+    case .security: return securityViewController
+    case .deleted: return deletedViewController
+    case .all, .passkeys, .wifi: return nil
+    }
+  }
 }
 
 extension MainSplitViewController: SidebarViewControllerDelegate {
   func sidebarViewController(_ controller: SidebarViewController, didSelect category: SidebarCategory) {
-    listViewController.select(category: category)
-    detailViewController.showNoSelection(for: category)
+    if let fullWidthViewController = fullWidthViewController(for: category) {
+      detailItem.viewController = fullWidthViewController
+      listItem.isCollapsed = true
+    } else {
+      detailItem.viewController = detailViewController
+      listItem.isCollapsed = false
+      listViewController.select(category: category)
+      detailViewController.showNoSelection(for: category)
+    }
   }
 }
 
