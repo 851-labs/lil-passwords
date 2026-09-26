@@ -41,6 +41,10 @@ import Testing
   @Test func localWritesSignalChangeObservers() async throws {
     try await VaultStoringSharedBehavior.assertLocalWritesSignalChangeObservers(InMemoryVaultStore())
   }
+
+  @Test func rotateRecoveryKey() async throws {
+    try await VaultStoringSharedBehavior.assertRotateRecoveryKey(InMemoryVaultStore())
+  }
 }
 
 @Suite struct InMemoryVaultStoreTests {

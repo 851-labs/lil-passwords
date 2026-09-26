@@ -252,6 +252,34 @@ enum VaultStoringSharedBehavior {
     #expect(await sawWrite)
   }
 
+  /// Regenerating the recovery key must re-wrap the (unchanged) vault key under a brand-new
+  /// recovery key, replacing the wrapped copy in `meta` — the new key must actually work, and the
+  /// old one must stop working the instant rotation returns, since there's no way left to unwrap
+  /// the vault key with it.
+  static func assertRotateRecoveryKey(_ store: some VaultStoring) async throws {
+    let originalRecoveryKey = try await store.createVault()
+    let originalVaultKey = try await store.currentKey()
+
+    let newRecoveryKey = try await store.rotateRecoveryKey()
+    #expect(newRecoveryKey.displayString != originalRecoveryKey.displayString)
+
+    // The vault key itself is unchanged — only its wrapped copy in `meta` moved — so the store
+    // should still be unlocked with the same key, no re-seal of any record required.
+    #expect(await store.isUnlocked)
+    #expect(try await store.currentKey() == originalVaultKey)
+
+    // The new recovery key actually recovers the (unchanged) vault key.
+    let restoredKey = try await store.restoreKey(recoveryKey: newRecoveryKey)
+    #expect(restoredKey == originalVaultKey)
+    try await store.open(with: restoredKey)
+    #expect(await store.isUnlocked)
+
+    // The old recovery key has nothing left to unwrap.
+    await #expect(throws: VaultStoreError.incorrectKey) {
+      _ = try await store.restoreKey(recoveryKey: originalRecoveryKey)
+    }
+  }
+
   /// `restore`, `deletePermanently`, and `purgeExpired` (when it actually purges something) are
   /// writes just like `create`/`update`/`delete`, and should signal `observeChanges()` the same
   /// way — this is easy to get wrong by forgetting the `notifyOfLocalChange()` call each of

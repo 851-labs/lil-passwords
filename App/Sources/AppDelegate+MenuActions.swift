@@ -31,6 +31,13 @@ extension AppDelegate {
     ExportFlow.presentExport(dataSource: vaultViewModel, from: window)
   }
 
+  /// 851-2462: temporarily lives in the File menu (see `MainMenu.makeFileMenu()`'s comment)
+  /// rather than Settings → Security, since PR #23's grouped-forms Settings rewrite is still open.
+  @objc func generateNewRecoveryKey(_ sender: Any?) {
+    guard let window = mainWindow else { return }
+    RegenerateRecoveryKeyFlow.present(agentClient: agentClient, over: window)
+  }
+
   @objc func find(_ sender: Any?) {
     presentComingSoonAlert(title: "Find", ticket: "851-2417")
   }

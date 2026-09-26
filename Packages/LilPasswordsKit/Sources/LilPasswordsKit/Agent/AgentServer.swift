@@ -83,7 +83,7 @@ public actor AgentServer {
 
     let outcome: AgentOutcome
     switch envelope.request {
-    case .status, .createVault, .unlock, .lock, .getAgentSettings, .setAgentSettings:
+    case .status, .createVault, .unlock, .lock, .getAgentSettings, .setAgentSettings, .rotateRecoveryKey:
       outcome = await lifecycleOutcome(for: envelope.request, caller: caller)
     default:
       outcome = await vaultOutcome(for: envelope.request, caller: caller)
@@ -166,9 +166,22 @@ public actor AgentServer {
         return .failure(.internal(message: "\(error)"))
       }
 
+    case .rotateRecoveryKey:
+      guard isAppCaller(caller) else { return .failure(.callerNotAuthorized) }
+      do {
+        let recoveryKey = try await vaultStore.rotateRecoveryKey()
+        return .success(.recoveryKeyRotated(recoveryKeyDisplayString: recoveryKey.displayString))
+      } catch let error as AgentError {
+        return .failure(error)
+      } catch let error as VaultStoreError {
+        return .failure(agentError(for: error))
+      } catch {
+        return .failure(.internal(message: "\(error)"))
+      }
+
     default:
       preconditionFailure(
-        "lifecycleOutcome only handles .status/.createVault/.unlock/.lock/.getAgentSettings/.setAgentSettings"
+        "lifecycleOutcome only handles .status/.createVault/.unlock/.lock/.getAgentSettings/.setAgentSettings/.rotateRecoveryKey"
       )
     }
   }
@@ -180,11 +193,12 @@ public actor AgentServer {
   }
 
   /// Whether `caller` is allowed to send `.createVault`/`.unlock`/`.getAgentSettings`/
-  /// `.setAgentSettings` — all four restricted to the app itself: the first two because only the
-  /// app performs the `LAContext` authentication that's supposed to gate them (see
-  /// docs/adr/0001-storage-and-process-model.md (b)), the latter two because the 851-2428 Settings
-  /// UI is their only intended writer/reader. `lilpass`, or any other process, must never be able
-  /// to trigger any of them just by connecting to the Mach service.
+  /// `.setAgentSettings`/`.rotateRecoveryKey` — all five restricted to the app itself: the first
+  /// two (and `.rotateRecoveryKey`, 851-2462) because only the app performs the `LAContext`
+  /// authentication that's supposed to gate them (see docs/adr/0001-storage-and-process-model.md
+  /// (b)), the other two because the 851-2428 Settings UI is their only intended writer/reader.
+  /// `lilpass`, or any other process, must never be able to trigger any of them just by connecting
+  /// to the Mach service.
   ///
   /// Delegates entirely to `CallerIdentity.isVerifiedApp(appBundleIdentifier:)` — the single,
   /// shared, code-signing-verified implementation also used by `AgentSettingsAccessPolicy`'s own
@@ -264,7 +278,7 @@ public actor AgentServer {
       let now = Date()
       return .totpCode(TOTPCodeResult(code: totp.code(at: now), expiresAt: totp.nextChange(after: now)))
 
-    case .status, .createVault, .unlock, .lock, .getAgentSettings, .setAgentSettings:
+    case .status, .createVault, .unlock, .lock, .getAgentSettings, .setAgentSettings, .rotateRecoveryKey:
       preconditionFailure("vaultResponse never sees lock-lifecycle/helper-configuration requests")
     }
   }

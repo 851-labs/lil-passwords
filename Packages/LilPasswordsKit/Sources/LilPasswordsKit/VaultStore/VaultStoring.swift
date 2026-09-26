@@ -59,6 +59,19 @@ public protocol VaultStoring: Actor {
   /// out which situation it's in.
   func vaultExists() async throws -> Bool
 
+  /// Generates a brand-new `VaultCrypto.RecoveryKey`, re-wraps the current vault key under it,
+  /// and atomically replaces the wrapped key stored in `meta` — "Generate New Recovery Key…" in
+  /// the app. The vault key itself is unchanged, so no item needs to be re-sealed; only the
+  /// recovery kit's wrapped copy in `meta` moves to the new key.
+  ///
+  /// The *previous* recovery key stops working the instant this returns — there's no way to
+  /// unwrap the vault key with it again, so a caller must show the new recovery kit before this
+  /// call's result is lost.
+  ///
+  /// Throws `VaultStoreError.locked` if the store isn't currently unlocked.
+  @discardableResult
+  func rotateRecoveryKey() async throws -> VaultCrypto.RecoveryKey
+
   /// Drops the in-memory vault key and the decrypted item index. Every CRUD/search call throws
   /// `VaultStoreError.locked` until `open(with:)` (or `createVault()`) succeeds again.
   func lock() async

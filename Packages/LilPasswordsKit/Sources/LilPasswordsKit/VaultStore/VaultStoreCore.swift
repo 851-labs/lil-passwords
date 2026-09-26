@@ -100,6 +100,29 @@ final class VaultStoreCore {
     return vaultKey
   }
 
+  /// Generates a brand-new `VaultCrypto.RecoveryKey`, re-wraps the (unchanged) vault key under
+  /// it, and atomically replaces the wrapped key stored in `meta`. No record is touched or
+  /// re-sealed — the vault key itself never changes, only which recovery key can unwrap it — so
+  /// this is much cheaper than the full vault-key rotation `docs/adr/0002-crypto.md` reserves as
+  /// future work.
+  ///
+  /// The previous recovery key stops working the instant this returns: `saveMeta` overwrites the
+  /// single `meta` row in place, so there's no way left to unwrap the vault key with it.
+  ///
+  /// Throws `VaultStoreError.locked` if the store isn't currently unlocked. Throws
+  /// `VaultStoreError.vaultNotFound` if, somehow, there's no `meta` row despite `vaultKey` being
+  /// set (shouldn't happen in practice — `open`/`createVault` are the only ways to set `vaultKey`,
+  /// and both require a `meta` row to exist first).
+  func rotateRecoveryKey() throws -> VaultCrypto.RecoveryKey {
+    guard let vaultKey else { throw VaultStoreError.locked }
+    guard var meta = try storage.loadMeta() else { throw VaultStoreError.vaultNotFound }
+
+    let newRecoveryKey = VaultCrypto.RecoveryKey.generate()
+    meta.wrappedKey = try VaultCrypto.wrapKey(vaultKey, recoveryKey: newRecoveryKey)
+    try storage.saveMeta(meta)
+    return newRecoveryKey
+  }
+
   /// Whether this database already has a vault (`meta` row), regardless of lock state. Lets a
   /// caller (`AgentServer.status`) distinguish "no vault yet — first run" from "vault exists but
   /// is locked" without attempting (and failing) an `open(with:)` first.

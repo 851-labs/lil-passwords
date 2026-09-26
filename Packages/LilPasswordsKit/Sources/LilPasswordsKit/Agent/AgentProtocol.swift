@@ -50,6 +50,14 @@ public enum AgentRequest: Sendable, Codable, Equatable {
   /// Discards the in-memory vault key and any open store. Idempotent.
   case lock
 
+  /// Regenerates the vault's recovery key: generates a new `VaultCrypto.RecoveryKey`, re-wraps
+  /// the current vault key under it, and replaces the wrapped copy in `meta` — the previous
+  /// recovery key stops working immediately. The vault must already be unlocked; the app is
+  /// expected to perform `LAContext` authentication before sending this, the same as it does
+  /// before `.unlock`. Restricted to the app itself, the same as `.createVault`/`.unlock`; see
+  /// `AgentError.callerNotAuthorized`.
+  case rotateRecoveryKey
+
   /// Every item in the vault.
   case list
 
@@ -166,6 +174,9 @@ public enum AgentResponse: Sendable, Codable, Equatable {
   case vaultCreated(recoveryKeyDisplayString: String)
   case unlocked
   case locked
+  /// Answers `.rotateRecoveryKey`: the newly generated recovery key, rendered for display — the
+  /// app's only chance to see it, the same as `.vaultCreated`.
+  case recoveryKeyRotated(recoveryKeyDisplayString: String)
   case items([PasswordItem])
   case item(PasswordItem)
   case created(PasswordItem)

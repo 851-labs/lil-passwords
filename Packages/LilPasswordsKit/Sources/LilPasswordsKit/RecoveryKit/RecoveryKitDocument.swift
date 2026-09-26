@@ -98,11 +98,15 @@ public enum RecoveryKitDocument {
       let displaySize = CGSize(width: 150, height: 150)
       let origin = CGPoint(x: (pageSize.width - displaySize.width) / 2, y: cursorY - displaySize.height)
       // QR codes must stay crisp, sharp-edged squares to stay scannable — the default
-      // interpolation would blur module edges together at this scale-up.
-      let previousInterpolation = context.interpolationQuality
+      // interpolation would blur module edges together at this scale-up. Drawing the `CGImage`
+      // directly (rather than going through `NSImage.draw(in:)`, which routes through
+      // `NSGraphicsContext`'s own, separate `imageInterpolation` property and doesn't reliably
+      // honor the underlying `CGContext.interpolationQuality` set below) is what actually gets
+      // this embedded into the PDF's image XObject as `/Interpolate false`.
+      context.saveGState()
       context.interpolationQuality = .none
-      qrImage.draw(in: CGRect(origin: origin, size: displaySize))
-      context.interpolationQuality = previousInterpolation
+      context.draw(qrImage, in: CGRect(origin: origin, size: displaySize))
+      context.restoreGState()
       cursorY = origin.y - 32
     }
 
@@ -136,7 +140,7 @@ public enum RecoveryKitDocument {
     •  \(appName) shows this key exactly once, right now. There is no way to see it again later, \
     only to generate a brand-new one and retire this page.
     •  If you ever suspect someone else has seen this key, generate a new recovery key from \
-    \(appName)'s settings as soon as you can.
+    \(appName) settings as soon as you can.
     """
   }
 
@@ -180,13 +184,14 @@ public enum RecoveryKitDocument {
 
   /// Renders `string` as a QR code image, one point per module (typically ~25x25pt for a key
   /// this long) — deliberately not pre-scaled, so the caller draws it with nearest-neighbor
-  /// interpolation to keep module edges sharp instead of blurring them together.
-  private static func qrCodeImage(for string: String) -> NSImage? {
+  /// interpolation to keep module edges sharp instead of blurring them together. Returned as a
+  /// `CGImage` rather than an `NSImage`, so the caller can draw it via `CGContext.draw(_:in:)`
+  /// directly and actually get crisp, unsmoothed module edges — see the call site's comment.
+  private static func qrCodeImage(for string: String) -> CGImage? {
     let filter = CIFilter.qrCodeGenerator()
     filter.message = Data(string.utf8)
     filter.correctionLevel = "M"
     guard let outputImage = filter.outputImage, outputImage.extent.width > 0 else { return nil }
-    guard let cgImage = CIContext().createCGImage(outputImage, from: outputImage.extent) else { return nil }
-    return NSImage(cgImage: cgImage, size: outputImage.extent.size)
+    return CIContext().createCGImage(outputImage, from: outputImage.extent)
   }
 }

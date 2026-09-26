@@ -406,6 +406,60 @@ private let cliCaller = CallerIdentity(
     }
   }
 
+  @Test func rotateRecoveryKeyIsRestrictedToTheAppEvenForARecognizedCliCaller() async throws {
+    let (server, _) = try await makeServer()
+    _ = await send(.unlock, to: server)
+
+    guard case .failure(.callerNotAuthorized) = await send(.rotateRecoveryKey, to: server, caller: cliCaller) else {
+      Issue.record("expected .failure(.callerNotAuthorized)")
+      return
+    }
+  }
+
+  @Test func rotateRecoveryKeyFailsWithLockedWhenTheVaultIsLocked() async throws {
+    let (server, _) = try await makeServer()
+
+    guard case .failure(.locked) = await send(.rotateRecoveryKey, to: server, caller: appCaller) else {
+      Issue.record("expected .failure(.locked)")
+      return
+    }
+  }
+
+  /// The headline requirement: a successful `.rotateRecoveryKey` hands back a recovery key that
+  /// actually works, and the moment it does, the *previous* recovery key stops working — there's
+  /// no way left to unwrap the vault key with it.
+  @Test func rotateRecoveryKeySucceedsForTheAppCallerAndTheOldRecoveryKeyStopsWorking() async throws {
+    let store = InMemoryVaultStore()
+    let server = AgentServer(vaultStore: store)
+
+    guard
+      case .success(.vaultCreated(let originalRecoveryKeyDisplayString)) =
+        await send(.createVault, to: server, caller: appCaller)
+    else {
+      Issue.record("expected .vaultCreated")
+      return
+    }
+
+    guard
+      case .success(.recoveryKeyRotated(let newRecoveryKeyDisplayString)) =
+        await send(.rotateRecoveryKey, to: server, caller: appCaller)
+    else {
+      Issue.record("expected .recoveryKeyRotated")
+      return
+    }
+    #expect(newRecoveryKeyDisplayString != originalRecoveryKeyDisplayString)
+
+    let originalRecoveryKey = try #require(VaultCrypto.RecoveryKey(displayString: originalRecoveryKeyDisplayString))
+    await #expect(throws: VaultStoreError.incorrectKey) {
+      _ = try await store.restoreKey(recoveryKey: originalRecoveryKey)
+    }
+
+    let newRecoveryKey = try #require(VaultCrypto.RecoveryKey(displayString: newRecoveryKeyDisplayString))
+    let restoredKey = try await store.restoreKey(recoveryKey: newRecoveryKey)
+    try await store.open(with: restoredKey)
+    #expect(await store.isUnlocked)
+  }
+
   @Test func statusReportsWhetherAVaultExistsIndependentlyOfLockState() async throws {
     let store = InMemoryVaultStore()
     let server = AgentServer(vaultStore: store)
