@@ -1,0 +1,229 @@
+import Foundation
+
+/// The versioned request/response protocol `LilPasswordsAgent` serves over its Mach service.
+///
+/// The wire shape is deliberately dumb: XPC only ever marshals `Data` (see `AgentXPCProtocol`),
+/// and every real operation lives in these Swift `Codable` enums instead of in `@objc`-compatible
+/// method signatures. That keeps the type system's full richness (associated values, nested
+/// structs, `Result`-shaped error handling) instead of flattening everything into
+/// `NSSecureCoding`-compatible primitives, and it means adding an operation never touches the
+/// `@objc` surface at all.
+public enum AgentProtocolVersion {
+  /// The protocol version this build of `LilPasswordsKit` speaks. `AgentServer` rejects any
+  /// `AgentRequestEnvelope` whose `version` doesn't match with
+  /// ``AgentError/unsupportedProtocolVersion(requested:supported:)`` rather than guessing at
+  /// compatibility — see that case's documentation for why there's no attempt at partial
+  /// forward/backward compatibility yet.
+  public static let current = 1
+}
+
+/// A reference to a single vault item, either by its stable id or by a free-text query matched
+/// against the same fields as ``AgentRequest/search(query:)``.
+///
+/// Letting `getItem`/`deleteItem`/`totpCode` accept either shape is what makes
+/// `AgentError.ambiguous` meaningful: `.query("github")` can match zero, one, or several items,
+/// while `.id` either exists or doesn't (``AgentError/notFound``, never `.ambiguous`).
+public enum ItemReference: Sendable, Codable, Equatable {
+  case id(UUID)
+  case query(String)
+}
+
+/// The vault key handoff: the app performs `LAContext` authentication (Touch ID/password), then
+/// sends the already-unwrapped vault key to the helper so it never has to touch the Keychain's
+/// `.userPresence` path itself — see docs/adr/0001-storage-and-process-model.md (b) for why.
+public struct UnlockPayload: Sendable, Codable, Equatable {
+  /// The vault key's raw bytes. Never logged, never persisted by `AgentServer` itself — see
+  /// `AccessLogging`'s documentation for the structural guarantee that this never reaches the
+  /// access log (851-2429).
+  public var sessionKey: Data
+
+  /// Which vault key this is (`VaultCrypto.Key.id`), so a future multi-vault-key world (rotation)
+  /// isn't a breaking wire change.
+  public var keyId: UUID
+
+  public init(sessionKey: Data, keyId: UUID) {
+    self.sessionKey = sessionKey
+    self.keyId = keyId
+  }
+}
+
+/// Every operation `LilPasswordsAgent` supports.
+public enum AgentRequest: Sendable, Codable, Equatable {
+  /// Whether the vault is locked/unlocked and whether agent access is currently enabled. Always
+  /// answerable, regardless of lock state or the 851-2428 toggle.
+  case status
+
+  /// Hands the vault key to the helper after the app's `LAContext` evaluation succeeds.
+  case unlock(UnlockPayload)
+
+  /// Discards the in-memory vault key and any open store. Idempotent.
+  case lock
+
+  /// Every item in the vault.
+  case list
+
+  /// Items matching a free-text query.
+  case search(query: String)
+
+  /// A single item, by id or query. Fails with ``AgentError/ambiguous`` if a query matches more
+  /// than one item, or ``AgentError/notFound`` if it matches none.
+  case getItem(ItemReference)
+
+  /// Adds a new item.
+  case createItem(PasswordItem)
+
+  /// Replaces an existing item (matched by `PasswordItem.id`).
+  case updateItem(PasswordItem)
+
+  /// Removes an item, by id or query (see ``getItem(_:)`` for the ambiguity rule).
+  case deleteItem(ItemReference)
+
+  /// Generates a password without touching the vault.
+  case generatePassword(PasswordGenerator.Format)
+
+  /// The current TOTP code for an item, by id or query (see ``getItem(_:)`` for the ambiguity
+  /// rule). Fails with `AgentError.internal` if the item has no `totpURI`, or one that fails to
+  /// parse.
+  case totpCode(ItemReference)
+}
+
+/// A generated TOTP code and when it stops being valid, so a caller can decide whether to
+/// re-request before pasting a stale code.
+public struct TOTPCodeResult: Sendable, Codable, Equatable {
+  public var code: String
+  public var expiresAt: Date
+
+  public init(code: String, expiresAt: Date) {
+    self.code = code
+    self.expiresAt = expiresAt
+  }
+}
+
+/// Point-in-time answer to ``AgentRequest/status``.
+public struct AgentStatus: Sendable, Codable, Equatable {
+  /// `true` if the helper is holding no vault key (either never unlocked, or explicitly locked).
+  public var locked: Bool
+
+  /// The 851-2428 Settings toggle's current value ("Allow agents to access passwords"),
+  /// independent of `locked` — both must be satisfied for a vault operation to succeed.
+  public var agentAccessEnabled: Bool
+
+  public init(locked: Bool, agentAccessEnabled: Bool) {
+    self.locked = locked
+    self.agentAccessEnabled = agentAccessEnabled
+  }
+}
+
+/// A successful answer to an `AgentRequest`. Exactly one case per request case, in the same order.
+public enum AgentResponse: Sendable, Codable, Equatable {
+  case status(AgentStatus)
+  case unlocked
+  case locked
+  case items([PasswordItem])
+  case item(PasswordItem)
+  case created(PasswordItem)
+  case updated(PasswordItem)
+  case deleted
+  case generatedPassword(String)
+  case totpCode(TOTPCodeResult)
+}
+
+/// Every way an `AgentRequest` can fail, as a typed, `Codable` value rather than an opaque string
+/// — so `AgentClient` callers (the app's UI, `lilpw`'s exit codes per 851-2428) can switch on the
+/// reason instead of pattern-matching error text.
+public enum AgentError: Error, Sendable, Codable, Equatable, CustomStringConvertible {
+  /// The helper holds no vault key. The caller (app) needs to unlock via `LAContext` and call
+  /// ``AgentRequest/unlock(_:)``.
+  case locked
+
+  /// The vault is unlocked, but the user has turned off "Allow agents to access passwords" in
+  /// Settings → Agents (851-2428). Distinct from `.locked` because the fix is different (flip a
+  /// setting, not authenticate).
+  case agentAccessDisabled
+
+  /// An `ItemReference` (or a plain id) matched no item.
+  case notFound
+
+  /// An `ItemReference.query` matched more than one item.
+  case ambiguous
+
+  /// The request's `AgentRequestEnvelope.version` isn't one this helper build understands. The
+  /// MVP doesn't attempt partial compatibility across versions — a mismatch is always a hard
+  /// error, on the theory that the app, `LilPasswordsAgent`, and `lilpw` are always built and
+  /// shipped from the same repo/version and a mismatch only happens during development (an old
+  /// helper still running after an app rebuild) or a bug, neither of which benefits from silently
+  /// degrading.
+  case unsupportedProtocolVersion(requested: Int, supported: Int)
+
+  /// Anything else. `message` is always safe to log or display — it must never be built from a
+  /// secret value (a vault item's password, the vault key, etc.); see call sites in
+  /// `AgentServer`.
+  case `internal`(message: String)
+
+  public var description: String {
+    switch self {
+    case .locked:
+      return "lil passwords is locked — unlock the app"
+    case .agentAccessDisabled:
+      return "agent access is disabled in Settings → Agents"
+    case .notFound:
+      return "no matching item"
+    case .ambiguous:
+      return "more than one item matched"
+    case .unsupportedProtocolVersion(let requested, let supported):
+      return "unsupported agent protocol version \(requested) (this helper supports \(supported))"
+    case .internal(let message):
+      return message
+    }
+  }
+}
+
+/// The outcome of a single request: exactly one of a success payload or a typed error, `Codable`
+/// as a two-case enum rather than `Swift.Result` (which has no `Codable` conformance).
+public enum AgentOutcome: Sendable, Codable, Equatable {
+  case success(AgentResponse)
+  case failure(AgentError)
+}
+
+/// A request plus the protocol version it was built against. `AgentClient` always sends
+/// ``AgentProtocolVersion/current``; the `version` field exists so `AgentServer` can detect a
+/// mismatch explicitly instead of failing to decode.
+public struct AgentRequestEnvelope: Sendable, Codable, Equatable {
+  public var version: Int
+  public var request: AgentRequest
+
+  public init(request: AgentRequest, version: Int = AgentProtocolVersion.current) {
+    self.version = version
+    self.request = request
+  }
+}
+
+/// The reply to an `AgentRequestEnvelope`, tagged with the protocol version the helper answered
+/// with (currently always ``AgentProtocolVersion/current``, since a version mismatch is always an
+/// error rather than a downgraded response — see `AgentError.unsupportedProtocolVersion`).
+public struct AgentReplyEnvelope: Sendable, Codable, Equatable {
+  public var version: Int
+  public var outcome: AgentOutcome
+
+  public init(outcome: AgentOutcome, version: Int = AgentProtocolVersion.current) {
+    self.version = version
+    self.outcome = outcome
+  }
+}
+
+/// The single `JSONEncoder`/`JSONDecoder` configuration `AgentClient` and `AgentServer` must
+/// agree on to decode each other's `Data`. Centralized so the two sides can't silently drift
+/// (e.g. one adding a date strategy the other doesn't have).
+public enum AgentWireCoding {
+  public static let encoder: JSONEncoder = {
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    return encoder
+  }()
+
+  public static let decoder: JSONDecoder = {
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    return decoder
+  }()
+}
