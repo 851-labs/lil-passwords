@@ -59,9 +59,21 @@ import Testing
 ///    point, not a thread-blocking one) is the fix; the SIGKILL sent just above it guarantees the poll
 ///    stays short.
 ///
+/// Both of those were verified with dozens of full local `swift test --no-parallel` runs — and then
+/// the commit landing them failed *CI* immediately, in under a minute, on a plain compile error:
+/// `'async' call cannot occur in a defer body`, from every one of this suite's original `defer {
+/// await stop(session) }` cleanup lines. This local toolchain (Swift 6.4) accepts that construct with
+/// only a stylistic warning; CI's toolchain at the time (Swift 6.2.4, via `xcodebuild -version` in the
+/// "Tool versions" step) rejects it outright. Neither toolchain is "wrong" — this is simply a real
+/// difference between them, and it's exactly the kind of gap an implicitly-different local Xcode can
+/// hide indefinitely. `withSession(_:_:)` below replaces `defer` entirely with an explicit
+/// `do`/`catch` so cleanup no longer depends on whether a given Swift version allows `await` inside a
+/// `defer` body at all.
+///
 /// `.serialized` and the package's `--no-parallel` flag stay on regardless — they're cheap, and
 /// still legitimate insurance against the *originally hypothesized* race actually existing somewhere
-/// too — but don't assume either one is why this suite passes; the two fixes in `stop(_:)` are.
+/// too — but don't assume either one is why this suite passes; `withSession`'s cleanup ordering and
+/// the two fixes in `stop(_:)` are.
 @Suite(.timeLimit(.minutes(1)), .serialized)
 struct MCPStdioSessionTests {
   init() {
@@ -97,6 +109,35 @@ struct MCPStdioSessionTests {
     HangWatchdog.trace("startSession(): client.connect(transport:) returned")
 
     return (helper, process, client)
+  }
+
+  /// Starts a session, hands its `Client` to `body`, and guarantees `stop(_:)` runs afterward
+  /// whichever way `body` finishes — including when it throws (every test's `#expect`/`#require`
+  /// failures raise, and a locked-vault tool call is expected to report an error but must not
+  /// itself throw out of `body` uncleaned-up).
+  ///
+  /// This exists instead of each test writing `let session = try await startSession(); defer {
+  /// await stop(session) }` directly, which is how this suite originally looked and which compiles
+  /// fine on some Swift toolchains (confirmed locally: Swift 6.4 accepts an `await` inside a `defer`
+  /// body with only a stylistic warning) but is rejected outright on others — CI's Swift 6.2.4 gives
+  /// a hard `'async' call cannot occur in a defer body` error, which only surfaces once something
+  /// forces a real CI compile of this exact code (as opposed to trusting a local toolchain that
+  /// happens to be newer and more permissive). Threading cleanup through an explicit `do`/`catch`
+  /// here instead sidesteps the question of which toolchains allow `defer { await ... }` entirely,
+  /// rather than depending on it.
+  private func withSession(
+    items: [PasswordItem] = [],
+    locked: Bool = false,
+    _ body: (Client) async throws -> Void
+  ) async throws {
+    let session = try await startSession(items: items, locked: locked)
+    do {
+      try await body(session.client)
+    } catch {
+      await stop(session)
+      throw error
+    }
+    await stop(session)
   }
 
   /// `terminate()` only requests a graceful exit (`SIGTERM`) — if `lilpass mcp` somehow never acts
@@ -154,62 +195,57 @@ struct MCPStdioSessionTests {
   }
 
   @Test func initializesAndListsAllEightTools() async throws {
-    let session = try await startSession()
-    defer { await stop(session) }
-
-    let (tools, _) = try await session.client.listTools()
-    #expect(
-      Set(tools.map(\.name)) == [
-        "list_passwords", "search_passwords", "get_password", "get_verification_code", "generate_password",
-        "create_password", "update_password", "delete_password",
-      ])
+    try await withSession { client in
+      let (tools, _) = try await client.listTools()
+      #expect(
+        Set(tools.map(\.name)) == [
+          "list_passwords", "search_passwords", "get_password", "get_verification_code", "generate_password",
+          "create_password", "update_password", "delete_password",
+        ])
+    }
   }
 
   @Test func listPasswordsToolCallReturnsSummariesWithoutSecrets() async throws {
     let item = makeE2ETestItem(title: "GitHub", notes: "very secret notes")
-    let session = try await startSession(items: [item])
-    defer { await stop(session) }
-
-    let (content, isError) = try await session.client.callTool(name: "list_passwords")
-    #expect(isError == false)
-    let json = try #require(text(of: content))
-    #expect(json.contains("GitHub"))
-    #expect(!json.contains("very secret notes"))
+    try await withSession(items: [item]) { client in
+      let (content, isError) = try await client.callTool(name: "list_passwords")
+      #expect(isError == false)
+      let json = try #require(text(of: content))
+      #expect(json.contains("GitHub"))
+      #expect(!json.contains("very secret notes"))
+    }
   }
 
   @Test func getPasswordToolCallReturnsTheFullRecord() async throws {
     let item = makeE2ETestItem(title: "GitHub", password: "hunter2")
-    let session = try await startSession(items: [item])
-    defer { await stop(session) }
-
-    let (content, isError) = try await session.client.callTool(
-      name: "get_password", arguments: ["item": "GitHub"])
-    #expect(isError == false)
-    let json = try #require(text(of: content))
-    #expect(json.contains("hunter2"))
+    try await withSession(items: [item]) { client in
+      let (content, isError) = try await client.callTool(
+        name: "get_password", arguments: ["item": "GitHub"])
+      #expect(isError == false)
+      let json = try #require(text(of: content))
+      #expect(json.contains("hunter2"))
+    }
   }
 
   @Test func generatePasswordToolCallWithALength() async throws {
-    let session = try await startSession()
-    defer { await stop(session) }
-
-    let (content, isError) = try await session.client.callTool(
-      name: "generate_password", arguments: ["length": 16, "noSymbols": true])
-    #expect(isError == false)
-    let json = try #require(text(of: content))
-    #expect(json.contains("\"password\""))
+    try await withSession { client in
+      let (content, isError) = try await client.callTool(
+        name: "generate_password", arguments: ["length": 16, "noSymbols": true])
+      #expect(isError == false)
+      let json = try #require(text(of: content))
+      #expect(json.contains("\"password\""))
+    }
   }
 
   @Test func aLockedVaultReturnsTheSameMessageTheCLIWouldPrint() async throws {
-    let session = try await startSession(items: [makeE2ETestItem()], locked: true)
-    defer { await stop(session) }
-
-    let (content, isError) = try await session.client.callTool(name: "list_passwords")
-    #expect(isError == true)
-    let message = try #require(text(of: content))
-    // Same message `AgentError.locked.description` produces, per LilpassMCP's dispatch (`LilpassError.from`)
-    // — the same text the CLI itself would print to stderr for a locked vault.
-    #expect(message == "lil passwords is locked — unlock the app")
+    try await withSession(items: [makeE2ETestItem()], locked: true) { client in
+      let (content, isError) = try await client.callTool(name: "list_passwords")
+      #expect(isError == true)
+      let message = try #require(text(of: content))
+      // Same message `AgentError.locked.description` produces, per LilpassMCP's dispatch (`LilpassError.from`)
+      // — the same text the CLI itself would print to stderr for a locked vault.
+      #expect(message == "lil passwords is locked — unlock the app")
+    }
   }
 
   private func text(of content: [Tool.Content]) -> String? {
