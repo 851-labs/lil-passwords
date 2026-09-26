@@ -118,7 +118,7 @@ final class DetailHeaderView: NSView {
 
   /// - Parameters:
   ///   - title: The item's display title.
-  ///   - icon: The large rounded-square icon (see `ItemIconFactory`).
+  ///   - icon: The large rounded-square icon (see `MonogramIcon`).
   ///   - modifiedAt: When the item was last changed, rendered as "Last modified <date>".
   ///   - isEditing: Whether the title should be shown as an editable field, and Cancel/Done
   ///     shown in place of Edit.

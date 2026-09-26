@@ -7,7 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.mainMenu = MainMenu.make()
-    let controller = MainWindowController(vaultViewModel: Self.makeDefaultVaultViewModel())
+    let controller = MainWindowController()
     controller.showWindow(nil)
     mainWindowController = controller
     NSApp.activate(ignoringOtherApps: true)
@@ -26,13 +26,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
   func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
     true
-  }
-
-  private static func makeDefaultVaultViewModel() -> VaultViewModel {
-    #if DEBUG
-      return VaultStoreViewModel.makeForCurrentLaunch()
-    #else
-      return VaultStoreViewModel()
-    #endif
   }
 }

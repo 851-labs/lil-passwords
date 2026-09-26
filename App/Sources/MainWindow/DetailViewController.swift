@@ -77,7 +77,7 @@ final class DetailViewController: NSViewController {
       showNoSelection(for: .all)
     }
 
-    cancellable = vaultViewModel.itemsPublisher
+    cancellable = vaultViewModel.itemsDidChange
       .receive(on: RunLoop.main)
       .sink { [weak self] _ in self?.handleItemsChanged() }
   }
@@ -277,7 +277,7 @@ final class DetailViewController: NSViewController {
 
     headerView.configure(
       title: displayItem.title,
-      icon: ItemIconFactory.icon(for: displayItem),
+      icon: MonogramIcon.icon(for: displayItem.title, dimension: 64),
       modifiedAt: displayItem.modifiedAt,
       isEditing: isEditing
     )
