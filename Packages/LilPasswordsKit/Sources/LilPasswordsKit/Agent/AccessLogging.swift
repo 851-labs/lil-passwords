@@ -33,18 +33,33 @@ public struct AccessEvent: Sendable {
   /// on `AgentProtocol.swift`.
   public var response: AgentResponse?
 
+  /// The Settings → Agents access mode (851-2445) in effect when this event was handled.
+  /// Defaults to ``AgentAccessScope/allPasswords`` so call sites/tests written before this field
+  /// existed keep compiling unchanged.
+  public var accessMode: AgentAccessScope
+
+  /// How a live ``AgentAccessScope/askEveryTime`` approval (if one ran for this request) was
+  /// resolved — `nil` when the access mode wasn't `.askEveryTime`, or the caller was the app
+  /// itself (exempt from approval gating the same way it's exempt from every other agent-access
+  /// toggle).
+  public var approvalOutcome: ApprovalOutcome?
+
   public init(
     date: Date = Date(),
     caller: CallerIdentity,
     request: AgentRequest,
     response: AgentResponse? = nil,
-    succeeded: Bool
+    succeeded: Bool,
+    accessMode: AgentAccessScope = .allPasswords,
+    approvalOutcome: ApprovalOutcome? = nil
   ) {
     self.date = date
     self.caller = caller
     self.request = request
     self.response = response
     self.succeeded = succeeded
+    self.accessMode = accessMode
+    self.approvalOutcome = approvalOutcome
   }
 }
 

@@ -87,7 +87,9 @@ private let autoFillCaller = CallerIdentity(
     accessPolicy: any AccessPolicyProviding = AlwaysAllowAccessPolicy(),
     accessLog: any AccessLogging = NoOpAccessLog(),
     items: [PasswordItem] = [],
-    agentSettingsStore: any AgentSettingsStoring = InMemoryAgentSettingsStore()
+    agentSettingsStore: any AgentSettingsStoring = InMemoryAgentSettingsStore(),
+    approvalCenter: ApprovalCenter = ApprovalCenter(),
+    approvalTimeout: Duration = .seconds(60)
   ) async throws -> (server: AgentServer, key: VaultCrypto.Key) {
     let store = InMemoryVaultStore()
     try await store.createVault()
@@ -103,9 +105,31 @@ private let autoFillCaller = CallerIdentity(
       vaultKeyStore: keyStore,
       accessPolicy: accessPolicy,
       accessLog: accessLog,
-      agentSettingsStore: agentSettingsStore
+      agentSettingsStore: agentSettingsStore,
+      approvalCenter: approvalCenter,
+      approvalTimeout: approvalTimeout
     )
     return (server, key)
+  }
+
+  /// An `InMemoryAgentSettingsStore` pre-seeded with agent access on, write access on (so
+  /// scope/approval tests below aren't incidentally blocked by 851-2433's separate write toggle),
+  /// and the given 851-2445 `accessScope`/allowlist.
+  private func scopedSettingsStore(
+    accessScope: AgentAccessScope,
+    allowedItemIDs: Set<UUID> = [],
+    allowedGroups: Set<String> = []
+  ) -> InMemoryAgentSettingsStore {
+    InMemoryAgentSettingsStore(
+      initial: AgentSettings(
+        agentAccessEnabled: true,
+        keepAgentAccessAvailableWhileMacUnlocked: false,
+        agentWriteAccessEnabled: true,
+        accessScope: accessScope,
+        allowedItemIDs: allowedItemIDs,
+        allowedGroups: allowedGroups
+      )
+    )
   }
 
   /// An `InMemoryAgentSettingsStore` pre-seeded with just ``AgentSettings/agentWriteAccessEnabled``
@@ -945,5 +969,287 @@ private let autoFillCaller = CallerIdentity(
       Issue.record("expected .autoFillCredential even with agent access disabled")
       return
     }
+  }
+
+  // MARK: - Scoped agent access (851-2445)
+
+  /// The headline policy matrix: for each of the three `AgentAccessScope` values, a non-app caller
+  /// sees exactly the items the mode entitles it to — `.allPasswords` sees everything, `.selected`
+  /// sees only the allowlisted item — while the app caller (`isAppCaller`) always sees everything,
+  /// regardless of scope, exactly as it's exempt from every other agent-access toggle. `.askEveryTime`
+  /// is covered separately below (it also depends on the approval outcome, not just the scope).
+  @Test func accessScopeAllPasswordsExposesEveryItemToBothCallerKinds() async throws {
+    let allowed = makeItem(title: "GitHub")
+    let notAllowed = makeItem(title: "Mail")
+    let settingsStore = scopedSettingsStore(accessScope: .allPasswords, allowedItemIDs: [allowed.id])
+    let (server, _) = try await makeServer(items: [allowed, notAllowed], agentSettingsStore: settingsStore)
+    _ = await send(.unlock, to: server)
+
+    guard case .success(.items(let nonAppItems)) = await send(.list, to: server, caller: cliCaller) else {
+      Issue.record("expected .items")
+      return
+    }
+    #expect(Set(nonAppItems.map(\.id)) == Set([allowed.id, notAllowed.id]))
+
+    guard case .success(.items(let appItems)) = await send(.list, to: server, caller: appCaller) else {
+      Issue.record("expected .items")
+      return
+    }
+    #expect(Set(appItems.map(\.id)) == Set([allowed.id, notAllowed.id]))
+  }
+
+  @Test func accessScopeSelectedFiltersListAndSearchToTheAllowlistForNonAppCallersOnly() async throws {
+    let allowed = makeItem(title: "GitHub")
+    let notAllowed = makeItem(title: "Mail")
+    let settingsStore = scopedSettingsStore(accessScope: .selected, allowedItemIDs: [allowed.id])
+    let (server, _) = try await makeServer(items: [allowed, notAllowed], agentSettingsStore: settingsStore)
+    _ = await send(.unlock, to: server)
+
+    guard case .success(.items(let nonAppItems)) = await send(.list, to: server, caller: cliCaller) else {
+      Issue.record("expected .items")
+      return
+    }
+    #expect(nonAppItems.map(\.id) == [allowed.id])
+
+    guard case .success(.items(let appItems)) = await send(.list, to: server, caller: appCaller) else {
+      Issue.record("expected .items")
+      return
+    }
+    #expect(Set(appItems.map(\.id)) == Set([allowed.id, notAllowed.id]))
+  }
+
+  @Test func accessScopeSelectedAllowsAnItemThroughAnAllowedGroupToo() async throws {
+    var allowed = makeItem(title: "GitHub")
+    allowed.group = "Work"
+    let notAllowed = makeItem(title: "Mail")
+    let settingsStore = scopedSettingsStore(accessScope: .selected, allowedGroups: ["Work"])
+    let (server, _) = try await makeServer(items: [allowed, notAllowed], agentSettingsStore: settingsStore)
+    _ = await send(.unlock, to: server)
+
+    guard case .success(.items(let items)) = await send(.list, to: server, caller: cliCaller) else {
+      Issue.record("expected .items")
+      return
+    }
+    #expect(items.map(\.id) == [allowed.id])
+  }
+
+  // MARK: - No existence leak (851-2445)
+
+  @Test func selectedScopeGetItemByIdReportsNotFoundRatherThanTheItemForADisallowedId() async throws {
+    let notAllowed = makeItem(title: "Mail")
+    let settingsStore = scopedSettingsStore(accessScope: .selected, allowedItemIDs: [])
+    let (server, _) = try await makeServer(items: [notAllowed], agentSettingsStore: settingsStore)
+    _ = await send(.unlock, to: server)
+
+    guard case .failure(.notFound) = await send(.getItem(.id(notAllowed.id)), to: server, caller: cliCaller) else {
+      Issue.record("expected .failure(.notFound) — a disallowed item's existence must not leak")
+      return
+    }
+  }
+
+  /// The exact no-leak scenario ADR 0005 calls out: a query matches two items, only one of which
+  /// is allowed. Filtering to the allowlist *before* the ambiguity check must resolve this as a
+  /// single unambiguous match — surfacing `.ambiguous` here would itself leak "there's a second,
+  /// invisible match somewhere" to a caller that isn't supposed to know the disallowed item exists.
+  @Test func selectedScopeQueryMatchingOneAllowedAndOneDisallowedItemResolvesUnambiguously() async throws {
+    let allowed = makeItem(title: "GitHub Work")
+    let notAllowed = makeItem(title: "GitHub Personal")
+    let settingsStore = scopedSettingsStore(accessScope: .selected, allowedItemIDs: [allowed.id])
+    let (server, _) = try await makeServer(items: [allowed, notAllowed], agentSettingsStore: settingsStore)
+    _ = await send(.unlock, to: server)
+
+    guard case .success(.item(let item)) = await send(.getItem(.query("github")), to: server, caller: cliCaller)
+    else {
+      Issue.record("expected .success(.item) — an allowed match among matches must not read as ambiguous")
+      return
+    }
+    #expect(item.id == allowed.id)
+  }
+
+  /// The mirror image: a query matches only disallowed items. This must read exactly like "no
+  /// match at all" (`.notFound`), not `.ambiguous`/anything that would hint a match exists.
+  @Test func selectedScopeQueryMatchingOnlyDisallowedItemsReportsNotFound() async throws {
+    let a = makeItem(title: "GitHub Work")
+    let b = makeItem(title: "GitHub Personal")
+    let settingsStore = scopedSettingsStore(accessScope: .selected, allowedItemIDs: [])
+    let (server, _) = try await makeServer(items: [a, b], agentSettingsStore: settingsStore)
+    _ = await send(.unlock, to: server)
+
+    guard case .failure(.notFound) = await send(.getItem(.query("github")), to: server, caller: cliCaller) else {
+      Issue.record("expected .failure(.notFound)")
+      return
+    }
+  }
+
+  @Test func selectedScopeDeleteAndTotpCodeAlsoReportNotFoundForADisallowedItem() async throws {
+    let notAllowed = PasswordItem(
+      title: "Mail",
+      totpURI: "otpauth://totp/Mail:octocat?secret=JBSWY3DPEHPK3PXP&issuer=Mail"
+    )
+    let settingsStore = scopedSettingsStore(accessScope: .selected, allowedItemIDs: [])
+    let (server, _) = try await makeServer(items: [notAllowed], agentSettingsStore: settingsStore)
+    _ = await send(.unlock, to: server)
+
+    guard case .failure(.notFound) = await send(.totpCode(.id(notAllowed.id)), to: server, caller: cliCaller) else {
+      Issue.record("expected .failure(.notFound) for totpCode")
+      return
+    }
+    guard case .failure(.notFound) = await send(.deleteItem(.id(notAllowed.id)), to: server, caller: cliCaller)
+    else {
+      Issue.record("expected .failure(.notFound) for deleteItem")
+      return
+    }
+  }
+
+  @Test func selectedScopeUpdateItemFailsWithNotFoundForADisallowedItemEvenWithWriteAccessOn() async throws {
+    let notAllowed = makeItem(title: "Mail")
+    let settingsStore = scopedSettingsStore(accessScope: .selected, allowedItemIDs: [])
+    let (server, _) = try await makeServer(items: [notAllowed], agentSettingsStore: settingsStore)
+    _ = await send(.unlock, to: server)
+
+    var updated = notAllowed
+    updated.title = "Changed"
+    guard case .failure(.notFound) = await send(.updateItem(updated), to: server, caller: cliCaller) else {
+      Issue.record("expected .failure(.notFound)")
+      return
+    }
+  }
+
+  /// `.createItem` is never auto-added to the allowlist — a write-capable, `.selected`-scoped agent
+  /// must not be able to silently expand its own read scope by creating a new item and expecting to
+  /// see it again later. See docs/adr/0005-scoped-agent-access.md.
+  @Test func selectedScopeCreatedItemIsNotAutomaticallyReadableByTheCreatingAgent() async throws {
+    let settingsStore = scopedSettingsStore(accessScope: .selected, allowedItemIDs: [])
+    let (server, _) = try await makeServer(agentSettingsStore: settingsStore)
+    _ = await send(.unlock, to: server)
+
+    let newItem = makeItem(title: "Mail")
+    guard case .success(.created) = await send(.createItem(newItem), to: server, caller: cliCaller) else {
+      Issue.record("expected .created")
+      return
+    }
+    guard case .failure(.notFound) = await send(.getItem(.id(newItem.id)), to: server, caller: cliCaller) else {
+      Issue.record("expected the newly created item to stay invisible to a .selected-scoped agent")
+      return
+    }
+  }
+
+  // MARK: - "Ask every time" approval (851-2445)
+
+  @Test func askEveryTimeDeniesTheRequestAndSurfacesApprovalDeniedOrTimedOutOnATimeout() async throws {
+    let item = makeItem()
+    // A test-scale timeout: nothing ever calls `resolve(id:decision:)`, so this always times out.
+    let approvalCenter = ApprovalCenter()
+    let settingsStore = scopedSettingsStore(accessScope: .askEveryTime)
+    let (server, _) = try await makeServer(
+      items: [item],
+      agentSettingsStore: settingsStore,
+      approvalCenter: approvalCenter,
+      approvalTimeout: .milliseconds(20)
+    )
+    _ = await send(.unlock, to: server)
+
+    guard
+      case .failure(.approvalDeniedOrTimedOut) = await send(.getItem(.id(item.id)), to: server, caller: cliCaller)
+    else {
+      Issue.record("expected .failure(.approvalDeniedOrTimedOut)")
+      return
+    }
+  }
+
+  @Test func askEveryTimeSucceedsOnceTheAppResolvesTheApprovalWithAllowOnce() async throws {
+    let item = makeItem()
+    let approvalCenter = ApprovalCenter()
+    let settingsStore = scopedSettingsStore(accessScope: .askEveryTime)
+    let (server, _) = try await makeServer(
+      items: [item],
+      agentSettingsStore: settingsStore,
+      approvalCenter: approvalCenter,
+      approvalTimeout: .seconds(10)
+    )
+    _ = await send(.unlock, to: server)
+
+    async let outcome = send(.getItem(.id(item.id)), to: server, caller: cliCaller)
+
+    // Give `requestApproval` a moment to actually park before resolving it — otherwise `resolve`
+    // could race ahead of `pending[id]` being populated.
+    var resolved = false
+    for _ in 0..<200 {
+      let summaries = await approvalCenter.pendingApprovals()
+      if let pending = summaries.first {
+        resolved = await approvalCenter.resolve(id: pending.id, decision: .allowOnce)
+        break
+      }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(resolved)
+
+    guard case .success(.item(let resolvedItem)) = await outcome else {
+      Issue.record("expected .success(.item) once approved")
+      return
+    }
+    #expect(resolvedItem.id == item.id)
+  }
+
+  /// `.askEveryTime` never gates the app's own connection — the same exemption every other
+  /// agent-access toggle grants it.
+  @Test func askEveryTimeNeverGatesTheAppCaller() async throws {
+    let item = makeItem()
+    let settingsStore = scopedSettingsStore(accessScope: .askEveryTime)
+    let (server, _) = try await makeServer(
+      items: [item],
+      agentSettingsStore: settingsStore,
+      approvalCenter: ApprovalCenter(),
+      approvalTimeout: .milliseconds(20)
+    )
+    _ = await send(.unlock, to: server)
+
+    guard case .success(.item(let fetched)) = await send(.getItem(.id(item.id)), to: server, caller: appCaller)
+    else {
+      Issue.record("expected .success(.item) — the app caller must never be gated by approval")
+      return
+    }
+    #expect(fetched.id == item.id)
+  }
+
+  @Test func askEveryTimeDoesNotGateGeneratePassword() async throws {
+    let settingsStore = scopedSettingsStore(accessScope: .askEveryTime)
+    let (server, _) = try await makeServer(
+      agentSettingsStore: settingsStore,
+      approvalCenter: ApprovalCenter(),
+      approvalTimeout: .milliseconds(20)
+    )
+    _ = await send(.unlock, to: server)
+
+    guard
+      case .success(.generatedPassword(let password)) =
+        await send(.generatePassword(.appleStrong), to: server, caller: cliCaller)
+    else {
+      Issue.record("expected .success(.generatedPassword) — generating a password shouldn't need approval")
+      return
+    }
+    #expect(!password.isEmpty)
+  }
+
+  @Test func accessLogRecordsTheAccessModeAndApprovalOutcome() async throws {
+    let log = RecordingAccessLog()
+    let item = makeItem()
+    let approvalCenter = ApprovalCenter()
+    let settingsStore = scopedSettingsStore(accessScope: .askEveryTime)
+    let (server, _) = try await makeServer(
+      accessLog: log,
+      items: [item],
+      agentSettingsStore: settingsStore,
+      approvalCenter: approvalCenter,
+      approvalTimeout: .milliseconds(20)
+    )
+    _ = await send(.unlock, to: server)
+
+    _ = await send(.getItem(.id(item.id)), to: server, caller: cliCaller)
+
+    let events = await log.events
+    #expect(events.count == 1)
+    #expect(events[0].accessMode == .askEveryTime)
+    #expect(events[0].approvalOutcome == .deniedOrTimedOut)
   }
 }

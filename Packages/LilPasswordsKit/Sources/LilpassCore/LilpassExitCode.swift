@@ -17,6 +17,11 @@ public enum LilpassExitCode: Int32, Sendable, Equatable {
   case ambiguous = 6
   case helperUnreachable = 7
   case agentWriteAccessDisabled = 8
+
+  /// 851-2445: the vault's Settings → Agents access mode is "Ask every time" and the person either
+  /// denied the request or never responded within the approval timeout — the two are
+  /// indistinguishable by design; see `AgentError.approvalDeniedOrTimedOut`.
+  case approvalDeniedOrTimedOut = 9
 }
 
 /// The one error type every `LilpassCore` entry point throws: a stable exit code plus a message safe
@@ -76,6 +81,8 @@ extension LilpassError {
       return LilpassError(exitCode: .ambiguous, message: error.description)
     case .unsupportedProtocolVersion, .internal, .callerNotAuthorized:
       return LilpassError(exitCode: .generic, message: error.description)
+    case .approvalDeniedOrTimedOut:
+      return LilpassError(exitCode: .approvalDeniedOrTimedOut, message: error.description)
     }
   }
 }

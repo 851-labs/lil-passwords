@@ -205,6 +205,27 @@ public actor AgentClient {
     return (username, password)
   }
 
+  /// The 851-2445 "ask every time" approval queue: every request currently parked in the helper's
+  /// `ApprovalCenter` awaiting a decision, oldest first. Restricted to the app itself by the
+  /// helper, same as ``agentSettings()``. The app polls or calls this on
+  /// ``AgentApprovalObserver``'s wake-up to drive its Touch ID-gated approval dialog.
+  public func pendingApprovals() async throws -> [PendingApprovalSummary] {
+    guard case .pendingApprovals(let summaries) = try await send(.pendingApprovals) else {
+      throw RequestError.connection(.invalidReply)
+    }
+    return summaries
+  }
+
+  /// Answers one pending approval (by the id `PendingApprovalSummary.id` handed back from
+  /// ``pendingApprovals()``) with the person's decision from the approval dialog. Restricted to
+  /// the app itself, same as ``pendingApprovals()``. A no-op on the helper side if `id` is no
+  /// longer pending (already resolved, already timed out); this still returns normally either way.
+  public func resolveApproval(id: UUID, decision: ApprovalDecision) async throws {
+    guard case .approvalResolved = try await send(.resolveApproval(id: id, decision: decision)) else {
+      throw RequestError.connection(.invalidReply)
+    }
+  }
+
   /// Tears down the current connection, if any. The next call reconnects. Not required in normal
   /// use (interruption/invalidation already clear it), but useful for tests and for explicit
   /// "log out" style flows.

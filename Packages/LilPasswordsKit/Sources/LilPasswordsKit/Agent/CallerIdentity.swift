@@ -71,6 +71,28 @@ extension CallerIdentity {
   }
 }
 
+/// The 851-2445 key an `ApprovalCenter` grant ("allow for 15 minutes") is stored under — the
+/// top-level agent in a caller's process chain, not its pid (pids are reused, and a single agent
+/// invocation is usually a fresh short-lived process per call — see
+/// `CallerIdentityResolver.resolveTopLevelAgentIdentity(pid:maxDepth:)` and
+/// docs/adr/0005-scoped-agent-access.md for why).
+public struct AgentGrantIdentity: Sendable, Equatable, Hashable {
+  /// The top-level agent's own executable path, or a best-effort `"name:..."`/`"pid:..."`
+  /// placeholder if even that couldn't be resolved (the process had already exited).
+  public var executablePath: String
+
+  /// The top-level agent's code-signing identifier, if it has one — `nil` for unsigned/ad-hoc
+  /// local scripts and most MCP servers, the common case. See ``executablePath``'s documentation
+  /// and docs/adr/0005-scoped-agent-access.md for why an absent identifier here is where this
+  /// mechanism's spoofing risk concentrates.
+  public var codeSigningIdentifier: String?
+
+  public init(executablePath: String, codeSigningIdentifier: String?) {
+    self.executablePath = executablePath
+    self.codeSigningIdentifier = codeSigningIdentifier
+  }
+}
+
 /// Resolves a `CallerIdentity` from a pid using `libproc`/`sysctl`, both best-effort: any lookup
 /// that fails just leaves the corresponding field `nil` rather than throwing, since a caller
 /// identity that's harder to attribute is still more useful to the access log than none at all.
@@ -209,6 +231,40 @@ public enum CallerIdentityResolver {
       currentPID = ancestorPID
     }
     return chain
+  }
+
+  /// Resolves the 851-2445 approval-grant key for `pid`: the executable path and (best-effort)
+  /// code-signing identifier of the **top-level** entry in the same process chain
+  /// ``resolveProcessChain(pid:maxDepth:)`` walks — e.g. `claude`'s own path for a
+  /// `claude → zsh → lilpass` chain, not `zsh`'s or `lilpass`'s.
+  ///
+  /// Walks the identical ancestor loop as ``resolveProcessChain(pid:maxDepth:)`` (best-effort at
+  /// every hop, stopping at an unresolvable ancestor, `launchd`, or `maxDepth`) so the two always
+  /// agree on which process is "top-level" for a given chain — the last element
+  /// `resolveProcessChain` would report, resolved here as an `AgentGrantIdentity` instead of a
+  /// display name.
+  ///
+  /// **This is an attribution/UX mechanism, not a hard security boundary** — see
+  /// docs/adr/0005-scoped-agent-access.md's "Agent identity for grants" section for the full
+  /// write-up of what a same-user process can and can't spoof by mimicking a path or chain shape.
+  /// `ApprovalCenter` must never use this as the sole gate on anything more consequential than
+  /// skipping a redundant approval prompt for 15 minutes.
+  public static func resolveTopLevelAgentIdentity(pid: pid_t, maxDepth: Int = 8) -> AgentGrantIdentity {
+    var currentPID = pid
+    var topPID = pid
+    for _ in 0..<maxDepth {
+      guard processName(of: currentPID) != nil else { break }
+      topPID = currentPID
+      guard let ancestorPID = parentPID(of: currentPID), ancestorPID != currentPID, ancestorPID > 1 else { break }
+      currentPID = ancestorPID
+    }
+
+    let path = processPath(of: topPID)
+    let identifier = bundleIdentifier(attributes: [kSecGuestAttributePid as String: topPID])
+    return AgentGrantIdentity(
+      executablePath: path ?? processName(of: topPID).map { "name:\($0)" } ?? "pid:\(topPID)",
+      codeSigningIdentifier: identifier
+    )
   }
 
   private static func processPath(of pid: pid_t) -> String? {

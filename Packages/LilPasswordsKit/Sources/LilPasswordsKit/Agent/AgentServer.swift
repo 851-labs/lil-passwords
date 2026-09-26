@@ -22,6 +22,8 @@ public actor AgentServer {
   private let appCallerBundleIdentifier: String
   private let autoFillCallerBundleIdentifier: String
   private let agentSettingsStore: any AgentSettingsStoring
+  private let approvalCenter: ApprovalCenter
+  private let approvalTimeout: Duration
 
   /// - Parameters:
   ///   - vaultStore: The single `VaultStoring` this helper serves for its entire process
@@ -56,6 +58,14 @@ public actor AgentServer {
   ///     need updating" reason `vaultKeyStore`'s default exists; production wiring
   ///     (`Agent/Sources/main.swift`) always passes `KeychainAgentSettingsStore()` explicitly, and
   ///     shares that one instance with the `AgentSettingsAccessPolicy` it also constructs.
+  ///   - approvalCenter: The 851-2445 "ask every time" approval queue. Defaults to a fresh
+  ///     ``ApprovalCenter`` (a `NoOpApprovalAppLauncher`, real wall-clock `Date`), which is exactly
+  ///     what production wiring wants too, other than passing a real ``NSWorkspaceApprovalAppLauncher``
+  ///     — see `Agent/Sources/main.swift`.
+  ///   - approvalTimeout: How long a non-app caller's request waits for a decision under
+  ///     `AgentAccessScope.askEveryTime` before failing with `AgentError.approvalDeniedOrTimedOut`.
+  ///     Defaults to the ticket's ~60 seconds; tests override this to a much shorter `Duration` so
+  ///     the timeout path doesn't actually take a minute to exercise.
   public init(
     vaultStore: any VaultStoring,
     vaultKeyStore: any VaultKeyStoring = InMemoryVaultKeyStore(),
@@ -64,7 +74,9 @@ public actor AgentServer {
     passwordGenerator: PasswordGenerator = PasswordGenerator(),
     appCallerBundleIdentifier: String = AgentConnectionSecurity.PeerIdentifier.app.rawValue,
     autoFillCallerBundleIdentifier: String = AgentConnectionSecurity.PeerIdentifier.autoFill.rawValue,
-    agentSettingsStore: any AgentSettingsStoring = InMemoryAgentSettingsStore()
+    agentSettingsStore: any AgentSettingsStoring = InMemoryAgentSettingsStore(),
+    approvalCenter: ApprovalCenter = ApprovalCenter(),
+    approvalTimeout: Duration = .seconds(60)
   ) {
     self.vaultStore = vaultStore
     self.vaultKeyStore = vaultKeyStore
@@ -74,6 +86,8 @@ public actor AgentServer {
     self.appCallerBundleIdentifier = appCallerBundleIdentifier
     self.autoFillCallerBundleIdentifier = autoFillCallerBundleIdentifier
     self.agentSettingsStore = agentSettingsStore
+    self.approvalCenter = approvalCenter
+    self.approvalTimeout = approvalTimeout
   }
 
   /// Handles one already-decoded request and returns the reply envelope to send back.
@@ -96,7 +110,8 @@ public actor AgentServer {
 
     let outcome: AgentOutcome
     switch envelope.request {
-    case .status, .createVault, .unlock, .lock, .getAgentSettings, .setAgentSettings, .rotateRecoveryKey:
+    case .status, .createVault, .unlock, .lock, .getAgentSettings, .setAgentSettings, .rotateRecoveryKey,
+      .pendingApprovals, .resolveApproval:
       outcome = await lifecycleOutcome(for: envelope.request, caller: caller)
     default:
       outcome = await vaultOutcome(for: envelope.request, caller: caller)
@@ -216,9 +231,19 @@ public actor AgentServer {
         return .failure(.internal(message: "\(error)"))
       }
 
+    case .pendingApprovals:
+      guard isAppCaller(caller) else { return .failure(.callerNotAuthorized) }
+      return .success(.pendingApprovals(await approvalCenter.pendingApprovals()))
+
+    case .resolveApproval(let id, let decision):
+      guard isAppCaller(caller) else { return .failure(.callerNotAuthorized) }
+      _ = await approvalCenter.resolve(id: id, decision: decision)
+      return .success(.approvalResolved)
+
     default:
       preconditionFailure(
-        "lifecycleOutcome only handles .status/.createVault/.unlock/.lock/.getAgentSettings/.setAgentSettings/.rotateRecoveryKey"
+        "lifecycleOutcome only handles .status/.createVault/.unlock/.lock/.getAgentSettings/"
+          + ".setAgentSettings/.rotateRecoveryKey/.pendingApprovals/.resolveApproval"
       )
     }
   }
@@ -288,10 +313,28 @@ public actor AgentServer {
 
   // MARK: - Vault operations (logged via AccessLogging)
 
+  /// A tiny mutable box for threading the 851-2445 approval outcome (if any) out of
+  /// ``vaultResponse(for:caller:settings:approvalOutcomeBox:)`` for logging, even when that method
+  /// throws partway through — a plain return value can't carry this alongside a thrown error, and
+  /// the outcome still belongs on the access log entry for a request that was approved but then
+  /// failed for some other reason (e.g. the approved item was deleted concurrently).
+  private final class ApprovalOutcomeBox: @unchecked Sendable {
+    var value: ApprovalOutcome?
+  }
+
   private func vaultOutcome(for request: AgentRequest, caller: CallerIdentity) async -> AgentOutcome {
+    let settings = currentAgentSettings()
+    let approvalOutcomeBox = ApprovalOutcomeBox()
+
     let outcome: AgentOutcome
     do {
-      outcome = .success(try await vaultResponse(for: request, caller: caller))
+      let response = try await vaultResponse(
+        for: request,
+        caller: caller,
+        settings: settings,
+        approvalOutcomeBox: approvalOutcomeBox
+      )
+      outcome = .success(response)
     } catch let error as AgentError {
       outcome = .failure(error)
     } catch let error as VaultStoreError {
@@ -309,31 +352,65 @@ public actor AgentServer {
       succeeded = false
       response = nil
     }
-    await accessLog.record(AccessEvent(caller: caller, request: request, response: response, succeeded: succeeded))
+    await accessLog.record(
+      AccessEvent(
+        caller: caller,
+        request: request,
+        response: response,
+        succeeded: succeeded,
+        accessMode: settings.accessScope,
+        approvalOutcome: approvalOutcomeBox.value
+      )
+    )
     return outcome
   }
 
-  private func vaultResponse(for request: AgentRequest, caller: CallerIdentity) async throws -> AgentResponse {
+  private func vaultResponse(
+    for request: AgentRequest,
+    caller: CallerIdentity,
+    settings: AgentSettings,
+    approvalOutcomeBox: ApprovalOutcomeBox
+  ) async throws -> AgentResponse {
     guard await accessPolicy.isAccessAllowed(for: caller) else { throw AgentError.agentAccessDisabled }
     guard await vaultStore.isUnlocked else { throw AgentError.locked }
 
+    // Both scope filtering and approval gating exempt the app's own connection — see
+    // `isAppCaller(_:)`'s documentation and docs/adr/0005-scoped-agent-access.md.
+    let scoped = !isAppCaller(caller)
+
+    if scoped, settings.accessScope == .askEveryTime, !request.isGeneratePassword {
+      let outcome = await requestApproval(for: request, caller: caller)
+      approvalOutcomeBox.value = outcome
+      guard outcome != .deniedOrTimedOut else { throw AgentError.approvalDeniedOrTimedOut }
+    }
+
     switch request {
     case .list:
-      return .items(try await vaultStore.allItems().filter(isLive))
+      var items = try await vaultStore.allItems().filter(isLive)
+      if scoped { items = filterToScope(items, settings: settings) }
+      return .items(items)
 
     case .search(let query):
-      return .items(try await vaultStore.items(matching: query).filter(isLive))
+      var items = try await vaultStore.items(matching: query).filter(isLive)
+      if scoped { items = filterToScope(items, settings: settings) }
+      return .items(items)
 
     case .getItem(let reference):
-      return .item(try await resolve(reference))
+      return .item(try await resolveVisible(reference, settings: settings, scoped: scoped))
 
     case .createItem(let item):
       try requireWriteAccess(for: caller)
+      // Deliberately not auto-added to `allowedItemIDs` under `.selected` — see
+      // docs/adr/0005-scoped-agent-access.md's "No existence leak" section for why a write-capable
+      // agent must not be able to silently expand its own read scope.
       try await vaultStore.create(item)
       return .created(item)
 
     case .updateItem(let item):
       try requireWriteAccess(for: caller)
+      if scoped, settings.accessScope == .selected, !isItemAllowed(item, settings: settings) {
+        throw AgentError.notFound
+      }
       try await vaultStore.update(item)
       return .updated(item)
 
@@ -342,7 +419,7 @@ public actor AgentServer {
       // `VaultStoring.delete(id:)` only ever soft-deletes (sets `deletedAt`; see `isLive(_:)`'s
       // doc comment) — there is no permanent-delete request anywhere in `AgentRequest` for an
       // agent caller to reach, by design (851-2433).
-      let item = try await resolve(reference)
+      let item = try await resolveVisible(reference, settings: settings, scoped: scoped)
       try await vaultStore.delete(id: item.id)
       return .deleted
 
@@ -354,7 +431,7 @@ public actor AgentServer {
       }
 
     case .totpCode(let reference):
-      let item = try await resolve(reference)
+      let item = try await resolveVisible(reference, settings: settings, scoped: scoped)
       guard let totp = item.totp else {
         throw AgentError.internal(message: "item has no usable TOTP secret")
       }
@@ -385,7 +462,8 @@ public actor AgentServer {
       guard let username = item.usernames.first else { throw AgentError.notFound }
       return .autoFillCredential(username: username, password: item.password)
 
-    case .status, .createVault, .unlock, .lock, .getAgentSettings, .setAgentSettings, .rotateRecoveryKey:
+    case .status, .createVault, .unlock, .lock, .getAgentSettings, .setAgentSettings, .rotateRecoveryKey,
+      .pendingApprovals, .resolveApproval:
       preconditionFailure("vaultResponse never sees lock-lifecycle/helper-configuration requests")
     }
   }
@@ -399,17 +477,107 @@ public actor AgentServer {
     item.deletedAt == nil
   }
 
-  private func resolve(_ reference: ItemReference) async throws -> PasswordItem {
+  /// Whether `item` is visible to a non-app caller under `AgentAccessScope.selected` — its id is
+  /// explicitly allowed, or its `group` (if it has one) is. Callers under any other scope never
+  /// call this; the app itself is always exempt (see ``vaultResponse(for:caller:settings:approvalOutcomeBox:)``'s
+  /// `scoped` guard at every call site).
+  private func isItemAllowed(_ item: PasswordItem, settings: AgentSettings) -> Bool {
+    if settings.allowedItemIDs.contains(item.id) { return true }
+    if let group = item.group, settings.allowedGroups.contains(group) { return true }
+    return false
+  }
+
+  private func filterToScope(_ items: [PasswordItem], settings: AgentSettings) -> [PasswordItem] {
+    guard settings.accessScope == .selected else { return items }
+    return items.filter { isItemAllowed($0, settings: settings) }
+  }
+
+  /// Resolves `reference` to a single item, exactly like the pre-851-2445 `resolve(_:)` did, except
+  /// that under `AgentAccessScope.selected` (`scoped && settings.accessScope == .selected`) a
+  /// non-allowed item is treated as if it doesn't exist at all — including, critically, *before*
+  /// the `.ambiguous` check: a query matching two items where only one is allowed is resolved as a
+  /// single unambiguous match (or `.notFound`, if the allowed one isn't among the matches), never
+  /// `.ambiguous` — reporting "more than one item matched" would itself leak that a second,
+  /// invisible item exists. See docs/adr/0005-scoped-agent-access.md's "No existence leak" section.
+  private func resolveVisible(_ reference: ItemReference, settings: AgentSettings, scoped: Bool) async throws
+    -> PasswordItem
+  {
     switch reference {
     case .id(let id):
       guard let item = try await vaultStore.item(id: id), isLive(item) else { throw AgentError.notFound }
+      if scoped, settings.accessScope == .selected, !isItemAllowed(item, settings: settings) {
+        throw AgentError.notFound
+      }
       return item
 
     case .query(let query):
-      let matches = try await vaultStore.items(matching: query).filter(isLive)
+      var matches = try await vaultStore.items(matching: query).filter(isLive)
+      if scoped, settings.accessScope == .selected {
+        matches = matches.filter { isItemAllowed($0, settings: settings) }
+      }
       guard let first = matches.first else { throw AgentError.notFound }
       guard matches.count == 1 else { throw AgentError.ambiguous }
       return first
+    }
+  }
+
+  /// Runs the `AgentAccessScope.askEveryTime` approval flow for one request: resolves the caller's
+  /// top-level `AgentGrantIdentity`, best-effort-resolves an item title for the dialog (never lets
+  /// a failure here block the prompt — an unresolvable title just means a less specific dialog, not
+  /// a denied request), and asks `approvalCenter` for a decision.
+  ///
+  /// See docs/adr/0005-scoped-agent-access.md's "Approval flow" section for the full design.
+  private func requestApproval(for request: AgentRequest, caller: CallerIdentity) async -> ApprovalOutcome {
+    let identity = CallerIdentityResolver.resolveTopLevelAgentIdentity(pid: caller.pid)
+    let agentDescription = (identity.executablePath as NSString).lastPathComponent
+    let itemTitle = await bestEffortItemTitle(for: request)
+
+    return await approvalCenter.requestApproval(
+      for: identity,
+      agentDescription: agentDescription,
+      itemTitle: itemTitle,
+      operationDescription: operationDescription(for: request),
+      timeout: approvalTimeout
+    )
+  }
+
+  /// A human description of `request` for the approval dialog, e.g. "wants to read the password
+  /// for" — combined with the agent's name and (if resolved) the item's title by the app to render
+  /// something like "claude (via lilpass) wants to read the password for GitHub".
+  private func operationDescription(for request: AgentRequest) -> String {
+    switch request {
+    case .list, .search: return "wants to list your passwords"
+    case .getItem: return "wants to read the password for"
+    case .createItem: return "wants to create a new password"
+    case .updateItem: return "wants to edit the password for"
+    case .deleteItem: return "wants to delete the password for"
+    case .totpCode: return "wants to read the verification code for"
+    case .generatePassword, .status, .createVault, .unlock, .lock, .getAgentSettings, .setAgentSettings,
+      .rotateRecoveryKey, .pendingApprovals, .resolveApproval:
+      return "wants access to your passwords"
+    }
+  }
+
+  /// Best-effort item title for the approval dialog, swallowing any resolution failure — an
+  /// unresolvable reference (a bad query, a nonexistent id) just means the dialog shows no item
+  /// title; the actual request still gets its own, correctly-typed error after approval runs, so
+  /// this never needs to surface one itself.
+  private func bestEffortItemTitle(for request: AgentRequest) async -> String? {
+    let reference: ItemReference?
+    switch request {
+    case .getItem(let ref), .deleteItem(let ref), .totpCode(let ref):
+      reference = ref
+    case .updateItem(let item):
+      return item.title
+    default:
+      reference = nil
+    }
+    guard let reference else { return nil }
+    switch reference {
+    case .id(let id):
+      return try? await vaultStore.item(id: id)?.title
+    case .query(let query):
+      return try? await vaultStore.items(matching: query).first?.title
     }
   }
 
