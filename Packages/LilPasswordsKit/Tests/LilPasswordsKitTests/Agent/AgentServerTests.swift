@@ -938,7 +938,8 @@ private let autoFillCaller = CallerIdentity(
       userDisplayName: "The Octocat"
     )
     guard
-      case .failure(.agentWriteAccessDisabled) = await send(.passkeyRegister(registration), to: server, caller: autoFillCaller)
+      case .failure(.agentWriteAccessDisabled) = await send(
+        .passkeyRegister(registration), to: server, caller: autoFillCaller)
     else {
       Issue.record("expected .agentWriteAccessDisabled")
       return

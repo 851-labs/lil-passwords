@@ -10,11 +10,16 @@ import Foundation
 /// unlike `NSDistributedNotificationCenter` or a `CFRunLoop`-driven callback — delivery doesn't
 /// depend on the observing process pumping a run loop, which matters for `lilpass`/test-runner
 /// style processes that never do.
-enum DarwinNotifications {
+///
+/// `public` (851-2442): `PasskeysViewModel` (App target) is the first App-UI consumer, observing
+/// `vaultChanged` directly to refresh the Passkeys list after an AutoFill-extension-driven
+/// registration/assertion mutates the vault out from under the app process — the same signal
+/// `CredentialIdentityStoreSyncCoordinator` already uses for its own refresh.
+public enum DarwinNotifications {
   /// The name this project's processes agree on. Individual `VaultStore` instances can override
   /// it (see `VaultStore.init`) — tests use a fresh name per instance so parallel test runs in
   /// the same process don't cross-talk on this system-wide, unscoped channel.
-  static let vaultChanged = "com.851labs.lilpasswords.vaultChanged"
+  public static let vaultChanged = "com.851labs.lilpasswords.vaultChanged"
 
   static func post(_ name: String) {
     CFNotificationCenterPostNotification(
@@ -36,11 +41,14 @@ enum DarwinNotifications {
 /// this class *is* that opaque context, recovered via `Unmanaged` inside the free-function
 /// trampoline, so `handler` (an ordinary escaping Swift closure, stored as a property) can be
 /// whatever the owner needs — no `@convention(c)` restrictions leak past this file.
-final class DarwinNotificationObserver {
+///
+/// `public` (851-2442): see ``DarwinNotifications``'s doc comment for why the App target now
+/// needs to construct one of these directly.
+public final class DarwinNotificationObserver {
   private let name: CFString
   private let handler: () -> Void
 
-  init(name: String, handler: @escaping () -> Void) {
+  public init(name: String, handler: @escaping () -> Void) {
     self.name = name as CFString
     self.handler = handler
 

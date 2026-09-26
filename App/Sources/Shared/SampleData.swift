@@ -286,5 +286,44 @@ public enum SampleData {
         ),
       ]
     }
+
+    /// Realistic-looking ``PasskeyMetadata`` for `-PasskeysDebugSampleData YES` (see
+    /// ``PasskeysViewModel``) — the Passkeys-category equivalent of ``makeItems(now:)`` above.
+    /// Never carries key material: ``PasskeyMetadata`` structurally can't (no `privateKeyPKCS8`,
+    /// no `credentialId` field at all), matching what a real ``AgentClient/passkeys()`` call
+    /// returns.
+    public static func makePasskeys(now: Date = Date()) -> [PasskeyMetadata] {
+      func days(_ count: Double) -> Date { now.addingTimeInterval(-count * 86_400) }
+
+      return [
+        PasskeyMetadata(
+          id: UUID(),
+          relyingPartyIdentifier: "webauthn.io",
+          userName: "jordan.reyes",
+          userDisplayName: "Jordan Reyes",
+          website: URL(string: "https://webauthn.io"),
+          createdAt: days(120),
+          lastUsedAt: days(3)
+        ),
+        PasskeyMetadata(
+          id: UUID(),
+          relyingPartyIdentifier: "github.com",
+          userName: "jreyes1990",
+          userDisplayName: "",
+          website: URL(string: "https://github.com"),
+          createdAt: days(64),
+          lastUsedAt: days(1)
+        ),
+        PasskeyMetadata(
+          id: UUID(),
+          relyingPartyIdentifier: "amazon.com",
+          userName: "jordan.reyes@icloud.com",
+          userDisplayName: "Jordan Reyes",
+          website: URL(string: "https://www.amazon.com"),
+          createdAt: days(9),
+          lastUsedAt: nil
+        ),
+      ]
+    }
   #endif
 }

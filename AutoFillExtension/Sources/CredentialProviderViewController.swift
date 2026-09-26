@@ -338,7 +338,8 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         case .assert(let credentialId, let relyingPartyIdentifier, let clientDataHash):
           try await completePasskeyAssertion(
             credentialId: credentialId, relyingPartyIdentifier: relyingPartyIdentifier, clientDataHash: clientDataHash)
-        case .register(let relyingPartyIdentifier, let userHandle, let userName, let userDisplayName, let clientDataHash):
+        case .register(
+          let relyingPartyIdentifier, let userHandle, let userName, let userDisplayName, let clientDataHash):
           try await completePasskeyRegistration(
             relyingPartyIdentifier: relyingPartyIdentifier, userHandle: userHandle, userName: userName,
             userDisplayName: userDisplayName, clientDataHash: clientDataHash)

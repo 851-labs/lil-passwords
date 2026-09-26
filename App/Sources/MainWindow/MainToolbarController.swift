@@ -1,15 +1,18 @@
 import AppKit
 
 /// Which toolbar layout should be installed for the currently-selected sidebar category: the
-/// default list+detail chrome (All/Passkeys), Codes/Security/Deleted's reduced full-width chrome,
-/// or Wi-Fi's own chrome (851-2444) — the default layout's list title and search field, but no
-/// sort/"+" capsule (nothing in `WiFiListViewController` is sortable or addable) and its Edit item
-/// left present-but-disabled rather than removed (`MainSplitViewController` disables the shared
-/// `editControl` for `.wifi` the same way it already does for "nothing selected").
+/// default list+detail chrome (All), Codes/Security/Deleted's reduced full-width chrome, or
+/// Wi-Fi/Passkeys' own chrome (851-2444, extended for Passkeys by 851-2442) — the default layout's
+/// list title and search field, but no sort/"+" capsule (nothing in `WiFiListViewController` or
+/// `PasskeysListViewController` is sortable, and neither has a manual "add" flow — a passkey only
+/// ever arrives via an AutoFill-driven registration) and the Edit item left present-but-disabled
+/// rather than removed (`MainSplitViewController` disables the shared `editControl` for `.wifi`/
+/// `.passkeys` the same way it already does for "nothing selected").
 enum ToolbarLayoutMode: Equatable {
   case splitView
   case fullWidth
   case wifi
+  case passkeys
 }
 
 /// Builds and manages the unified toolbar, matching Apple Passwords' per-column layout (851-2463):
@@ -174,11 +177,21 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     ]
   }
 
+  /// Passkeys' own toolbar layout (851-2442) — structurally identical to `wifiItemIdentifiers`
+  /// (list title + search, no sort/"+" capsule, Edit present-but-disabled) since neither category
+  /// has anything to sort or a manual "add" affordance. Kept as its own case (rather than reusing
+  /// `.wifi`) so `MainSplitViewController.onToolbarLayoutModeChange` reads as "which category" and
+  /// the two chrome sets can diverge later without an unrelated rename.
+  private var passkeysItemIdentifiers: [NSToolbarItem.Identifier] {
+    wifiItemIdentifiers
+  }
+
   private func itemIdentifiers(for mode: ToolbarLayoutMode) -> [NSToolbarItem.Identifier] {
     switch mode {
     case .splitView: return splitViewItemIdentifiers
     case .fullWidth: return fullWidthItemIdentifiers
     case .wifi: return wifiItemIdentifiers
+    case .passkeys: return passkeysItemIdentifiers
     }
   }
 

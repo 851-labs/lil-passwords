@@ -515,7 +515,8 @@ public actor AgentServer {
         attestedCredentialData: attestedCredentialData
       )
       let attestationObject = PasskeyAuthenticator.attestationObject(authenticatorData: authenticatorData)
-      return .passkeyRegistered(PasskeyRegistrationResult(credentialId: credentialId, attestationObject: attestationObject))
+      return .passkeyRegistered(
+        PasskeyRegistrationResult(credentialId: credentialId, attestationObject: attestationObject))
 
     case .passkeyAssert(let assertion):
       // 851-2442: the only other place a passkey private key is ever used. Looked up by

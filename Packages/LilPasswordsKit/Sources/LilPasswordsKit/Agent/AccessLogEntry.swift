@@ -219,7 +219,8 @@ enum AccessEventSummary {
     case .passkeys:
       // 851-2442: a list, like `.list`/`.search` — no single item, and the response
       // (`[PasskeyMetadata]`) structurally cannot carry a private key.
-      return Summary(operation: "passkeys", itemId: nil, itemTitle: nil, fields: ["relyingPartyIdentifier", "userName"])
+      return Summary(
+        operation: "passkeys", itemId: nil, itemTitle: nil, fields: ["relyingPartyIdentifier", "userName"])
 
     case .passkeyIdentities:
       // 851-2442: app-only, powers `CredentialIdentityStoreSyncCoordinator` — a list, like
