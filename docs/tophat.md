@@ -31,17 +31,25 @@ make project && make build
 "build/Build/Products/Debug/lil passwords.app/Contents/Helpers/lilpass" list --json
 ```
 
-**Caveat as of 851-2430/851-2431**: `AppDelegate` doesn't call
-`SMAppService.agent(plistName:).register()` anywhere yet — the ADR's "Infrastructure landed
-alongside this spike" section describes this as tested via a temporary, reverted hook, not as
-wired into app startup. Until some ticket adds that call, launchd never learns about
-`com.851labs.lilpasswords.agent.xpc` at all, so *every* `lilpass` command that needs the helper
-(`status`, `list`, `search`, `get`, `read`, `totp`, `generate`, and `run`/`inject` when they
-actually need to resolve a `lilpass://` reference) fails with exit code 7
-("the connection to LilPasswordsAgent was invalidated") regardless of the Settings → Agents toggle
-above — this is a real, currently-true gap, not specific to this branch, and not something
-851-2430/851-2431 (or 851-2428/851-2429/851-2460) should fix; it's a separate, pre-existing concern
-outside all of their scopes.
+**Caveat, updated post-851-2411**: `AppDelegate.applicationDidFinishLaunching` now calls
+`registerHelperAgentAndHandleOutcome()` → `HelperAgentRegistrar.registerIfNeeded(using:)` on every
+launch (851-2411, commit `660fc7c`) — the previous version of this doc said no such call existed
+anywhere; that's no longer true and the claim below has been corrected accordingly. Despite that,
+`lilpass` commands that need the helper (`status`, `list`, `search`, `get`, `read`, `totp`,
+`generate`, and `run`/`inject` when they need to resolve a `lilpass://` reference) still routinely
+fail with exit code 7 ("the connection to LilPasswordsAgent was invalidated") in this shared,
+multi-worktree dev environment, regardless of the Settings → Agents toggle above — the exact cause
+hasn't been root-caused (candidates include `.requiresApproval`/`.notFound` outcomes, or launchd's
+per-bundle-path identity for `com.851labs.lilpasswords.agent.xpc` colliding across several checked
+out worktrees of the same app on one machine), but it is real, currently-true, not specific to this
+branch, and not something 851-2428/851-2429/851-2460 should fix; it's a separate, pre-existing
+concern outside all of their scopes.
+
+For tophatting without a registered helper, the app has its own documented escape hatch for exactly
+this shared-machine scenario: `LILPASSWORDS_OFFLINE_DEMO=1 LILPASSWORDS_FAKE_AUTH=1` (see
+`App/Sources/OfflineDemoAgent.swift` and `MainWindowController.makeAgent`/`makeAuthenticator`) swaps
+in an in-process fake agent and authenticator instead of the real XPC connection, so Settings/lock
+screen captures aren't blocked on launchd cooperating.
 
 What that leaves as real, meaningful verification without a registered helper:
 
