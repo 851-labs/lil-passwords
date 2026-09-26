@@ -129,9 +129,6 @@ import Testing
   }
 
   @Test func agentAccessDisabledSurfacesAsATypedErrorOverXPC() async throws {
-    struct AlwaysDenyAccessPolicy: AccessPolicyProviding {
-      func isAgentAccessEnabled() async -> Bool { false }
-    }
     let harness = try await Harness(accessPolicy: AlwaysDenyAccessPolicy())
 
     // Access-disabled takes precedence over lock state (see `AgentServerTests
@@ -145,6 +142,23 @@ import Testing
       Issue.record("expected .list to throw")
     } catch let AgentClient.RequestError.remote(error) {
       #expect(error == .agentAccessDisabled)
+    }
+  }
+
+  @Test func aRejectAllRequirementRefusesToEvenAttemptTheConnection() async throws {
+    // The fail-closed case (`AgentConnectionSecurity.Requirement.rejectAll`): unlike
+    // `.developmentFallback`, `AgentClient` doesn't even create an `NSXPCConnection` — it throws
+    // immediately, symmetrically with `AgentXPCListenerDelegate` refusing to accept one.
+    let harness = try await Harness(connectionSecurity: .rejectAll(reason: "test"))
+
+    do {
+      _ = try await harness.client.status()
+      Issue.record("expected the connection attempt to be refused")
+    } catch let AgentClient.RequestError.connection(error) {
+      guard case .invalidated = error else {
+        Issue.record("expected .invalidated, got \(error)")
+        return
+      }
     }
   }
 

@@ -13,10 +13,14 @@ import LilPasswordsKit
 // a future change to where/how the vault lives should ever require here.
 let sharedVaultStore = try VaultStore()
 
-let server = AgentServer(vaultStore: sharedVaultStore)
+// Agent access starts disabled and stays that way until a user explicitly turns it on (during
+// onboarding or in Settings) — never hardcode `true` here. `AlwaysDenyAccessPolicy` is wired in
+// explicitly rather than leaning on `AgentServer`'s own `AlwaysAllowAccessPolicy()` parameter
+// default, which exists only for tests that don't care about the toggle.
+// TODO(851-2428): replace this with the real, AppSettings-backed `AccessPolicyProviding` (the
+// Settings → Agents toggle) once it exists.
+let server = AgentServer(vaultStore: sharedVaultStore, accessPolicy: AlwaysDenyAccessPolicy())
 
-// TODO(851-2428): supply the real `AccessPolicyProviding` (the Settings → Agents toggle) once it
-// exists; `AgentServer`'s default (`AlwaysAllowAccessPolicy`) is used above until then.
 // TODO(851-2429): supply the real `AccessLogging` conformer once it exists; `AgentServer`'s default
 // (`NoOpAccessLog`) is used above until then.
 

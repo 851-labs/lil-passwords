@@ -168,6 +168,13 @@ public actor AgentClient {
   }
 
   private func sendOverXPC(_ data: Data) async throws -> Data {
+    // Fail closed, symmetrically with the helper side (`AgentXPCListenerDelegate`): a Release
+    // build with no team identifier can't verify it's really talking to `LilPasswordsAgent`
+    // rather than some other same-user process that squatted the Mach service name, so refuse to
+    // even attempt the connection rather than exchanging data with an unverified peer.
+    if case .rejectAll(let reason) = connectionSecurity {
+      throw RequestError.connection(.invalidated(reason: reason))
+    }
     let connection = activeConnection()
     do {
       return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
@@ -207,12 +214,26 @@ public actor AgentClient {
       newConnection.setCodeSigningRequirement(requirement)
     case .developmentFallback:
       break
+    case .rejectAll:
+      // Unreachable in practice: `sendOverXPC` throws before ever calling `activeConnection()`
+      // for `.rejectAll`. Handled here anyway so this switch stays exhaustive without a `default`.
+      break
     }
+    // Unwrap `self` to a strong local *before* handing it to `Task { }`: capturing the raw `weak
+    // self` inside the nested `Task` closure (rather than a materialized strong reference) is what
+    // the older Swift/Xcode toolchain CI builds with flags as "passing closure as a 'sending'
+    // parameter risks causing data races" — a weak reference can be nilled out concurrently by ARC,
+    // so it isn't a safe value to hand across the isolation boundary `Task.init`'s `sending`
+    // closure parameter introduces, even though the referent (`AgentClient`, an actor) is `Sendable`
+    // once loaded. `guard let self` loads it once into an immutable, genuinely `Sendable` local
+    // that both toolchains accept.
     newConnection.invalidationHandler = { [weak self] in
-      Task { await self?.clearConnection() }
+      guard let self else { return }
+      Task { await self.clearConnection() }
     }
     newConnection.interruptionHandler = { [weak self] in
-      Task { await self?.clearConnection() }
+      guard let self else { return }
+      Task { await self.clearConnection() }
     }
     newConnection.resume()
     connection = newConnection

@@ -32,6 +32,17 @@ public final class AgentXPCListenerDelegate: NSObject, NSXPCListenerDelegate, @u
           "LilPasswordsAgent: accepting an XPC connection without code-signature validation (\(reason))\n".utf8
         )
       )
+
+    case .rejectAll(let reason):
+      // Fail closed: a Release build with no team identifier has no safe way to validate the
+      // peer, so refuse the connection outright rather than falling back to accept-anything (see
+      // `AgentConnectionSecurity.Requirement.rejectAll`'s docs). Returning `false` here means we
+      // never call `newConnection.resume()` below, so the exported object/interface is never set
+      // up and the connection is torn down without handling a single request.
+      FileHandle.standardError.write(
+        Data("LilPasswordsAgent: rejecting an XPC connection — \(reason)\n".utf8)
+      )
+      return false
     }
 
     let caller = CallerIdentityResolver.resolve(pid: newConnection.processIdentifier)

@@ -27,31 +27,57 @@ public enum AgentConnectionSecurity {
     /// `NSXPCConnection.setCodeSigningRequirement(_:)`.
     case enforce(String)
 
-    /// No team identifier could be determined for the running process — an unsigned or
-    /// ad-hoc-signed build (the default per `Config/Base.xcconfig`, and always true in CI, which
-    /// builds unsigned). Connections are accepted without code-signature validation.
+    /// No team identifier could be determined for the running process, **and** this is a `DEBUG`
+    /// build — an unsigned or ad-hoc-signed local/CI build (the default per `Config/Base.xcconfig`).
+    /// Connections are accepted without code-signature validation.
     ///
     /// This is the documented local-dev fallback: an ad-hoc/unsigned build has no team identifier
     /// to build a requirement from, so enforcing one would make the agent reject every client on
     /// a machine without a configured `Config/Local.xcconfig` signing identity, including CI.
     /// Anyone who *does* configure a personal team there (see that file) gets real enforcement
-    /// with no code change.
+    /// with no code change. **Never returned from a Release build** — see ``rejectAll(reason:)``.
     case developmentFallback(reason: String)
+
+    /// No team identifier could be determined for the running process, and this is **not** a
+    /// `DEBUG` build. Every connection must be refused rather than accepted unauthenticated: a
+    /// Release build with no team identifier to validate against has no safe way to tell the real
+    /// app/`lilpw` apart from any other process on the machine, and this helper holds the vault
+    /// key once unlocked — silently running with `.developmentFallback`'s "accept anything"
+    /// behavior in that configuration would let any local process read the vault through it.
+    case rejectAll(reason: String)
   }
 
   /// Builds a `Requirement` accepting only peers whose code signature has our own running
   /// process's team identifier and one of `identifiers`' bundle identifiers.
   public static func requirement(acceptingPeers identifiers: [PeerIdentifier]) -> Requirement {
-    requirement(acceptingPeers: identifiers, teamIdentifier: currentProcessTeamIdentifier())
+    requirement(acceptingPeers: identifiers, teamIdentifier: currentProcessTeamIdentifier(), isDebugBuild: isDebugBuild)
   }
 
-  /// The `teamIdentifier`-parameterized half of ``requirement(acceptingPeers:)``, split out so
-  /// tests can exercise the string-building and syntax-validation logic without depending on how
-  /// the test binary itself happens to be signed.
-  static func requirement(acceptingPeers identifiers: [PeerIdentifier], teamIdentifier: String?) -> Requirement {
+  /// Whether this binary was compiled with `DEBUG` defined. A `static let` (rather than an inline
+  /// `#if DEBUG` at each call site) so ``requirement(acceptingPeers:teamIdentifier:isDebugBuild:)``
+  /// can take it as an ordinary parameter — tests exercise both the DEBUG and Release policy
+  /// branches by passing `isDebugBuild` explicitly, regardless of which configuration the test
+  /// binary itself was built with.
+  static let isDebugBuild: Bool = {
+    #if DEBUG
+      return true
+    #else
+      return false
+    #endif
+  }()
+
+  /// The `teamIdentifier`/`isDebugBuild`-parameterized half of ``requirement(acceptingPeers:)``,
+  /// split out so tests can exercise the string-building, syntax-validation, and DEBUG-vs-Release
+  /// fallback logic without depending on how the test binary itself happens to be signed or built.
+  static func requirement(
+    acceptingPeers identifiers: [PeerIdentifier],
+    teamIdentifier: String?,
+    isDebugBuild: Bool = isDebugBuild
+  ) -> Requirement {
     guard let teamIdentifier else {
-      return .developmentFallback(
-        reason: "no team identifier on the running process's own code signature (unsigned or ad-hoc build)"
+      return unauthenticatedFallback(
+        reason: "no team identifier on the running process's own code signature (unsigned or ad-hoc build)",
+        isDebugBuild: isDebugBuild
       )
     }
     let identifierClause = identifiers.map { "identifier \"\($0.rawValue)\"" }.joined(separator: " or ")
@@ -65,11 +91,27 @@ public enum AgentConnectionSecurity {
     var requirementRef: SecRequirement?
     let status = SecRequirementCreateWithString(text as CFString, SecCSFlags(), &requirementRef)
     guard status == errSecSuccess else {
-      return .developmentFallback(
-        reason: "generated requirement failed to parse (SecRequirementCreateWithString status \(status)); this is a bug"
+      return unauthenticatedFallback(
+        reason:
+          "generated requirement failed to parse (SecRequirementCreateWithString status \(status)); this is a bug",
+        isDebugBuild: isDebugBuild
       )
     }
     return .enforce(text)
+  }
+
+  /// Chooses between `.developmentFallback` and `.rejectAll` for a situation where no real
+  /// `Requirement` could be built (no team identifier, or a bug in the template above): DEBUG
+  /// builds get the permissive local-dev behavior; anything else fails closed and logs why, since
+  /// this is the only path an unauthenticated peer could otherwise talk to the vault helper.
+  private static func unauthenticatedFallback(reason: String, isDebugBuild: Bool) -> Requirement {
+    guard !isDebugBuild else {
+      return .developmentFallback(reason: reason)
+    }
+    FileHandle.standardError.write(
+      Data("LilPasswordsAgent: refusing every connection — \(reason)\n".utf8)
+    )
+    return .rejectAll(reason: reason)
   }
 
   /// The team identifier from the *running process's own* code signature, or `nil` if it has
