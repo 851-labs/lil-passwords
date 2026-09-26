@@ -6,54 +6,22 @@
    helper a session key).
 2. "Allow agents to access passwords" is turned on in Settings → Agents.
 
-(2) is the 851-2428 Settings toggle. Until it exists, the helper hardcodes
-`AlwaysDenyAccessPolicy` (see `Agent/Sources/main.swift`), so a real, launchd-managed helper always
-refuses `lilpass`/`lilpass mcp` — there's no UI yet to turn it on.
-
-To unblock tophatting 851-2430/851-2431 against the real helper before 851-2428 lands,
-`Agent/Sources/main.swift` has a **DEBUG-only** override. It does not exist in a Release build —
-the entire check is inside `#if DEBUG`, and the `#else` branch is an unconditional
-`AlwaysDenyAccessPolicy()` with no override path at all — so there is no way for this to ship
-enabled, or at all, in a Release/archived build.
+(2) is the real, 851-2428 Settings → Agents toggle: `AgentSettingsAccessPolicy` (see
+`Agent/Sources/main.swift`) reads it live from a helper-owned Keychain item — never
+`UserDefaults` — via the gated `getAgentSettings`/`setAgentSettings` XPC ops (see
+`docs/adr/0001-storage-and-process-model.md` (e)). There's no DEBUG-only override for this
+anymore: the toggle is real, so tophatting `lilpass`/`lilpass mcp` against a launchd-managed
+helper just means turning it on in the app's own Settings window, the same way an end user would.
 
 ## Enabling it
 
-Pick one:
-
-- **Env var**, for a helper launchd activates on demand (the normal path — see
-  `docs/adr/0001-storage-and-process-model.md`):
-
-  ```sh
-  launchctl setenv LILPASS_TOPHAT_ALLOW_AGENT_ACCESS 1
-  ```
-
-  launchd only reads its managed environment when it *activates* the on-demand service, so if
-  `LilPasswordsAgent` is already running, kill it first so the next connection attempt relaunches
-  it with the new environment:
-
-  ```sh
-  launchctl kill SIGTERM gui/$(id -u)/com.851labs.lilpasswords.agent
-  ```
-
-  Unset it when you're done so a normal (non-DEBUG) rebuild of the app/helper doesn't leave
-  anything surprising set in your shell/session:
-
-  ```sh
-  launchctl unsetenv LILPASS_TOPHAT_ALLOW_AGENT_ACCESS
-  ```
-
-- **Launch argument**, if you're running the helper binary directly (e.g. from Xcode, or
-  `build/Build/Products/Debug/LilPasswordsAgent.app/Contents/MacOS/LilPasswordsAgent` in a
-  terminal) rather than through launchd:
-
-  ```sh
-  LilPasswordsAgent --allow-agent-access-debug
-  ```
-
-Either way, you still need the vault *unlocked* — the override only flips the Settings toggle's
-stand-in, not the lock state. Unlock via the app's normal flow (or, in a unit/integration test, via
-`AgentClient.unlock(sessionKey:keyId:)` directly, which is how `LilpassCoreTests`' `Harness` does it
-without any of this).
+1. Launch the app and open Settings → Agents.
+2. Turn on "Allow agents to access passwords".
+3. Unlock the vault via the app's normal flow (Touch ID/password) — the toggle alone isn't
+   enough; `AgentSettingsAccessPolicy.isAccessAllowed(for:)` still requires the vault to be
+   unlocked for any non-app caller (`lilpass`, the MCP server). In a unit/integration test, unlock
+   instead via `AgentClient.unlock(sessionKey:keyId:)` directly, which is how `LilpassCoreTests`'
+   `Harness` does it.
 
 ## Running `lilpass` against the real helper
 
@@ -70,9 +38,10 @@ wired into app startup. Until some ticket adds that call, launchd never learns a
 `com.851labs.lilpasswords.agent.xpc` at all, so *every* `lilpass` command that needs the helper
 (`status`, `list`, `search`, `get`, `read`, `totp`, `generate`, and `run`/`inject` when they
 actually need to resolve a `lilpass://` reference) fails with exit code 7
-("the connection to LilPasswordsAgent was invalidated") regardless of the DEBUG override above —
-this is a real, currently-true gap, not specific to this branch, and not something 851-2430/851-2431
-should fix (it's a separate concern from either ticket's scope).
+("the connection to LilPasswordsAgent was invalidated") regardless of the Settings → Agents toggle
+above — this is a real, currently-true gap, not specific to this branch, and not something
+851-2430/851-2431 (or 851-2428/851-2429/851-2460) should fix; it's a separate, pre-existing concern
+outside all of their scopes.
 
 What that leaves as real, meaningful verification without a registered helper:
 
