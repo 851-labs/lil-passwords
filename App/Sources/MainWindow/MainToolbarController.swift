@@ -1,31 +1,20 @@
 import AppKit
 
-/// Told about toolbar actions the main window doesn't yet do anything real with (search
-/// filtering and creating new items both depend on `PasswordItem`, 851-2403). Kept as a
-/// protocol so the toolbar doesn't need to know what eventually implements this.
-@MainActor
-protocol MainToolbarControllerDelegate: AnyObject {
-  func toolbarController(_ controller: MainToolbarController, searchTextDidChange text: String)
-}
-
-/// Builds and manages the unified toolbar: sidebar toggle, search field, a "+" add button, and
-/// a share button, matching Apple Passwords' toolbar layout.
+/// Builds and manages the unified toolbar: sidebar toggle, a "+" add button, and a share button,
+/// matching Apple Passwords' toolbar layout. The search field is *not* here — Apple Passwords puts
+/// it at the top of the list column rather than the toolbar's centered/principal position, so it
+/// lives in `ItemListViewController` instead (851-2461).
 @MainActor
 final class MainToolbarController: NSObject, NSToolbarDelegate {
   static let toolbarIdentifier = NSToolbar.Identifier("MainWindowToolbar")
 
   private enum ItemIdentifier {
-    static let search = NSToolbarItem.Identifier("SearchItem")
     static let add = NSToolbarItem.Identifier("AddItem")
     static let share = NSToolbarItem.Identifier("ShareItem")
   }
 
-  weak var delegate: MainToolbarControllerDelegate?
-
   /// The split view whose first divider the sidebar-tracking separator should follow.
   weak var splitView: NSSplitView?
-
-  private var searchToolbarItem: NSSearchToolbarItem?
 
   func makeToolbar() -> NSToolbar {
     let toolbar = NSToolbar(identifier: Self.toolbarIdentifier)
@@ -40,8 +29,6 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     [
       .toggleSidebar,
       .sidebarTrackingSeparator,
-      .flexibleSpace,
-      ItemIdentifier.search,
       .flexibleSpace,
       ItemIdentifier.add,
       ItemIdentifier.share,
@@ -64,13 +51,6 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     case .sidebarTrackingSeparator:
       guard let splitView else { return nil }
       return NSTrackingSeparatorToolbarItem(identifier: itemIdentifier, splitView: splitView, dividerIndex: 0)
-
-    case ItemIdentifier.search:
-      let item = NSSearchToolbarItem(itemIdentifier: itemIdentifier)
-      item.searchField.placeholderString = "Search"
-      item.searchField.delegate = self
-      searchToolbarItem = item
-      return item
 
     case ItemIdentifier.add:
       let item = NSToolbarItem(itemIdentifier: itemIdentifier)
@@ -101,16 +81,6 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     }
   }
 
-  /// Focuses and selects-all in the toolbar search field, in response to ⌘F (851-2417). Handled
-  /// here rather than as a `MainMenu.swift` menu item's action, since that file is 851-2424's.
-  func focusSearchField() {
-    guard let searchField = searchToolbarItem?.searchField else { return }
-    searchField.window?.makeFirstResponder(searchField)
-    if let editor = searchField.currentEditor() {
-      editor.selectAll(nil)
-    }
-  }
-
   @objc
   private func showAddMenu(_ sender: NSButton) {
     let menu = NSMenu()
@@ -121,12 +91,5 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     menu.addItem(withTitle: "New Secure Note…", action: nil, keyEquivalent: "")
     menu.items.forEach { $0.isEnabled = false }
     menu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 4), in: sender)
-  }
-}
-
-extension MainToolbarController: NSSearchFieldDelegate {
-  func controlTextDidChange(_ notification: Notification) {
-    guard let field = notification.object as? NSSearchField else { return }
-    delegate?.toolbarController(self, searchTextDidChange: field.stringValue)
   }
 }

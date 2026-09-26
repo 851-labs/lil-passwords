@@ -46,7 +46,6 @@ final class MainWindowController: NSWindowController {
     super.init(window: window)
 
     window.contentViewController = splitViewController
-    toolbarController.delegate = self
     toolbarController.splitView = splitViewController.splitView
     window.toolbar = toolbarController.makeToolbar()
 
@@ -72,7 +71,8 @@ final class MainWindowController: NSWindowController {
     }
 
     // ⌘F focuses the search field (851-2417). Handled as a local event monitor, rather than a
-    // `MainMenu.swift` menu item's action, since that file is 851-2424's.
+    // `MainMenu.swift` menu item's action, since that file is 851-2424's. The search field itself
+    // lives in the list column's header, not the toolbar (851-2461).
     searchKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
       guard let self,
         event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
@@ -80,7 +80,7 @@ final class MainWindowController: NSWindowController {
       else {
         return event
       }
-      toolbarController.focusSearchField()
+      splitViewController.listViewController.focusSearchField()
       return nil
     }
   }
@@ -94,11 +94,5 @@ final class MainWindowController: NSWindowController {
     if let searchKeyMonitor {
       NSEvent.removeMonitor(searchKeyMonitor)
     }
-  }
-}
-
-extension MainWindowController: MainToolbarControllerDelegate {
-  func toolbarController(_ controller: MainToolbarController, searchTextDidChange text: String) {
-    splitViewController.listViewController.updateSearch(query: text)
   }
 }

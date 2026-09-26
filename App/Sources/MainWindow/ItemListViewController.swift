@@ -33,6 +33,8 @@ final class ItemListViewController: NSViewController {
 
   weak var delegate: ItemListViewControllerDelegate?
 
+  private let searchBar = NSView()
+  private let searchField = NSSearchField()
   private let headerBar = NSView()
   private let countLabel = NSTextField(labelWithString: "")
   private let sortButton = NSButton()
@@ -70,26 +72,34 @@ final class ItemListViewController: NSViewController {
 
   override func loadView() {
     let view = NSView()
+    configureSearchBar()
     configureHeaderBar()
     configureTableView()
     configureEmptyStateView()
 
+    view.addSubview(searchBar)
     view.addSubview(headerBar)
     view.addSubview(scrollView)
     view.addSubview(emptyStateView)
 
+    searchBar.translatesAutoresizingMaskIntoConstraints = false
     headerBar.translatesAutoresizingMaskIntoConstraints = false
     scrollView.translatesAutoresizingMaskIntoConstraints = false
     emptyStateView.translatesAutoresizingMaskIntoConstraints = false
 
     NSLayoutConstraint.activate([
-      headerBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-      headerBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      searchBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      searchBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
       // Anchored to the safe area (not `view.topAnchor`) because the window uses a transparent
       // unified toolbar (`titlebarAppearsTransparent = true`): this split-view item's content
-      // extends *behind* the toolbar/search field, so pinning to the plain top anchor drew the
-      // count label and sort button underneath the search pill instead of below it.
-      headerBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+      // extends *behind* the toolbar, so pinning to the plain top anchor drew content underneath
+      // the titlebar instead of below it.
+      searchBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+      searchBar.heightAnchor.constraint(equalToConstant: 44),
+
+      headerBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      headerBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      headerBar.topAnchor.constraint(equalTo: searchBar.bottomAnchor),
       headerBar.heightAnchor.constraint(equalToConstant: 24),
 
       scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -128,14 +138,38 @@ final class ItemListViewController: NSViewController {
     rebuildRows(preservingSelection: false)
   }
 
-  /// Called by `MainWindowController` whenever the toolbar search field's text changes.
-  func updateSearch(query: String) {
+  /// Focuses and selects-all in the embedded search field, in response to ⌘F (851-2417),
+  /// forwarded here by `MainWindowController`'s local event monitor since the search field lives
+  /// in the list column's header, not the toolbar (851-2461).
+  func focusSearchField() {
+    view.window?.makeFirstResponder(searchField)
+    if let editor = searchField.currentEditor() {
+      editor.selectAll(nil)
+    }
+  }
+
+  /// Updates the current search query and rebuilds rows; called from the embedded search field's
+  /// delegate methods below.
+  private func updateSearch(query: String) {
     guard query != searchQuery else { return }
     searchQuery = query
     rebuildRows(preservingSelection: false)
   }
 
   // MARK: Configuration
+
+  private func configureSearchBar() {
+    searchField.translatesAutoresizingMaskIntoConstraints = false
+    searchField.placeholderString = "Search"
+    searchField.delegate = self
+
+    searchBar.addSubview(searchField)
+    NSLayoutConstraint.activate([
+      searchField.leadingAnchor.constraint(equalTo: searchBar.leadingAnchor, constant: 10),
+      searchField.trailingAnchor.constraint(equalTo: searchBar.trailingAnchor, constant: -10),
+      searchField.centerYAnchor.constraint(equalTo: searchBar.centerYAnchor),
+    ])
+  }
 
   private func configureHeaderBar() {
     countLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -170,10 +204,14 @@ final class ItemListViewController: NSViewController {
     tableView.allowsMultipleSelection = true
     tableView.allowsEmptySelection = true
     tableView.floatsGroupRows = true
-    // `.plain` (rather than leaving `.automatic`, which resolves to extra inset padding around
-    // rows/group rows in some window chrome configurations) plus zeroed `intercellSpacing`, since
-    // row/section spacing is fully controlled by `tableView(_:heightOfRow:)` below — anything else
-    // just stacks on top of that and produces the "twice the row height" look between sections.
+    // `NSTableView.Style.inset` (tried first, per design review) turned out not to draw a rounded,
+    // inset selection highlight on its own here — with a single plain column (no outline/source
+    // list), its selection still fills edge-to-edge as a square rectangle. `InsetTableRowView`
+    // below draws that shape directly instead, matching the sidebar's `.sourceList` look, so the
+    // base style stays `.plain` (confirmed not to disturb section header alignment).
+    // `intercellSpacing` stays zeroed since row/section spacing is fully controlled by
+    // `tableView(_:heightOfRow:)` below — anything else just stacks on top of that and produces a
+    // "twice the row height" look between sections.
     tableView.style = .plain
     tableView.intercellSpacing = NSSize(width: 0, height: 0)
     tableView.dataSource = self
@@ -407,6 +445,15 @@ extension ItemListViewController: NSTableViewDelegate {
     return false
   }
 
+  func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+    // Only item rows get the rounded/inset selection; section headers keep the default row view
+    // so `floatsGroupRows`/group-row chrome above is unaffected.
+    switch rows[row] {
+    case .item: return InsetTableRowView()
+    case .section: return nil
+    }
+  }
+
   func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
     if case .section = rows[row] { return false }
     return true
@@ -447,6 +494,20 @@ extension ItemListViewController: NSMenuDelegate {
   }
 }
 
+extension ItemListViewController: NSSearchFieldDelegate {
+  func controlTextDidChange(_ notification: Notification) {
+    guard let field = notification.object as? NSSearchField else { return }
+    updateSearch(query: field.stringValue)
+  }
+
+  /// Called when the user presses Esc or clicks the field's cancel button — `NSSearchField`
+  /// already clears its own text for both, this just makes sure the query (and results) reset to
+  /// match, satisfying "Esc clears it" (851-2461).
+  func searchFieldDidEndSearching(_ sender: NSSearchField) {
+    updateSearch(query: "")
+  }
+}
+
 /// Filtering rules for which items appear under each sidebar category (851-2414): `all` is every
 /// non-deleted item, `codes` is non-deleted items with a TOTP secret, and `deleted` is anything
 /// with `deletedAt` set. `passkeys`, `wifi`, and `security` aren't modeled by `PasswordItem` yet,
@@ -459,6 +520,19 @@ fileprivate extension SidebarCategory {
     case .deleted: return item.deletedAt != nil
     case .passkeys, .wifi, .security: return false
     }
+  }
+}
+
+/// A row view that draws its own rounded, inset selection highlight for item rows — matching the
+/// sidebar's `.sourceList` look — since `NSTableView.Style.inset` doesn't produce that shape by
+/// itself for a plain single-column table view (see `configureTableView()` above for why).
+private final class InsetTableRowView: NSTableRowView {
+  override func drawSelection(in dirtyRect: NSRect) {
+    guard selectionHighlightStyle != .none else { return }
+    let insetRect = bounds.insetBy(dx: 8, dy: 1)
+    let path = NSBezierPath(roundedRect: insetRect, xRadius: 6, yRadius: 6)
+    (isEmphasized ? NSColor.controlAccentColor : NSColor.unemphasizedSelectedContentBackgroundColor).setFill()
+    path.fill()
   }
 }
 
