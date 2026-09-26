@@ -237,6 +237,9 @@
     "Check for Updates…" : {
 
     },
+    "Checks each password against known data leaks by sending only the first 5 characters of its hash — never the password itself — to Have I Been Pwned." : {
+
+    },
     "Choose a Different File…" : {
 
     },
@@ -389,6 +392,9 @@
     "Detect a QR code currently on screen" : {
 
     },
+    "Detect compromised passwords" : {
+
+    },
     "Done" : {
 
     },
@@ -425,6 +431,9 @@
           }
         }
       }
+    },
+    "Fetching icons reveals which sites you have accounts for to those sites." : {
+
     },
     "Fields" : {
 
@@ -781,6 +790,9 @@
     "Show Sidebar" : {
 
     },
+    "Show website icons" : {
+
+    },
     "Sidebar" : {
 
     },
@@ -939,6 +951,9 @@
 
     },
     "Website" : {
+
+    },
+    "Website Icons" : {
 
     },
     "Will be deleted permanently today" : {
