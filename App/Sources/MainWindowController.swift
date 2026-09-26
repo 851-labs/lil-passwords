@@ -21,6 +21,7 @@ final class MainWindowController: NSWindowController {
   private let lockScreenViewController = LockScreenViewController()
 
   private var itemsDidChangeCancellable: AnyCancellable?
+  private var wifiNetworksDidChangeCancellable: AnyCancellable?
   private var searchKeyMonitor: Any?
 
   /// Read access to the vault for surfaces that live outside `MainSplitViewController` — the
@@ -143,13 +144,21 @@ final class MainWindowController: NSWindowController {
     window.toolbar = toolbarController.makeToolbar()
     window.toolbar?.isVisible = false
 
-    store.update(VaultSnapshot(items: dataSource.items))
+    // The sidebar's Wi-Fi count (851-2444) comes from `WiFiNetworkViewModel.networks`, not
+    // `dataSource.items` — known Wi-Fi networks aren't `PasswordItem`s — so the snapshot is
+    // rebuilt from both sources together, and re-rebuilt whenever either one changes.
+    let wifiViewModel = splitViewController.wifiViewModel
+    func updateSnapshot() {
+      store.update(VaultSnapshot(items: dataSource.items, wifiKnownNetworkCount: wifiViewModel.networks.count))
+    }
+
+    updateSnapshot()
     itemsDidChangeCancellable = dataSource.itemsDidChange
       .receive(on: RunLoop.main)
-      .sink { [weak self] in
-        guard let self else { return }
-        store.update(VaultSnapshot(items: dataSource.items))
-      }
+      .sink { _ in updateSnapshot() }
+    wifiNetworksDidChangeCancellable = wifiViewModel.$networks
+      .receive(on: RunLoop.main)
+      .sink { _ in updateSnapshot() }
 
     // `start()` is async (it has to unlock the vault before any CRUD works), but `init()` isn't,
     // so it's kicked off here as an unstructured `Task` — `dataSource.items` stays empty until it

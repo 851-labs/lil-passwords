@@ -29,9 +29,11 @@ struct VaultSnapshot: Hashable, Sendable {
 
 extension VaultSnapshot {
   /// Builds a snapshot from real items (851-2414/851-2417/851-2419), computing sidebar counts for
-  /// the categories `PasswordItem` currently models. `passkeys` and `wifi` aren't represented by
-  /// `PasswordItem` yet, so they're left at their default zero count.
-  init(items: [PasswordItem]) {
+  /// the categories `PasswordItem` currently models, plus the Wi-Fi category's known-network count
+  /// (851-2444 — sourced separately, from `WiFiNetworkViewModel.networks`, since known Wi-Fi
+  /// networks aren't `PasswordItem`s). `passkeys` isn't represented by either yet, so it's left at
+  /// its default zero count.
+  init(items: [PasswordItem], wifiKnownNetworkCount: Int = 0) {
     self.init(
       counts: [
         .all: items.nonDeleted().count,
@@ -40,6 +42,7 @@ extension VaultSnapshot {
         // one item flagged as both reused and weak still only counts once.
         .security: SecurityFindings.build(from: items).uniqueItemIDs.count,
         .deleted: items.recentlyDeleted().count,
+        .wifi: wifiKnownNetworkCount,
       ],
       sharedGroups: []
     )

@@ -59,7 +59,7 @@ enum SidebarCategory: String, CaseIterable, Identifiable, Hashable, Sendable {
     case .all: "No Passwords"
     case .passkeys: "No Passkeys"
     case .codes: "No Verification Codes"
-    case .wifi: "No Wi-Fi Passwords"
+    case .wifi: "No Wi-Fi Networks"
     case .security: "No Security Recommendations"
     case .deleted: "No Recently Deleted Items"
     }
@@ -71,7 +71,7 @@ enum SidebarCategory: String, CaseIterable, Identifiable, Hashable, Sendable {
     case .all: "Passwords and passkeys you save will appear here."
     case .passkeys: "Passkeys you save will appear here."
     case .codes: "Verification codes you save will appear here."
-    case .wifi: "Wi-Fi networks you save will appear here."
+    case .wifi: "Wi-Fi networks this Mac remembers will appear here."
     case .security: "lil passwords will let you know about weak, reused, or leaked passwords."
     case .deleted: "Items you delete will appear here for 30 days."
     }

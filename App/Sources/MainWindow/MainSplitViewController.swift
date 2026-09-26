@@ -7,9 +7,14 @@ import LilPasswordsKit
 /// Codes/Security/Deleted (851-2418/851-2419/851-2420) are single full-width views in Apple
 /// Passwords, not list+detail splits, so for those three categories the list column collapses and
 /// `detailItem`'s hosted content is swapped (via `DetailContainerViewController`) to the matching
-/// full-width controller; selecting `.all`/`.passkeys`/`.wifi` restores the normal list+detail
-/// layout. `detailItem.viewController` itself is set once and never reassigned — see
-/// `DetailContainerViewController`'s doc comment for why.
+/// full-width controller; selecting `.all`/`.passkeys` restores the normal `PasswordItem`
+/// list+detail layout. `.wifi` (851-2444) is a third case: it keeps a visible two-column
+/// list+detail split like `.all`/`.passkeys`, but that split is backed by `WiFiNetwork`, not
+/// `PasswordItem`, so both `listItem` and `detailItem`'s hosted content are swapped (via a second
+/// `DetailContainerViewController`, `listContainerViewController`) to `wifiListViewController` /
+/// `wifiDetailViewController` instead of reusing `listViewController`/`detailViewController`.
+/// Neither `listItem.viewController` nor `detailItem.viewController` is ever reassigned after
+/// `addSplitViewItem` — see `DetailContainerViewController`'s doc comment for why.
 @MainActor
 final class MainSplitViewController: NSSplitViewController {
   let sidebarViewController: SidebarViewController
@@ -18,13 +23,20 @@ final class MainSplitViewController: NSSplitViewController {
   let codesViewController: CodesViewController
   let securityViewController: SecurityViewController
   let deletedViewController: DeletedViewController
+  let wifiViewModel: WiFiNetworkViewModel
+  let wifiListViewController: WiFiListViewController
+  let wifiDetailViewController: WiFiDetailViewController
 
   /// Fires whenever selecting a sidebar category switches into or out of a full-width category
   /// view (Codes/Security/Deleted) — `MainWindowController` wires this to
   /// `MainToolbarController.setFullWidthModeActive(_:)` so the toolbar's list/detail-column items
-  /// (which have nothing to apply to over a full-width view) come and go with it.
+  /// (which have nothing to apply to over a full-width view) come and go with it. Also fired
+  /// (`true`) for `.wifi`: it keeps its own two-column list+detail split rather than collapsing to
+  /// one full-width view, but none of the list/detail toolbar chrome built for `PasswordItem`
+  /// (sort menu, "+", Edit, search) applies to it either, so it hides the same way.
   var onFullWidthModeChange: ((Bool) -> Void)?
 
+  private let listContainerViewController = DetailContainerViewController()
   private let detailContainerViewController = DetailContainerViewController()
 
   private var sidebarItem: NSSplitViewItem!
@@ -43,6 +55,10 @@ final class MainSplitViewController: NSSplitViewController {
     codesViewController = CodesViewController(dataSource: dataSource)
     securityViewController = SecurityViewController(dataSource: dataSource)
     deletedViewController = DeletedViewController(dataSource: dataSource)
+    let wifiViewModel = WiFiNetworkViewModel()
+    self.wifiViewModel = wifiViewModel
+    wifiListViewController = WiFiListViewController(viewModel: wifiViewModel)
+    wifiDetailViewController = WiFiDetailViewController(viewModel: wifiViewModel)
     super.init(nibName: nil, bundle: nil)
   }
 
@@ -55,6 +71,7 @@ final class MainSplitViewController: NSSplitViewController {
     super.viewDidLoad()
     sidebarViewController.delegate = self
     listViewController.delegate = self
+    wifiListViewController.delegate = self
 
     splitView.autosaveName = "MainSplitView"
     splitView.identifier = NSUserInterfaceItemIdentifier("MainSplitView")
@@ -65,7 +82,8 @@ final class MainSplitViewController: NSSplitViewController {
     sidebarItem.canCollapse = true
     sidebarItem.titlebarSeparatorStyle = .none
 
-    let listItem = NSSplitViewItem(contentListWithViewController: listViewController)
+    listContainerViewController.setContentViewController(listViewController)
+    let listItem = NSSplitViewItem(contentListWithViewController: listContainerViewController)
     listItem.minimumThickness = 240
     listItem.maximumThickness = 420
     // Programmatically collapsed for the full-width categories (Codes/Security/Deleted); see
@@ -103,7 +121,9 @@ final class MainSplitViewController: NSSplitViewController {
   }
 
   /// The full-width controller for a category that replaces the list+detail split, or `nil` for
-  /// categories that use the normal list+detail layout.
+  /// categories that use a list+detail layout. `.wifi` is handled separately, before this is ever
+  /// consulted — see `sidebarViewController(_:didSelect:)` — since it needs its own list+detail
+  /// pair rather than either a full-width controller or `PasswordItem`'s list+detail controllers.
   private func fullWidthViewController(for category: SidebarCategory) -> NSViewController? {
     switch category {
     case .codes: return codesViewController
@@ -116,7 +136,18 @@ final class MainSplitViewController: NSSplitViewController {
 
 extension MainSplitViewController: SidebarViewControllerDelegate {
   func sidebarViewController(_ controller: SidebarViewController, didSelect category: SidebarCategory) {
-    if let fullWidthViewController = fullWidthViewController(for: category) {
+    if category == .wifi {
+      // Wi-Fi keeps a real list+detail split — unlike Codes/Security/Deleted it's not a single
+      // full-width view — but it's backed by `WiFiNetwork`, not `PasswordItem`, so it gets its own
+      // pair of view controllers swapped into both containers rather than reusing
+      // `listViewController`/`detailViewController`.
+      listContainerViewController.setContentViewController(wifiListViewController)
+      detailContainerViewController.setContentViewController(wifiDetailViewController)
+      listItem.isCollapsed = false
+      wifiDetailViewController.show(network: nil)
+      onFullWidthModeChange?(true)
+    } else if let fullWidthViewController = fullWidthViewController(for: category) {
+      listContainerViewController.setContentViewController(listViewController)
       detailContainerViewController.setContentViewController(fullWidthViewController)
       listItem.isCollapsed = true
       // `detailViewController` (and the toolbar's Edit/Cancel/Done control, 851-2463) stay alive
@@ -129,12 +160,19 @@ extension MainSplitViewController: SidebarViewControllerDelegate {
       detailViewController.showNoSelection(for: category)
       onFullWidthModeChange?(true)
     } else {
+      listContainerViewController.setContentViewController(listViewController)
       detailContainerViewController.setContentViewController(detailViewController)
       listItem.isCollapsed = false
       listViewController.select(category: category)
       detailViewController.showNoSelection(for: category)
       onFullWidthModeChange?(false)
     }
+  }
+}
+
+extension MainSplitViewController: WiFiListViewControllerDelegate {
+  func wifiListViewController(_ controller: WiFiListViewController, didSelect network: WiFiNetwork?) {
+    wifiDetailViewController.show(network: network)
   }
 }
 
