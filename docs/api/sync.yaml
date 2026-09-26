@@ -1,0 +1,1046 @@
+openapi: 3.1.0
+info:
+  title: lil passwords sync API
+  version: "1.0.0-draft"
+  license:
+    name: MIT
+    identifier: MIT
+  description: |
+    The wire contract for lil passwords' "Sync & web" milestone, designed in
+    `docs/adr/0004-sync-and-server.md`. **This spec has no implementation yet** (851-2450
+    implements it); it exists so 851-2451 (Mac sync engine) and 851-2452/851-2453 (web vault) can
+    build against a stable target, and so 851-2455 (third-party audit) has something concrete to
+    review.
+
+    Three things worth knowing before reading the paths:
+
+    1. **The server never sees plaintext or key material.** Every `sealed` byte string is a
+       `VaultCrypto.SealedItem.combined` value (AES-256-GCM nonce + ciphertext + tag) — opaque to
+       this server. See `docs/adr/0002-crypto.md` and `docs/adr/0004-sync-and-server.md` §10.
+    2. **Authentication and decryption are independent.** A device can hold a fully valid session
+       (able to call every endpoint below) with a locked vault — decrypting `sealed` values is a
+       client-side-only concern this API is never involved in. See §4 of the ADR.
+    3. **`SyncRecord` mirrors `VaultRecord`** (`Packages/LilPasswordsKit/.../VaultRecord.swift`)
+       field-for-field, plus the server-only `serverSeq` cursor. There is no translation layer
+       between the two.
+  contact:
+    name: lil passwords
+    url: https://github.com/851-labs/lil-passwords
+
+servers:
+  - url: https://sync.lilpasswords.app
+    description: Placeholder production host — final domain depends on the stack decision in ADR 0004 §1.
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: auth
+    description: Passkey registration/login, recovery-key login, session refresh.
+  - name: account
+    description: Account-level metadata, public keys, wrapped vault key, deletion.
+  - name: devices
+    description: Device list/revoke and the device-approval relay (851-2457).
+  - name: sync
+    description: Push/pull of sealed VaultRecord envelopes and the anti-rollback account head.
+
+paths:
+  # ---------------------------------------------------------------- auth
+  /v1/auth/register/options:
+    post:
+      tags: [auth]
+      summary: Begin passkey registration (sign-up)
+      operationId: registerOptions
+      security: []
+      description: |
+        Step 1 of 2. No account exists yet. Returns a WebAuthn `PublicKeyCredentialCreationOptions`
+        object (per the WebAuthn spec's JSON serialization) plus a short-lived `registrationId`
+        that scopes the server-side challenge this ceremony is bound to.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: >-
+                    Optional, never a login factor. Used only for security notifications
+                    (ADR 0004 §4).
+      responses:
+        "200":
+          description: Registration challenge issued.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [registrationId, publicKey]
+                properties:
+                  registrationId:
+                    type: string
+                    format: uuid
+                  publicKey:
+                    $ref: "#/components/schemas/WebAuthnCreationOptions"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /v1/auth/register/verify:
+    post:
+      tags: [auth]
+      summary: Complete passkey registration, creating the account
+      operationId: registerVerify
+      security: []
+      description: |
+        Step 2 of 2. Creates `accounts`, `webauthn_credentials`, and `devices` rows atomically
+        (ADR 0004 §2/§4) and returns a session. The account key pair's *public* halves are
+        supplied here (ADR 0004 §3) — their private halves never leave the client; they're synced
+        later as an ordinary encrypted vault record once sync push is first called.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - registrationId
+                - credential
+                - device
+                - recoveryVerifier
+                - accountPublicKeys
+              properties:
+                registrationId:
+                  type: string
+                  format: uuid
+                credential:
+                  $ref: "#/components/schemas/WebAuthnAttestationResponse"
+                device:
+                  $ref: "#/components/schemas/DeviceRegistration"
+                recoveryVerifier:
+                  $ref: "#/components/schemas/RecoveryVerifier"
+                wrappedVaultKey:
+                  $ref: "#/components/schemas/Base64Bytes"
+                  description: >-
+                    `VaultCrypto.WrappedKey`, JSON-encoded then base64'd. Stored so a future
+                    device can recover the vault key via the recovery key (ADR 0004 §4).
+                accountPublicKeys:
+                  $ref: "#/components/schemas/AccountPublicKeys"
+      responses:
+        "201":
+          description: Account created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: Registration ceremony's challenge already used or expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /v1/auth/login/options:
+    post:
+      tags: [auth]
+      summary: Begin passkey login
+      operationId: loginOptions
+      security: []
+      description: >-
+        Usernameless/discoverable: `allowCredentials` is empty so any resident credential for this
+        relying party can respond (ADR 0004 §4).
+      responses:
+        "200":
+          description: Login challenge issued.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [loginId, publicKey]
+                properties:
+                  loginId:
+                    type: string
+                    format: uuid
+                  publicKey:
+                    $ref: "#/components/schemas/WebAuthnRequestOptions"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /v1/auth/login/verify:
+    post:
+      tags: [auth]
+      summary: Complete passkey login
+      operationId: loginVerify
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [loginId, credential, device]
+              properties:
+                loginId:
+                  type: string
+                  format: uuid
+                credential:
+                  $ref: "#/components/schemas/WebAuthnAssertionResponse"
+                device:
+                  $ref: "#/components/schemas/DeviceRegistration"
+                  description: >-
+                    Only `id` is required if this device has authenticated before; `name`/
+                    `platform` are required the first time a given `deviceId` is seen.
+      responses:
+        "200":
+          description: Signed in.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          description: >-
+            Assertion failed verification, or `sign_count` did not strictly increase
+            (possible cloned credential — ADR 0004 §4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /v1/auth/recovery/login:
+    post:
+      tags: [auth]
+      summary: Sign in with the recovery key
+      operationId: recoveryLogin
+      security: []
+      description: >-
+        The only password-shaped credential in the system, and the most aggressively rate-limited
+        endpoint in this API (ADR 0004 §4/§9). Verified as `Argon2id(recoveryKey.entropy, salt)`
+        compared in constant time — the raw recovery key is never stored.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accountId, recoveryKey, device]
+              properties:
+                accountId:
+                  type: string
+                  format: uuid
+                recoveryKey:
+                  type: string
+                  description: The recovery key as displayed to the user (e.g. grouped word/base32 form).
+                device:
+                  $ref: "#/components/schemas/DeviceRegistration"
+      responses:
+        "200":
+          description: >-
+            Signed in. Fetch `GET /v1/account/wrapped-key` next to recover the vault key locally.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          description: Recovery key did not verify.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /v1/auth/refresh:
+    post:
+      tags: [auth]
+      summary: Rotate a refresh token for a new access/refresh pair
+      operationId: refreshSession
+      security: []
+      description: >-
+        The refresh token is single-use and rotated on every call (ADR 0004 §4). Reuse of an
+        already-rotated refresh token revokes the whole session as a precaution against a stolen
+        token being replayed after a legitimate refresh.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        "200":
+          description: New session pair.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          description: Refresh token invalid, expired, revoked, or already-rotated (reuse detected).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /v1/auth/logout:
+    post:
+      tags: [auth]
+      summary: Revoke the current session
+      operationId: logout
+      responses:
+        "204":
+          description: Session revoked.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ------------------------------------------------------------- account
+  /v1/account:
+    get:
+      tags: [account]
+      summary: Fetch the caller's account metadata and public keys
+      operationId: getAccount
+      description: >-
+        Fetchable even by a device with a valid session but no vault key yet — needed
+        pre-unlock to verify a device-approval signature (ADR 0004 §3/§8).
+      responses:
+        "200":
+          description: Account metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      tags: [account]
+      summary: Delete the account and wipe all stored ciphertext
+      operationId: deleteAccount
+      description: >-
+        Irreversible. Requires step-up re-authentication in the same request (ADR 0004 §5) — a
+        still-valid session alone is not sufficient. Hard-deletes every row for this account;
+        only expiring backups (ADR 0004 §11) retain a copy afterward.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [webauthnCredential]
+                  properties:
+                    webauthnCredential:
+                      $ref: "#/components/schemas/WebAuthnAssertionResponse"
+                - type: object
+                  required: [recoveryKey]
+                  properties:
+                    recoveryKey:
+                      type: string
+      responses:
+        "202":
+          description: Account and all associated ciphertext deleted.
+        "401":
+          description: Step-up re-authentication failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /v1/account/wrapped-key:
+    get:
+      tags: [account]
+      summary: Fetch the account's WrappedKey blob for recovery-key unwrap
+      operationId: getWrappedKey
+      responses:
+        "200":
+          description: The wrapped vault key.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [wrappedVaultKey]
+                properties:
+                  wrappedVaultKey:
+                    $ref: "#/components/schemas/Base64Bytes"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [account]
+      summary: Replace the stored WrappedKey blob (e.g. after a vault key rotation)
+      operationId: putWrappedKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [wrappedVaultKey]
+              properties:
+                wrappedVaultKey:
+                  $ref: "#/components/schemas/Base64Bytes"
+      responses:
+        "204":
+          description: Updated.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/server-keys:
+    get:
+      tags: [account]
+      summary: Fetch the server's current Ed25519 account-head signing public key
+      operationId: getServerKeys
+      security: []
+      description: Used to verify the `signature` on `AccountHead` values returned by sync endpoints (ADR 0004 §7).
+      responses:
+        "200":
+          description: Current (and recently-rotated-from) server signing keys.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keys]
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+                      required: [keyId, publicKey, createdAt]
+                      properties:
+                        keyId:
+                          type: string
+                        publicKey:
+                          $ref: "#/components/schemas/Base64Bytes"
+                        createdAt:
+                          type: string
+                          format: date-time
+
+  # ------------------------------------------------------------- devices
+  /v1/devices:
+    get:
+      tags: [devices]
+      summary: List non-revoked devices for the caller's account
+      operationId: listDevices
+      responses:
+        "200":
+          description: Devices.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [devices]
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Device"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/devices/{deviceId}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceId"
+    delete:
+      tags: [devices]
+      summary: Revoke a device
+      operationId: revokeDevice
+      description: >-
+        Revokes all sessions for the device (ADR 0004 §5). Does not rotate the vault key — a
+        merely-removed device is not treated as compromised by default.
+      responses:
+        "204":
+          description: Device revoked.
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/devices/approvals:
+    get:
+      tags: [devices]
+      summary: List pending device-approval requests for the account
+      operationId: listDeviceApprovals
+      description: >-
+        Called by an already-unlocked device to see what a new device is waiting to be approved
+        for (ADR 0004 §8). Includes the server-relayed `newDevicePublicKey` for the manual
+        fallback comparison path only — the QR path never needs this endpoint.
+      responses:
+        "200":
+          description: Pending requests.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [approvals]
+                properties:
+                  approvals:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DeviceApprovalSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [devices]
+      summary: Create a device-approval request (called by the new device)
+      operationId: createDeviceApproval
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deviceName, platform]
+              properties:
+                deviceName:
+                  type: string
+                platform:
+                  $ref: "#/components/schemas/Platform"
+      responses:
+        "201":
+          description: Pending approval created.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [approvalId, expiresAt]
+                properties:
+                  approvalId:
+                    type: string
+                    format: uuid
+                  expiresAt:
+                    type: string
+                    format: date-time
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /v1/devices/approvals/{approvalId}:
+    parameters:
+      - $ref: "#/components/parameters/ApprovalId"
+    get:
+      tags: [devices]
+      summary: Poll an approval request's status (called by the new device)
+      operationId: getDeviceApproval
+      responses:
+        "200":
+          description: Current status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceApprovalStatus"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          description: Approval expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+    delete:
+      tags: [devices]
+      summary: Cancel or deny a pending approval request
+      operationId: cancelDeviceApproval
+      responses:
+        "204":
+          description: Approval cancelled/denied and its ciphertext cleared.
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/devices/approvals/{approvalId}/confirm:
+    parameters:
+      - $ref: "#/components/parameters/ApprovalId"
+    post:
+      tags: [devices]
+      summary: Confirm a device approval (called by the existing, unlocked device)
+      operationId: confirmDeviceApproval
+      description: >-
+        Relays the ECDH-wrapped vault key and the account-key signature. The server can read
+        neither (ADR 0004 §8/§10).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [approverEphemeralPublicKey, wrappedVaultKey, signature]
+              properties:
+                approverEphemeralPublicKey:
+                  $ref: "#/components/schemas/Base64Bytes"
+                wrappedVaultKey:
+                  $ref: "#/components/schemas/Base64Bytes"
+                  description: AES-256-GCM ciphertext of the vault key under the ECDH-derived transport key.
+                signature:
+                  $ref: "#/components/schemas/Base64Bytes"
+                  description: Ed25519 signature by the account key over the approval record.
+      responses:
+        "200":
+          description: Confirmed; the new device can now redeem it.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceApprovalStatus"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Approval already confirmed, redeemed, expired, or denied.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  # --------------------------------------------------------------- sync
+  /v1/sync/push:
+    post:
+      tags: [sync]
+      summary: Push one or more sealed records
+      operationId: pushSyncRecords
+      description: >-
+        Each record is judged independently against the version-check rule in ADR 0004 §6; one
+        record conflicting does not fail the rest of the batch.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: >-
+            Scopes this exact push attempt. A byte-identical retry replays the original response;
+            a differing body under the same key is rejected with 422 (ADR 0004 §6).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [records]
+              properties:
+                records:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  items:
+                    $ref: "#/components/schemas/SyncRecordInput"
+      responses:
+        "200":
+          description: >-
+            Per-record results. HTTP 200 even when some records conflict — conflicts are reported
+            per-item, not as a request-level failure.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PushResult"
+        "413":
+          description: Batch exceeds size or count limits (ADR 0004 §9).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with a different request body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /v1/sync/pull:
+    get:
+      tags: [sync]
+      summary: Pull records since a cursor
+      operationId: pullSyncRecords
+      parameters:
+        - name: since
+          in: query
+          schema:
+            type: integer
+            format: int64
+            default: 0
+          description: >-
+            Last `serverSeq` already applied locally. `0` (or omitted) pulls full history from
+            the beginning, tombstones included — used by a brand-new or freshly-approved device.
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 500
+            maximum: 500
+      responses:
+        "200":
+          description: A page of records in `serverSeq` order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PullResult"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /v1/sync/head:
+    get:
+      tags: [sync]
+      summary: Fetch the current account head without pulling records
+      operationId: getAccountHead
+      description: A cheap "has anything changed?" poll (ADR 0004 §7).
+      responses:
+        "200":
+          description: Current head.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountHead"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Short-lived (12h) opaque access token from `Session.accessToken`.
+
+  parameters:
+    DeviceId:
+      name: deviceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ApprovalId:
+      name: approvalId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    Unauthorized:
+      description: Missing, expired, or revoked bearer access token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    BadRequest:
+      description: Malformed request.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: Not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    RateLimited:
+      description: Rate limit exceeded (ADR 0004 §9).
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+            description: Seconds until the caller may retry.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457-shaped error body.
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+
+    Base64Bytes:
+      type: string
+      contentEncoding: base64
+      description: Opaque bytes, base64-encoded. The server never inspects the decoded contents.
+
+    Platform:
+      type: string
+      enum: [mac, web]
+
+    DeviceRegistration:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Client-generated. Matches `VaultRecord.deviceId` once this device pushes records.
+        name:
+          type: string
+          example: "Alexandru's MacBook Pro"
+        platform:
+          $ref: "#/components/schemas/Platform"
+
+    RecoveryVerifier:
+      type: object
+      required: [hash, salt]
+      properties:
+        hash:
+          $ref: "#/components/schemas/Base64Bytes"
+          description: Argon2id(recoveryKey.entropy, salt), computed client-side.
+        salt:
+          $ref: "#/components/schemas/Base64Bytes"
+
+    AccountPublicKeys:
+      type: object
+      required: [x25519, ed25519]
+      properties:
+        x25519:
+          $ref: "#/components/schemas/Base64Bytes"
+        ed25519:
+          $ref: "#/components/schemas/Base64Bytes"
+
+    Account:
+      type: object
+      required: [id, createdAt, publicKeys]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        publicKeys:
+          $ref: "#/components/schemas/AccountPublicKeys"
+        createdAt:
+          type: string
+          format: date-time
+
+    Session:
+      type: object
+      required: [accessToken, accessExpiresAt, refreshToken, deviceId]
+      properties:
+        accessToken:
+          type: string
+        accessExpiresAt:
+          type: string
+          format: date-time
+        refreshToken:
+          type: string
+        deviceId:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+
+    Device:
+      type: object
+      required: [id, name, platform, createdAt, lastSeenAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        platform:
+          $ref: "#/components/schemas/Platform"
+        createdAt:
+          type: string
+          format: date-time
+        lastSeenAt:
+          type: string
+          format: date-time
+
+    DeviceApprovalSummary:
+      type: object
+      required: [approvalId, requestingDeviceName, platform, createdAt, expiresAt]
+      properties:
+        approvalId:
+          type: string
+          format: uuid
+        requestingDeviceName:
+          type: string
+        platform:
+          $ref: "#/components/schemas/Platform"
+        newDevicePublicKey:
+          $ref: "#/components/schemas/Base64Bytes"
+          description: >-
+            Server-relayed, for the manual-comparison fallback only (ADR 0004 §8). The QR path
+            transfers this out of band instead and never needs to trust this field.
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+
+    DeviceApprovalStatus:
+      type: object
+      required: [approvalId, status, expiresAt]
+      properties:
+        approvalId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, confirmed, redeemed, denied, expired]
+        approverEphemeralPublicKey:
+          $ref: "#/components/schemas/Base64Bytes"
+        wrappedVaultKey:
+          $ref: "#/components/schemas/Base64Bytes"
+        signature:
+          $ref: "#/components/schemas/Base64Bytes"
+        expiresAt:
+          type: string
+          format: date-time
+
+    # -- WebAuthn: modeled loosely (plain objects), matching the ceremony's own JSON
+    # serialization (navigator.credentials.create()/get() options and responses). Full structural
+    # typing of the WebAuthn spec's JSON forms is out of scope for this draft; 851-2450 should
+    # validate against a maintained WebAuthn server library's own types rather than this schema.
+    WebAuthnCreationOptions:
+      type: object
+      description: PublicKeyCredentialCreationOptionsJSON, per the WebAuthn spec.
+    WebAuthnRequestOptions:
+      type: object
+      description: PublicKeyCredentialRequestOptionsJSON, per the WebAuthn spec.
+    WebAuthnAttestationResponse:
+      type: object
+      description: RegistrationResponseJSON, per the WebAuthn spec.
+    WebAuthnAssertionResponse:
+      type: object
+      description: AuthenticationResponseJSON, per the WebAuthn spec.
+
+    # -- Sync: mirrors Packages/LilPasswordsKit/Sources/LilPasswordsKit/Item/VaultRecord.swift
+    # field-for-field, plus serverSeq. See ADR 0004 §2/§6.
+    SyncRecordInput:
+      type: object
+      description: >-
+        Same shape as `SyncRecord` but without server-assigned fields — what a client sends to
+        `push`.
+      required: [id, type, version, modifiedAt, deviceId, deleted]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          example: password-item
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Must equal the server's current version for this record, plus one.
+        modifiedAt:
+          type: string
+          format: date-time
+          description: Writer's local clock. Informational only — never used for ordering (ADR 0004 §6).
+        deviceId:
+          type: string
+          format: uuid
+        deleted:
+          type: boolean
+          description: Tombstone flag. When true, `sealed`/`schemaVersion`/`keyId`/`formatVersion` are omitted.
+        keyId:
+          type: string
+          format: uuid
+        formatVersion:
+          type: integer
+          minimum: 0
+          maximum: 255
+        sealed:
+          $ref: "#/components/schemas/Base64Bytes"
+          description: VaultCrypto.SealedItem.combined (AES-256-GCM nonce + ciphertext + tag).
+        schemaVersion:
+          type: integer
+          minimum: 0
+
+    SyncRecord:
+      allOf:
+        - $ref: "#/components/schemas/SyncRecordInput"
+        - type: object
+          required: [serverSeq]
+          properties:
+            serverSeq:
+              type: integer
+              format: int64
+              description: The per-account sync cursor this record was assigned (ADR 0004 §2/§6).
+
+    PushRecordResult:
+      type: object
+      required: [id, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [accepted, conflict]
+        serverSeq:
+          type: integer
+          format: int64
+          description: Present only when status is "accepted".
+        server:
+          allOf:
+            - $ref: "#/components/schemas/SyncRecord"
+          description: >-
+            Present only when status is "conflict" — the record's current server-side state, for
+            the client to build a conflict copy from (ADR 0004 §6).
+
+    PushResult:
+      type: object
+      required: [results, head]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/PushRecordResult"
+        head:
+          $ref: "#/components/schemas/AccountHead"
+
+    PullResult:
+      type: object
+      required: [records, nextSince, hasMore, head]
+      properties:
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/SyncRecord"
+        nextSince:
+          type: integer
+          format: int64
+        hasMore:
+          type: boolean
+        head:
+          $ref: "#/components/schemas/AccountHead"
+
+    AccountHead:
+      type: object
+      description: >-
+        The anti-rollback hash chain state (ADR 0004 §7). Clients recompute this chain forward
+        from their own last-known value using the records just returned, and must reject the
+        response if the recomputed hash doesn't match `hash`.
+      required: [seq, hash, signature, signedAt]
+      properties:
+        seq:
+          type: integer
+          format: int64
+        hash:
+          $ref: "#/components/schemas/Base64Bytes"
+          description: SHA-256, see ADR 0004 §7's chain formula.
+        signature:
+          $ref: "#/components/schemas/Base64Bytes"
+          description: >-
+            Ed25519 signature by the server's own key (GET /v1/server-keys) over
+            (accountId, seq, hash). Protects against tampering downstream of the origin server —
+            not against the origin server itself, which holds this key (ADR 0004 §7).
+        signedAt:
+          type: string
+          format: date-time
