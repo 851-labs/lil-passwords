@@ -71,7 +71,7 @@ extension LilpwError {
       return LilpwError(exitCode: .notFound, message: error.description)
     case .ambiguous:
       return LilpwError(exitCode: .ambiguous, message: error.description)
-    case .unsupportedProtocolVersion, .internal:
+    case .unsupportedProtocolVersion, .internal, .callerNotAuthorized:
       return LilpwError(exitCode: .generic, message: error.description)
     }
   }

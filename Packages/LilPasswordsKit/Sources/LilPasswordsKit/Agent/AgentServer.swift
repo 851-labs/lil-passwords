@@ -15,24 +15,46 @@ import Foundation
 /// stored here.
 public actor AgentServer {
   private let vaultStore: any VaultStoring
+  private let vaultKeyStore: any VaultKeyStoring
   private let accessPolicy: any AccessPolicyProviding
   private let accessLog: any AccessLogging
   private let passwordGenerator: PasswordGenerator
+  private let appCallerBundleIdentifier: String
 
-  /// - Parameter vaultStore: The single `VaultStoring` this helper serves for its entire process
-  ///   lifetime. Injected (rather than `AgentServer` constructing a concrete `VaultStore` itself)
-  ///   so production code and tests can supply different backends (`VaultStore` vs
-  ///   `InMemoryVaultStore`) without `AgentServer` depending on either concrete type.
+  /// - Parameters:
+  ///   - vaultStore: The single `VaultStoring` this helper serves for its entire process
+  ///     lifetime. Injected (rather than `AgentServer` constructing a concrete `VaultStore` itself)
+  ///     so production code and tests can supply different backends (`VaultStore` vs
+  ///     `InMemoryVaultStore`) without `AgentServer` depending on either concrete type.
+  ///   - vaultKeyStore: Where `.createVault` persists the freshly generated vault key and
+  ///     `.unlock` reads it back from — the local Keychain in production
+  ///     (`KeychainVaultKeyStore`), an in-memory double in tests. Defaults to
+  ///     `InMemoryVaultKeyStore()` purely so existing call sites that only care about the vault
+  ///     CRUD surface (not lock lifecycle) don't all need updating; production wiring
+  ///     (`Agent/Sources/main.swift`) always passes `KeychainVaultKeyStore()` explicitly.
+  ///   - appCallerBundleIdentifier: The bundle identifier `isAppCaller(_:)` treats as "the app" for
+  ///     `.createVault`/`.unlock` gating. Defaults to the real app's identifier
+  ///     (`AgentConnectionSecurity.PeerIdentifier.app`). Overridable so an in-process XPC test
+  ///     harness (`AgentXPCEndToEndTests`), whose connecting peer really is the test binary itself
+  ///     — not an unsigned/ad-hoc process with no `bundleIdentifier` at all, but a normally-signed
+  ///     one with *some* real, resolvable identifier (e.g. the `xctest` tool's) — can tell
+  ///     `AgentServer` to trust that identifier as "the app" instead. This exercises the exact same
+  ///     caller-identity-resolution and gating code production does; only which identifier counts
+  ///     as trusted changes.
   public init(
     vaultStore: any VaultStoring,
+    vaultKeyStore: any VaultKeyStoring = InMemoryVaultKeyStore(),
     accessPolicy: any AccessPolicyProviding = AlwaysAllowAccessPolicy(),
     accessLog: any AccessLogging = NoOpAccessLog(),
-    passwordGenerator: PasswordGenerator = PasswordGenerator()
+    passwordGenerator: PasswordGenerator = PasswordGenerator(),
+    appCallerBundleIdentifier: String = AgentConnectionSecurity.PeerIdentifier.app.rawValue
   ) {
     self.vaultStore = vaultStore
+    self.vaultKeyStore = vaultKeyStore
     self.accessPolicy = accessPolicy
     self.accessLog = accessLog
     self.passwordGenerator = passwordGenerator
+    self.appCallerBundleIdentifier = appCallerBundleIdentifier
   }
 
   /// Handles one already-decoded request and returns the reply envelope to send back.
@@ -50,8 +72,8 @@ public actor AgentServer {
 
     let outcome: AgentOutcome
     switch envelope.request {
-    case .status, .unlock, .lock:
-      outcome = await lifecycleOutcome(for: envelope.request)
+    case .status, .createVault, .unlock, .lock:
+      outcome = await lifecycleOutcome(for: envelope.request, caller: caller)
     default:
       outcome = await vaultOutcome(for: envelope.request, caller: caller)
     }
@@ -60,31 +82,86 @@ public actor AgentServer {
 
   // MARK: - Lock lifecycle (never logged — see AccessLogging)
 
-  private func lifecycleOutcome(for request: AgentRequest) async -> AgentOutcome {
+  private func lifecycleOutcome(for request: AgentRequest, caller: CallerIdentity) async -> AgentOutcome {
     switch request {
     case .status:
       let locked = await !vaultStore.isUnlocked
-      let status = AgentStatus(locked: locked, agentAccessEnabled: await accessPolicy.isAgentAccessEnabled())
+      // A store that fails to answer `vaultExists()` (a corrupt/unreadable database, say) is
+      // treated as "a vault exists" rather than "no vault yet": the former just means the app
+      // shows the lock screen and a subsequent `.unlock` fails with a real error, while the
+      // latter would offer to `.createVault` over — and silently orphan — whatever's actually on
+      // disk.
+      let exists = (try? await vaultStore.vaultExists()) ?? true
+      let status = AgentStatus(
+        locked: locked,
+        agentAccessEnabled: await accessPolicy.isAgentAccessEnabled(),
+        vaultExists: exists
+      )
       return .success(.status(status))
 
-    case .unlock(let payload):
+    case .createVault:
+      guard isAppCaller(caller) else { return .failure(.callerNotAuthorized) }
       do {
-        let key = try VaultCrypto.Key(id: payload.keyId, rawData: payload.sessionKey)
+        let recoveryKey = try await vaultStore.createVault()
+        let key = try await vaultStore.currentKey()
+        try vaultKeyStore.store(key)
+        LockStateNotifications.post()
+        return .success(.vaultCreated(recoveryKeyDisplayString: recoveryKey.displayString))
+      } catch let error as AgentError {
+        return .failure(error)
+      } catch let error as VaultStoreError {
+        return .failure(agentError(for: error))
+      } catch {
+        return .failure(.internal(message: "\(error)"))
+      }
+
+    case .unlock:
+      guard isAppCaller(caller) else { return .failure(.callerNotAuthorized) }
+      do {
+        guard let key = try vaultKeyStore.loadKey() else {
+          // No key ever stored — either `.createVault` never ran (shouldn't happen; the app
+          // always calls it on first run before offering to unlock anything) or something wiped
+          // the Keychain item out from under this helper. Either way, the caller can't proceed by
+          // retrying `.unlock` — surfaced as an `.internal` error rather than `.locked` (a bare
+          // "wrong password" story) since there's no key material to even try.
+          return .failure(.internal(message: "no vault key is stored — call .createVault first"))
+        }
         try await vaultStore.open(with: key)
+        LockStateNotifications.post()
         return .success(.unlocked)
       } catch let error as AgentError {
         return .failure(error)
+      } catch let error as VaultStoreError {
+        return .failure(agentError(for: error))
       } catch {
         return .failure(.internal(message: "\(error)"))
       }
 
     case .lock:
       await vaultStore.lock()
+      LockStateNotifications.post()
       return .success(.locked)
 
     default:
-      preconditionFailure("lifecycleOutcome only handles .status/.unlock/.lock")
+      preconditionFailure("lifecycleOutcome only handles .status/.createVault/.unlock/.lock")
     }
+  }
+
+  /// Whether `caller` is allowed to send `.createVault`/`.unlock` — both restricted to the app
+  /// itself, since only the app performs the `LAContext` authentication that's supposed to gate
+  /// them (see docs/adr/0001-storage-and-process-model.md (b)). `lilpw`, or any other process,
+  /// must never be able to trigger either just by connecting to the Mach service.
+  ///
+  /// Falls back to `AgentConnectionSecurity.isDebugBuild` when `caller.bundleIdentifier` is `nil`
+  /// (an unsigned/ad-hoc local build, or the in-process XPC test harness, neither of which has a
+  /// real code signature to read a bundle identifier from) — the same DEBUG-vs-Release philosophy
+  /// `AgentConnectionSecurity` itself already applies at the whole-connection level, applied here
+  /// too so this per-request check doesn't independently reject every local/CI build.
+  private func isAppCaller(_ caller: CallerIdentity) -> Bool {
+    guard let bundleIdentifier = caller.bundleIdentifier else {
+      return AgentConnectionSecurity.isDebugBuild
+    }
+    return bundleIdentifier == appCallerBundleIdentifier
   }
 
   // MARK: - Vault operations (logged via AccessLogging)
@@ -153,7 +230,7 @@ public actor AgentServer {
       let now = Date()
       return .totpCode(TOTPCodeResult(code: totp.code(at: now), expiresAt: totp.nextChange(after: now)))
 
-    case .status, .unlock, .lock:
+    case .status, .createVault, .unlock, .lock:
       preconditionFailure("vaultResponse never sees lock-lifecycle requests")
     }
   }

@@ -19,6 +19,27 @@ private actor RecordingAccessLog: AccessLogging {
 
 private let testCaller = CallerIdentity(pid: 1, processPath: "/usr/bin/test", parentProcessName: "xctest")
 
+/// A caller whose code-signing identifier really is the app's — used to test `.createVault`/
+/// `.unlock` gating without depending on `AgentConnectionSecurity.isDebugBuild`'s fallback (which
+/// `testCaller`, with no `bundleIdentifier` at all, relies on instead).
+private let appCaller = CallerIdentity(
+  pid: 2,
+  processPath: "/Applications/Lil Passwords.app/Contents/MacOS/Lil Passwords",
+  parentProcessName: nil,
+  bundleIdentifier: AgentConnectionSecurity.PeerIdentifier.app.rawValue
+)
+
+/// A caller identified as `lilpw`, not the app — `.createVault`/`.unlock` must reject this caller
+/// even though it's a legitimate, recognized peer of the *connection* itself
+/// (`AgentConnectionSecurity` accepts both `.app` and `.cli`); only the app performs the
+/// `LAContext` authentication those two requests presuppose.
+private let cliCaller = CallerIdentity(
+  pid: 3,
+  processPath: "/usr/local/bin/lilpw",
+  parentProcessName: nil,
+  bundleIdentifier: AgentConnectionSecurity.PeerIdentifier.cli.rawValue
+)
+
 @Suite struct AgentServerTests {
   private func makeItem(title: String = "GitHub") -> PasswordItem {
     // Pinned to whole-second precision: `AgentWireCoding`'s `.iso8601` date strategy drops
@@ -39,6 +60,13 @@ private let testCaller = CallerIdentity(pid: 1, processPath: "/usr/bin/test", pa
   /// real `VaultCrypto.Key` a test needs to unlock with. Real `VaultStoring.open(with:)` requires
   /// the actual key `createVault()` generated; there is no "any bytes unlock it" placeholder
   /// behavior to lean on anymore (see the now-merged 851-2404).
+  ///
+  /// The vault is seeded directly on `store` (rather than through `AgentServer.handle(.createVault)`)
+  /// so most tests here don't have to care about the app-caller gate at all — but the resulting key
+  /// is still written to `keyStore`, so `.unlock` (now payload-less; the helper reads the key back
+  /// from `vaultKeyStore` itself) behaves exactly as it would after a real `.createVault` round
+  /// trip. See `createVaultStoresTheKeySoASubsequentUnlockSucceeds` for a test that exercises the
+  /// real `.createVault` → `.unlock` path end-to-end instead.
   private func makeServer(
     accessPolicy: any AccessPolicyProviding = AlwaysAllowAccessPolicy(),
     accessLog: any AccessLogging = NoOpAccessLog(),
@@ -51,12 +79,15 @@ private let testCaller = CallerIdentity(pid: 1, processPath: "/usr/bin/test", pa
       try await store.create(item)
     }
     await store.lock()
-    let server = AgentServer(vaultStore: store, accessPolicy: accessPolicy, accessLog: accessLog)
+    let keyStore = InMemoryVaultKeyStore()
+    try keyStore.store(key)
+    let server = AgentServer(
+      vaultStore: store,
+      vaultKeyStore: keyStore,
+      accessPolicy: accessPolicy,
+      accessLog: accessLog
+    )
     return (server, key)
-  }
-
-  private func unlockPayload(for key: VaultCrypto.Key) -> UnlockPayload {
-    UnlockPayload(sessionKey: key.rawData, keyId: key.id)
   }
 
   private func send(_ request: AgentRequest, to server: AgentServer, caller: CallerIdentity = testCaller) async
@@ -66,7 +97,7 @@ private let testCaller = CallerIdentity(pid: 1, processPath: "/usr/bin/test", pa
   }
 
   @Test func statusReportsLockedUntilUnlockedAndAgentAccessEnabled() async throws {
-    let (server, key) = try await makeServer()
+    let (server, _) = try await makeServer()
 
     guard case .success(.status(let before)) = await send(.status, to: server) else {
       Issue.record("expected .status")
@@ -75,7 +106,7 @@ private let testCaller = CallerIdentity(pid: 1, processPath: "/usr/bin/test", pa
     #expect(before.locked == true)
     #expect(before.agentAccessEnabled == true)
 
-    _ = await send(.unlock(unlockPayload(for: key)), to: server)
+    _ = await send(.unlock, to: server)
 
     guard case .success(.status(let after)) = await send(.status, to: server) else {
       Issue.record("expected .status")
@@ -120,8 +151,8 @@ private let testCaller = CallerIdentity(pid: 1, processPath: "/usr/bin/test", pa
 
   @Test func listSearchAndCrudWorkOnceUnlocked() async throws {
     let item = makeItem()
-    let (server, key) = try await makeServer(items: [item])
-    _ = await send(.unlock(unlockPayload(for: key)), to: server)
+    let (server, _) = try await makeServer(items: [item])
+    _ = await send(.unlock, to: server)
 
     guard case .success(.items(let listed)) = await send(.list, to: server) else {
       Issue.record("expected .items")
@@ -157,8 +188,8 @@ private let testCaller = CallerIdentity(pid: 1, processPath: "/usr/bin/test", pa
   }
 
   @Test func getItemByIdFailsWithNotFoundForAnUnknownId() async throws {
-    let (server, key) = try await makeServer()
-    _ = await send(.unlock(unlockPayload(for: key)), to: server)
+    let (server, _) = try await makeServer()
+    _ = await send(.unlock, to: server)
 
     guard case .failure(.notFound) = await send(.getItem(.id(UUID())), to: server) else {
       Issue.record("expected .failure(.notFound)")
@@ -169,8 +200,8 @@ private let testCaller = CallerIdentity(pid: 1, processPath: "/usr/bin/test", pa
   @Test func getItemByQueryFailsWithAmbiguousForMultipleMatches() async throws {
     let a = makeItem(title: "GitHub Work")
     let b = makeItem(title: "GitHub Personal")
-    let (server, key) = try await makeServer(items: [a, b])
-    _ = await send(.unlock(unlockPayload(for: key)), to: server)
+    let (server, _) = try await makeServer(items: [a, b])
+    _ = await send(.unlock, to: server)
 
     guard case .failure(.ambiguous) = await send(.getItem(.query("github")), to: server) else {
       Issue.record("expected .failure(.ambiguous)")
@@ -179,8 +210,8 @@ private let testCaller = CallerIdentity(pid: 1, processPath: "/usr/bin/test", pa
   }
 
   @Test func getItemByQueryFailsWithNotFoundForZeroMatches() async throws {
-    let (server, key) = try await makeServer(items: [makeItem()])
-    _ = await send(.unlock(unlockPayload(for: key)), to: server)
+    let (server, _) = try await makeServer(items: [makeItem()])
+    _ = await send(.unlock, to: server)
 
     guard case .failure(.notFound) = await send(.getItem(.query("nonexistent")), to: server) else {
       Issue.record("expected .failure(.notFound)")
@@ -190,8 +221,8 @@ private let testCaller = CallerIdentity(pid: 1, processPath: "/usr/bin/test", pa
 
   @Test func deleteItemByQueryResolvesThenDeletes() async throws {
     let item = makeItem()
-    let (server, key) = try await makeServer(items: [item])
-    _ = await send(.unlock(unlockPayload(for: key)), to: server)
+    let (server, _) = try await makeServer(items: [item])
+    _ = await send(.unlock, to: server)
 
     guard case .success(.deleted) = await send(.deleteItem(.query("GitHub")), to: server) else {
       Issue.record("expected .deleted")
@@ -204,8 +235,8 @@ private let testCaller = CallerIdentity(pid: 1, processPath: "/usr/bin/test", pa
   }
 
   @Test func generatePasswordProducesANonEmptyPasswordOnceUnlocked() async throws {
-    let (server, key) = try await makeServer()
-    _ = await send(.unlock(unlockPayload(for: key)), to: server)
+    let (server, _) = try await makeServer()
+    _ = await send(.unlock, to: server)
 
     guard case .success(.generatedPassword(let password)) = await send(.generatePassword(.appleStrong), to: server)
     else {
@@ -220,8 +251,8 @@ private let testCaller = CallerIdentity(pid: 1, processPath: "/usr/bin/test", pa
       title: "GitHub",
       totpURI: "otpauth://totp/GitHub:octocat?secret=JBSWY3DPEHPK3PXP&issuer=GitHub"
     )
-    let (server, key) = try await makeServer(items: [item])
-    _ = await send(.unlock(unlockPayload(for: key)), to: server)
+    let (server, _) = try await makeServer(items: [item])
+    _ = await send(.unlock, to: server)
 
     guard case .success(.totpCode(let result)) = await send(.totpCode(.id(item.id)), to: server) else {
       Issue.record("expected .totpCode")
@@ -232,8 +263,8 @@ private let testCaller = CallerIdentity(pid: 1, processPath: "/usr/bin/test", pa
 
   @Test func totpCodeFailsWithInternalErrorForAnItemWithNoTOTPURI() async throws {
     let item = makeItem()
-    let (server, key) = try await makeServer(items: [item])
-    _ = await send(.unlock(unlockPayload(for: key)), to: server)
+    let (server, _) = try await makeServer(items: [item])
+    _ = await send(.unlock, to: server)
 
     guard case .failure(.internal) = await send(.totpCode(.id(item.id)), to: server) else {
       Issue.record("expected .failure(.internal)")
@@ -243,8 +274,8 @@ private let testCaller = CallerIdentity(pid: 1, processPath: "/usr/bin/test", pa
 
   @Test func agentAccessDisabledTakesPrecedenceOverAnUnlockedStore() async throws {
     let policy = ToggleableAccessPolicy(enabled: false)
-    let (server, key) = try await makeServer(accessPolicy: policy, items: [makeItem()])
-    _ = await send(.unlock(unlockPayload(for: key)), to: server)
+    let (server, _) = try await makeServer(accessPolicy: policy, items: [makeItem()])
+    _ = await send(.unlock, to: server)
 
     guard case .failure(.agentAccessDisabled) = await send(.list, to: server) else {
       Issue.record("expected .failure(.agentAccessDisabled)")
@@ -265,10 +296,10 @@ private let testCaller = CallerIdentity(pid: 1, processPath: "/usr/bin/test", pa
 
   @Test func lockLifecycleRequestsAreNeverWrittenToTheAccessLog() async throws {
     let log = RecordingAccessLog()
-    let (server, key) = try await makeServer(accessLog: log)
+    let (server, _) = try await makeServer(accessLog: log)
 
     _ = await send(.status, to: server)
-    _ = await send(.unlock(unlockPayload(for: key)), to: server)
+    _ = await send(.unlock, to: server)
     _ = await send(.lock, to: server)
 
     let events = await log.events
@@ -278,8 +309,8 @@ private let testCaller = CallerIdentity(pid: 1, processPath: "/usr/bin/test", pa
   @Test func vaultOperationsAreLoggedWithTheCallerIdentityRegardlessOfOutcome() async throws {
     let log = RecordingAccessLog()
     let item = makeItem()
-    let (server, key) = try await makeServer(accessLog: log, items: [item])
-    _ = await send(.unlock(unlockPayload(for: key)), to: server)
+    let (server, _) = try await makeServer(accessLog: log, items: [item])
+    _ = await send(.unlock, to: server)
 
     _ = await send(.list, to: server, caller: testCaller)
     _ = await send(.getItem(.id(UUID())), to: server, caller: testCaller)
@@ -291,17 +322,116 @@ private let testCaller = CallerIdentity(pid: 1, processPath: "/usr/bin/test", pa
     #expect(events.allSatisfy { $0.caller == testCaller })
   }
 
-  @Test func unlockFailurePropagatesAsATypedAgentError() async {
-    // A store whose vault was never created: `open(with:)` has no `meta` row to check the key
-    // against, so it throws `VaultStoreError.vaultNotFound` — this should surface as a typed
-    // `AgentError.internal`, not crash or hang the handler.
+  @Test func unlockFailurePropagatesAsATypedAgentError() async throws {
+    // A key is stored (so `.unlock` gets past the "no key at all" check), but no vault was ever
+    // created at this store: `open(with:)` has no `meta` row to check the key against, so it
+    // throws `VaultStoreError.vaultNotFound` — this should surface as a typed `AgentError.internal`,
+    // not crash or hang the handler.
     let store = InMemoryVaultStore()
-    let server = AgentServer(vaultStore: store)
+    let keyStore = InMemoryVaultKeyStore()
+    try keyStore.store(VaultCrypto.Key.generate())
+    let server = AgentServer(vaultStore: store, vaultKeyStore: keyStore)
 
-    let key = VaultCrypto.Key.generate()
-    guard case .failure(.internal) = await send(.unlock(unlockPayload(for: key)), to: server) else {
+    guard case .failure(.internal) = await send(.unlock, to: server) else {
       Issue.record("expected .failure(.internal)")
       return
     }
+  }
+
+  @Test func unlockFailsWithInternalErrorWhenNoKeyHasEverBeenStored() async throws {
+    // The default `AgentServer.init` `vaultKeyStore` (an empty `InMemoryVaultKeyStore`) has never
+    // had anything stored in it — the "helper restarted with a stale/missing Keychain item" case,
+    // distinct from "the key exists but doesn't match this database" above.
+    let store = InMemoryVaultStore()
+    let server = AgentServer(vaultStore: store)
+
+    guard case .failure(.internal) = await send(.unlock, to: server) else {
+      Issue.record("expected .failure(.internal)")
+      return
+    }
+  }
+
+  @Test func createVaultIsRestrictedToTheAppEvenForARecognizedCliCaller() async throws {
+    let store = InMemoryVaultStore()
+    let server = AgentServer(vaultStore: store)
+
+    guard case .failure(.callerNotAuthorized) = await send(.createVault, to: server, caller: cliCaller) else {
+      Issue.record("expected .failure(.callerNotAuthorized)")
+      return
+    }
+
+    // Confirm the rejection didn't quietly leave a vault behind anyway.
+    guard case .success(.status(let status)) = await send(.status, to: server) else {
+      Issue.record("expected .status")
+      return
+    }
+    #expect(status.vaultExists == false)
+  }
+
+  @Test func unlockIsRestrictedToTheAppEvenForARecognizedCliCaller() async throws {
+    let (server, _) = try await makeServer()
+
+    guard case .failure(.callerNotAuthorized) = await send(.unlock, to: server, caller: cliCaller) else {
+      Issue.record("expected .failure(.callerNotAuthorized)")
+      return
+    }
+  }
+
+  @Test func createVaultStoresTheKeySoASubsequentUnlockSucceeds() async throws {
+    let store = InMemoryVaultStore()
+    let server = AgentServer(vaultStore: store)
+
+    guard
+      case .success(.vaultCreated(let recoveryKeyDisplayString)) =
+        await send(.createVault, to: server, caller: appCaller)
+    else {
+      Issue.record("expected .vaultCreated")
+      return
+    }
+    #expect(!recoveryKeyDisplayString.isEmpty)
+
+    await store.lock()
+    guard case .success(.unlocked) = await send(.unlock, to: server, caller: appCaller) else {
+      Issue.record("expected .unlocked")
+      return
+    }
+  }
+
+  @Test func createVaultFailsWithVaultAlreadyExistsAsAnInternalErrorOnASecondCall() async throws {
+    let (server, _) = try await makeServer()
+
+    guard case .failure(.internal) = await send(.createVault, to: server, caller: appCaller) else {
+      Issue.record("expected .failure(.internal)")
+      return
+    }
+  }
+
+  @Test func statusReportsWhetherAVaultExistsIndependentlyOfLockState() async throws {
+    let store = InMemoryVaultStore()
+    let server = AgentServer(vaultStore: store)
+
+    guard case .success(.status(let beforeCreate)) = await send(.status, to: server) else {
+      Issue.record("expected .status")
+      return
+    }
+    #expect(beforeCreate.vaultExists == false)
+    #expect(beforeCreate.locked == true)
+
+    _ = await send(.createVault, to: server, caller: appCaller)
+
+    guard case .success(.status(let afterCreate)) = await send(.status, to: server) else {
+      Issue.record("expected .status")
+      return
+    }
+    #expect(afterCreate.vaultExists == true)
+    #expect(afterCreate.locked == false)
+
+    await store.lock()
+    guard case .success(.status(let afterLock)) = await send(.status, to: server) else {
+      Issue.record("expected .status")
+      return
+    }
+    #expect(afterLock.vaultExists == true)
+    #expect(afterLock.locked == true)
   }
 }
