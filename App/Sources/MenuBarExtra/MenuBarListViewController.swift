@@ -255,7 +255,9 @@ extension MenuBarListViewController: NSTableViewDelegate {
       return cell
     case .item(let item):
       let cell = ItemRowCellView.dequeue(from: tableView, owner: self)
-      cell.configure(with: item)
+      // The menu bar extra's list doesn't hide separators around the selection the way the main
+      // window's item list does (851-2463) — it always shows them.
+      cell.configure(with: item, hidesSeparator: false)
       return cell
     }
   }
