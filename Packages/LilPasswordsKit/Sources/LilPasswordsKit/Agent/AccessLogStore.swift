@@ -50,6 +50,11 @@ public actor AccessLogStore: AccessLogging {
 
   /// `~/Library/Application Support/lil passwords/access-log.jsonl` — the same directory
   /// `VaultStore.defaultDatabaseURL()` uses, so both land under one already-`0700` directory.
+  ///
+  /// Uses `LilPasswordsKit.productName` rather than a hardcoded literal: this previously hardcoded
+  /// "Lil Passwords" (pre-851-2464), which after the rename would have silently split the access
+  /// log off into a sibling directory from `vault.sqlite` instead of sharing its `0700` one.
+  /// Referencing the shared constant means a future rename can't reintroduce that same drift.
   public static func defaultFileURL(fileManager: FileManager = .default) throws -> URL {
     let appSupport = try fileManager.url(
       for: .applicationSupportDirectory,
@@ -59,7 +64,7 @@ public actor AccessLogStore: AccessLogging {
     )
     return
       appSupport
-      .appendingPathComponent("lil passwords", isDirectory: true)
+      .appendingPathComponent(LilPasswordsKit.productName, isDirectory: true)
       .appendingPathComponent("access-log.jsonl", isDirectory: false)
   }
 
