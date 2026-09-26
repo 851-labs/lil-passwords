@@ -69,24 +69,21 @@ jobs:
         # `Process.waitUntilExit()` call starving Swift Concurrency's cooperative thread pool from
         # inside `async` code — both now fixed there.
         #
-        # The retry loop below stays on as defense in depth, not because either fix above is expected
-        # to be incomplete, but because this step burned enough investigation time already that
-        # failing fast with full diagnostics beats a silent 30-minute stall if something new ever
-        # shows up here. Each attempt fails fast (the 90s HangWatchdog plus its `sample` dump, well
-        # under this step's 10-minute budget) and leaves full tracing in the log either way, so a
-        # retry that goes green still leaves the failed attempt's diagnostics behind to investigate.
+        # This step used to retry `make e2e` up to 3 times to paper over the hang above. That's gone
+        # now: run 36272729378 (headSha 7f2d793, before either fix landed) burned all 3 retries and
+        # its 3rd HangWatchdog sample caught the exact leaked-`Client`-task livelock described above —
+        # `Client.connect(transport:)`'s message loop stuck in the Swift runtime's generic-metadata
+        # cache (`awaitSatisfyingState` / `ConcurrentReadableHashMap::find` / `MetadataCacheKey::
+        # operator==`), i.e. bug (1). Once `disconnect()` (commit f7e4693) and the `isRunning`-poll
+        # fix (also f7e4693) landed, run 36275337487 passed clean on the first and only attempt. A
+        # retry loop that can silently absorb this failure mode is worse than no retry at all — see
+        # `make e2e`'s own comment in the Makefile for why that target deliberately never retries
+        # either. If this hangs again, it should fail this step outright and name the offending test.
         #
         # `timeout-minutes: 10` and every suite's own `.timeLimit(.minutes(1))` trait stay on as a
-        # backstop: a genuine future hang should fail fast and name the offending test, rather than
-        # silently burning the job's full 30-minute allowance again.
+        # backstop: a genuine future hang should fail fast, with the 90s HangWatchdog's `sample` dump
+        # in the log, rather than silently burning the job's full 30-minute allowance.
         timeout-minutes: 10
         env:
           E2E_EXTRA_ARGS: --verbose
-        run: |
-          for attempt in 1 2 3; do
-            if make e2e; then
-              exit 0
-            fi
-            echo "::warning::make e2e attempt ${attempt} failed (see HangWatchdog tracing above if this was the livelock)"
-          done
-          exit 1
+        run: make e2e

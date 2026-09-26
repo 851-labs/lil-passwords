@@ -48,8 +48,10 @@ test:
 #
 # This target deliberately does *not* retry on failure — a hang here should surface immediately to
 # whoever's running it locally, not get silently swallowed. CI's E2E step (.github/workflows/ci.yml)
-# retries a few times instead, as defense in depth against any residual flakiness, while keeping
-# every attempt's HangWatchdog tracing in the log.
+# doesn't retry either, for the same reason: a retry loop is exactly what let 851-2434's real bug
+# hide behind "residual flakiness" for as long as it did. See that step's comment for the CI run
+# that proved it (all 3 retries burned on the actual bug, not flakiness) and the fix that made a
+# single attempt reliably pass.
 e2e: build
 	swift build --package-path Packages/LilpassE2E --product LilpassE2EHelper
 	LILPASS_E2E_BINARY_PATH="$(CURDIR)/build/Build/Products/Debug/lil passwords.app/Contents/Helpers/lilpass" \
