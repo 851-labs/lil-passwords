@@ -34,6 +34,6 @@ CODE_SIGN_IDENTITY = -
 // keypair — UpdaterController treats an empty key as "no updater configured"
 // and no-ops rather than starting Sparkle against a malformed key. See
 // docs/releasing.md.
-SPARKLE_PUBLIC_ED_KEY =
+SPARKLE_PUBLIC_ED_KEY = X14W9JrQPEYH7UD8MUT+/bKsVkrMVpbnLAy360q6ffE=
 
 #include? "Local.xcconfig"
