@@ -39,9 +39,6 @@ final class DetailViewController: NSViewController {
   private let documentStack = NSStackView()
 
   private let headerView = DetailHeaderView()
-  private let editButton = NSButton(title: "Edit", target: nil, action: nil)
-  private let cancelButton = NSButton(title: "Cancel", target: nil, action: nil)
-  private let doneButton = NSButton(title: "Done", target: nil, action: nil)
 
   private let usernameSection = DetailSectionContainerView()
   private let passwordSection = DetailSectionContainerView()
@@ -158,12 +155,17 @@ final class DetailViewController: NSViewController {
     NSLayoutConstraint.activate([
       contentContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
       contentContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-      contentContainer.topAnchor.constraint(equalTo: view.topAnchor),
+      // `safeAreaLayoutGuide`, not `view.topAnchor`: this detail pane is added to the split view
+      // via the plain `NSSplitViewItem(viewController:)` initializer, which — unlike the
+      // sidebar/list columns' convenience initializers — doesn't pre-inset its content below the
+      // unified toolbar. Pinning to the raw top anchor let the scrollable document (see
+      // `scrollView` below) scroll its content up underneath the toolbar's translucent
+      // background, ghosting through it. The safe area guide reflects the real toolbar height
+      // regardless of how the split item was constructed, so this keeps the whole scrollable
+      // region — not just its resting position — clipped below the toolbar.
+      contentContainer.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
       contentContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
     ])
-
-    let topBar = makeTopBar()
-    topBar.translatesAutoresizingMaskIntoConstraints = false
 
     scrollView.hasVerticalScroller = true
     scrollView.drawsBackground = false
@@ -178,6 +180,9 @@ final class DetailViewController: NSViewController {
     headerView.onTitleChange = { [weak self] newTitle in
       self?.draft?.title = newTitle
     }
+    headerView.onEditTapped = { [weak self] in self?.editTapped() }
+    headerView.onCancelTapped = { [weak self] in self?.cancelTapped() }
+    headerView.onDoneTapped = { [weak self] in self?.doneTapped() }
 
     for section in [usernameSection, passwordSection, verificationSection, websitesSection, notesSection] {
       documentStack.addArrangedSubview(section)
@@ -205,41 +210,13 @@ final class DetailViewController: NSViewController {
       flippedDocumentView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor)
     ])
 
-    contentContainer.addSubview(topBar)
     contentContainer.addSubview(scrollView)
     NSLayoutConstraint.activate([
-      topBar.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor, constant: 16),
-      topBar.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor, constant: -16),
-      topBar.topAnchor.constraint(equalTo: contentContainer.topAnchor, constant: 12),
-
       scrollView.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
       scrollView.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
-      scrollView.topAnchor.constraint(equalTo: topBar.bottomAnchor, constant: 4),
+      scrollView.topAnchor.constraint(equalTo: contentContainer.topAnchor),
       scrollView.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor),
     ])
-  }
-
-  private func makeTopBar() -> NSView {
-    editButton.bezelStyle = .rounded
-    editButton.target = self
-    editButton.action = #selector(editTapped)
-
-    cancelButton.bezelStyle = .rounded
-    cancelButton.target = self
-    cancelButton.action = #selector(cancelTapped)
-    cancelButton.keyEquivalent = "\u{1b}"  // Escape
-    cancelButton.isHidden = true
-
-    doneButton.bezelStyle = .rounded
-    doneButton.keyEquivalent = "\r"
-    doneButton.target = self
-    doneButton.action = #selector(doneTapped)
-    doneButton.isHidden = true
-
-    let stack = NSStackView(views: [cancelButton, doneButton, editButton])
-    stack.orientation = .horizontal
-    stack.spacing = 8
-    return stack
   }
 
   // MARK: Edit mode
@@ -305,10 +282,6 @@ final class DetailViewController: NSViewController {
       isEditing: isEditing
     )
 
-    editButton.isHidden = isEditing
-    cancelButton.isHidden = !isEditing
-    doneButton.isHidden = !isEditing
-
     configureUsernameSection(displayItem)
     configurePasswordSection(displayItem)
     configureVerificationSection(displayItem)
@@ -330,9 +303,12 @@ final class DetailViewController: NSViewController {
     } else {
       usernameListEditor = nil
       usernameSection.isHidden = displayItem.usernames.isEmpty
-      let rows: [NSView] = displayItem.usernames.map { username in
+      // Apple Passwords labels only the first row when there's more than one username (using
+      // the plural "User Names"), leaving the rest unlabeled rather than repeating the label.
+      let label = displayItem.usernames.count > 1 ? "User Names" : "User Name"
+      let rows: [NSView] = displayItem.usernames.enumerated().map { index, username in
         let row = DetailValueRowView()
-        row.configure(label: "User Name", value: username)
+        row.configure(label: index == 0 ? label : "", value: username)
         row.onCopy = { Pasteboard.copySecret(username) }
         return row
       }
