@@ -57,6 +57,18 @@ enum Pasteboard {
     #endif
     return AppSettings.shared.clipboardClearInterval.timeInterval
   }
+
+  /// Copies non-secret text (851-2432: the "Copy Setup" MCP config snippets/commands) to the
+  /// general pasteboard as a plain string. Deliberately doesn't go through `copySecret(_:)` — that
+  /// path's concealed/transient marking and scheduled auto-clear exist to protect passwords and
+  /// TOTP codes, and would be actively wrong here: a copied setup command is meant to be pasted
+  /// into a terminal or config file, sync normally, and stay on the clipboard until the user
+  /// replaces it.
+  static func copyText(_ value: String) {
+    let pasteboard = NSPasteboard.general
+    pasteboard.clearContents()
+    pasteboard.setString(value, forType: .string)
+  }
 }
 
 extension NSPasteboard: ClipboardTarget {
