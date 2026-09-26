@@ -35,9 +35,15 @@ struct GeneralSettingsView: View {
       } header: {
         Text("Security Recommendations")
       } footer: {
+        // Plain `"a" + "b"` type-infers to a `String`, not `LocalizedStringKey` — `Text(_:)` only
+        // auto-localizes via the String Catalog when it receives one literal. Each half is wrapped
+        // in `String(localized:)` individually so the whole sentence still gets extracted (851-2466).
         Text(
-          "Checks each password against known data leaks by sending only the first 5 characters of its hash — "
-            + "never the password itself — to Have I Been Pwned.")
+          String(
+            localized:
+              "Checks each password against known data leaks by sending only the first 5 characters of its hash — "
+          )
+            + String(localized: "never the password itself — to Have I Been Pwned."))
       }
 
       // 851-2459. Off by default: fetching an icon tells that site (and anything on the network
@@ -67,10 +73,10 @@ struct GeneralSettingsView: View {
         // literal just suppresses the source newline, it isn't string concatenation): `Text(_:)`
         // only auto-localizes via the String Catalog when it receives one `LocalizedStringKey`
         // literal. `"a" + "b"` type-infers to a plain `String` instead, which silently opts this
-        // out of localization/extraction entirely — confirmed missing from
-        // App/Resources/Localizable.xcstrings for the pre-existing "Menu Bar" footer just below,
-        // which has the same `+`-split shape. Not fixing that pre-existing one here (out of scope
-        // for 851-2441), but not repeating its bug in this new section either.
+        // out of localization/extraction entirely — this used to be confirmed missing from
+        // App/Resources/Localizable.xcstrings for the "Menu Bar" footer just below, which had the
+        // same `+`-split shape; that one's now fixed too (851-2466), by wrapping each half in its
+        // own `String(localized:)` instead.
         Text(
           """
           To let Safari and other apps offer lil passwords when filling in a username and password, \
@@ -89,9 +95,17 @@ struct GeneralSettingsView: View {
       } header: {
         Text("Menu Bar")
       } footer: {
+        // Plain `"a" + "b"` type-infers to a `String`, not `LocalizedStringKey` — `Text(_:)` only
+        // auto-localizes via the String Catalog when it receives one literal. Each half is wrapped
+        // in `String(localized:)` individually so the whole sentence still gets extracted. This was
+        // the pre-existing, confirmed-missing-from-the-catalog footer the "AutoFill" section's
+        // comment below used to call out — now fixed (851-2466).
         Text(
-          "Suggestions ask Safari, Chrome, Arc, or Brave for the site in the frontmost tab, and may prompt for "
-            + "Automation permission the first time.")
+          String(
+            localized:
+              "Suggestions ask Safari, Chrome, Arc, or Brave for the site in the frontmost tab, and may prompt for "
+          )
+            + String(localized: "Automation permission the first time."))
       }
     }
     .formStyle(.grouped)

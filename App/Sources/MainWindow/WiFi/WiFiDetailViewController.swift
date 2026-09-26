@@ -160,12 +160,22 @@ final class WiFiDetailViewController: NSViewController {
 
     identityView.configure(title: network.ssid, icon: Self.wifiIcon(), isEditing: false)
     securityValueField.stringValue = network.security?.displayName ?? String(localized: "Unknown")
+    // `setAccessibilityLabel` alone doesn't make a plain, multi-subview `NSView` an accessibility
+    // element in its own right (851-2466) — without `setAccessibilityElement(true)`, VoiceOver
+    // just descends straight into the card's own rows and never surfaces this summary at all, the
+    // same "relying on one property alone isn't enough" gap docs/accessibility.md calls out for
+    // icon-only controls.
+    view.setAccessibilityElement(true)
     view.setAccessibilityLabel(String(localized: "\(network.ssid), \(securityValueField.stringValue)"))
   }
 
   private func showNoSelection() {
     emptyStateView.isHidden = false
     contentContainer.isHidden = true
+    // Un-set the whole-view summary element too, not just its label — otherwise VoiceOver would
+    // land on this view as an unlabeled group instead of skipping straight to `emptyStateView`'s
+    // own "No Network Selected" text.
+    view.setAccessibilityElement(false)
     view.setAccessibilityLabel(nil)
   }
 

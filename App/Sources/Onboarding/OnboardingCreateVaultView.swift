@@ -48,10 +48,12 @@ struct OnboardingCreateVaultView: View {
   var body: some View {
     OnboardingPageView(
       icon: .symbol(name: "key.fill", tint: .blue),
-      title: "Create Your Vault",
+      title: String(localized: "Create Your Vault"),
       subtitle:
-        "Your passwords are encrypted and stored only on this Mac, unlocked with Touch ID or your "
-        + "password. Next, we'll show you a one-time recovery key — keep it somewhere safe.",
+        String(
+          localized: "Your passwords are encrypted and stored only on this Mac, unlocked with Touch ID or your "
+        )
+        + String(localized: "password. Next, we'll show you a one-time recovery key — keep it somewhere safe."),
       content: {
         if let errorMessage = viewModel.errorMessage {
           Text(errorMessage)
@@ -61,7 +63,7 @@ struct OnboardingCreateVaultView: View {
             .fixedSize(horizontal: false, vertical: true)
         }
       },
-      primaryTitle: viewModel.errorMessage == nil ? "Create Vault" : "Try Again",
+      primaryTitle: viewModel.errorMessage == nil ? String(localized: "Create Vault") : String(localized: "Try Again"),
       primaryAction: viewModel.createVault,
       isPrimaryLoading: viewModel.isCreating
     )

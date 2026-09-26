@@ -11,6 +11,12 @@ enum OnboardingLayout {
 /// The one-icon/bold-title/short-copy/primary-button page shape every onboarding step (851-2439)
 /// is built from, in the style of Apple's own welcome screens — kept in one place so all six steps
 /// stay visually consistent rather than six hand-rolled layouts drifting apart.
+///
+/// 851-2466: `title`/`subtitle`/`primaryTitle`/`secondaryTitle` are plain `String`, not
+/// `LocalizedStringKey` — `body` below feeds them to `Text(_:)`/`Button(_:action:)` via the
+/// verbatim, non-localizing `String` initializers. Every call site must pass an already-resolved
+/// `String(localized: "...")`, not a bare literal, or the copy won't be extracted into
+/// `Localizable.xcstrings` at all.
 struct OnboardingPageView<Content: View>: View {
   var icon: OnboardingIcon
   let title: String
@@ -27,7 +33,12 @@ struct OnboardingPageView<Content: View>: View {
     VStack(spacing: 20) {
       Spacer(minLength: 12)
 
+      // Purely decorative (851-2466): the bold title right below always says in words whatever
+      // this icon illustrates ("Create Your Vault" next to a key glyph, "Unlock with Touch ID"
+      // next to a Touch ID glyph, etc.), so VoiceOver would otherwise announce the same thing
+      // twice — same reasoning as `SidebarIconFactory`'s icons (docs/accessibility.md).
       icon.view
+        .accessibilityHidden(true)
 
       VStack(spacing: 8) {
         Text(title)
@@ -62,6 +73,10 @@ struct OnboardingPageView<Content: View>: View {
         .controlSize(.large)
         .disabled(primaryDisabled || isPrimaryLoading)
         .keyboardShortcut(.defaultAction)
+        // 851-2466: while loading, this button's content is a bare `ProgressView` with no text, so
+        // without an explicit label VoiceOver would land on it as an unlabeled (dimmed) button —
+        // keep announcing the same title (e.g. "Create Vault") throughout, not just when idle.
+        .accessibilityLabel(primaryTitle)
 
         if let secondaryTitle, let secondaryAction {
           Button(secondaryTitle, action: secondaryAction)
@@ -115,10 +130,14 @@ struct OnboardingFeatureBullet: View {
 
   var body: some View {
     HStack(spacing: 12) {
+      // Decorative (851-2466): `title` already says the whole feature in words, so the symbol
+      // would otherwise be announced as a second, redundant element — see `OnboardingPageView`'s
+      // own icon for the same reasoning.
       Image(systemName: symbolName)
         .font(.system(size: 16, weight: .semibold))
         .foregroundStyle(tint)
         .frame(width: 24)
+        .accessibilityHidden(true)
 
       Text(title)
         .font(.system(size: 13, weight: .medium))

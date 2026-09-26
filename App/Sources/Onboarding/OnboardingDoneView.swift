@@ -10,10 +10,10 @@ struct OnboardingDoneView: View {
   var body: some View {
     OnboardingPageView(
       icon: .symbol(name: "checkmark.seal.fill", tint: .green),
-      title: "You're All Set",
-      subtitle: "Start saving, generating, and autofilling your passwords.",
+      title: String(localized: "You're All Set"),
+      subtitle: String(localized: "Start saving, generating, and autofilling your passwords."),
       content: { EmptyView() },
-      primaryTitle: "Open \(LilPasswordsKit.productName)",
+      primaryTitle: String(localized: "Open \(LilPasswordsKit.productName)"),
       primaryAction: onOpenMainWindow
     )
   }

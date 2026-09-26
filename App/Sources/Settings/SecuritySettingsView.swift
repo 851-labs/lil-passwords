@@ -45,9 +45,15 @@ struct SecuritySettingsView: View {
       Section {
         Button("Generate New Recovery Key…", action: onGenerateNewRecoveryKey)
       } footer: {
+        // Plain `"a" + "b"` type-infers to a `String`, not `LocalizedStringKey` — `Text(_:)` only
+        // auto-localizes via the String Catalog when it receives one literal. Each half is wrapped
+        // in `String(localized:)` individually so the whole sentence still gets extracted (851-2466).
         Text(
-          "Your current recovery key will stop working immediately, and you'll be shown a new one to save. "
-            + "Do this if you ever suspect someone else has seen your existing key."
+          String(
+            localized:
+              "Your current recovery key will stop working immediately, and you'll be shown a new one to save. "
+          )
+            + String(localized: "Do this if you ever suspect someone else has seen your existing key.")
         )
       }
     }

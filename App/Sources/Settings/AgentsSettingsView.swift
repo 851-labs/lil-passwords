@@ -36,14 +36,27 @@ struct AgentsSettingsView: View {
         .disabled(!agentSettings.agentAccessEnabled)
       } footer: {
         VStack(alignment: .leading, spacing: 6) {
+          // Plain `"a" + "b"` type-infers to a `String`, not `LocalizedStringKey` — `Text(_:)` only
+          // auto-localizes via the String Catalog when it receives one literal. Each half is
+          // wrapped in `String(localized:)` individually so the whole sentence still gets
+          // extracted (851-2466).
           Text(
-            "The \(LilPasswordsKit.cliName) CLI and MCP server can read every password with no prompts while "
-              + "\(LilPasswordsKit.productName) is unlocked. Turning this off, or locking the vault, blocks access."
+            String(
+              localized:
+                "The \(LilPasswordsKit.cliName) CLI and MCP server can read every password with no prompts while "
+            )
+              + String(
+                localized:
+                  "\(LilPasswordsKit.productName) is unlocked. Turning this off, or locking the vault, blocks access."
+              )
           )
           Text("Otherwise, agent access follows \(LilPasswordsKit.productName)' own auto-lock.")
           Text(
-            "Write access is separate from read access and off by default — turn it on only if you want agents "
-              + "to be able to add, change, or delete passwords, not just read them."
+            String(
+              localized:
+                "Write access is separate from read access and off by default — turn it on only if you want agents "
+            )
+              + String(localized: "to be able to add, change, or delete passwords, not just read them.")
           )
         }
       }
@@ -64,8 +77,11 @@ struct AgentsSettingsView: View {
         Text("Connect Agents")
       } footer: {
         Text(
-          "Sets up \(LilPasswordsKit.cliName)'s MCP server so the agent can use \(LilPasswordsKit.productName) "
-            + "directly, subject to the access setting above."
+          String(
+            localized:
+              "Sets up \(LilPasswordsKit.cliName)'s MCP server so the agent can use \(LilPasswordsKit.productName) "
+          )
+            + String(localized: "directly, subject to the access setting above.")
         )
       }
 
@@ -83,8 +99,11 @@ struct AgentsSettingsView: View {
         Text("Access Log")
       } footer: {
         Text(
-          "Every agent request is recorded here — time, agent, item, and fields accessed, never secret values. "
-            + "Entries older than 30 days are removed automatically."
+          String(
+            localized:
+              "Every agent request is recorded here — time, agent, item, and fields accessed, never secret values. "
+          )
+            + String(localized: "Entries older than 30 days are removed automatically.")
         )
       }
     }
@@ -139,6 +158,11 @@ private struct CLIInstallSectionBody: View {
             .foregroundStyle(.red)
         }
       }
+      // 851-2466: combines the status/error lines into a single VoiceOver element (e.g. "Not
+      // installed") instead of two separate stops — mirrors the row-description principle in
+      // docs/accessibility.md. Doesn't touch the Install/Uninstall button below, which stays its
+      // own focusable element.
+      .accessibilityElement(children: .combine)
       Spacer()
       switch viewModel.status {
       case .notInstalled:
@@ -179,6 +203,11 @@ private struct AgentConnectionRow: View {
           .font(.callout)
           .foregroundStyle(.secondary)
       }
+      // 851-2466: combines name + connection status into one VoiceOver element (e.g. "Claude
+      // Code, Connected") instead of two separate stops — mirrors the row-description principle
+      // in docs/accessibility.md. Doesn't touch the buttons below, which stay their own focusable
+      // elements.
+      .accessibilityElement(children: .combine)
       Spacer()
       Button("Copy Setup") {
         Pasteboard.copyText(viewModel.snippet(for: agent))

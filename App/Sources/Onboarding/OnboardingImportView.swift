@@ -11,19 +11,19 @@ struct OnboardingImportView: View {
   var body: some View {
     OnboardingPageView(
       icon: .symbol(name: "square.and.arrow.down.on.square.fill", tint: .indigo),
-      title: "Import from Apple Passwords",
-      subtitle: "Bring over what you've already saved in Passwords:",
+      title: String(localized: "Import from Apple Passwords"),
+      subtitle: String(localized: "Bring over what you've already saved in Passwords:"),
       content: {
         VStack(alignment: .leading, spacing: 6) {
-          OnboardingStepRow(number: 1, text: "Open the Passwords app")
-          OnboardingStepRow(number: 2, text: "Choose File → Export All Passwords…")
-          OnboardingStepRow(number: 3, text: "Authenticate, then save the CSV file")
-          OnboardingStepRow(number: 4, text: "Import that file below")
+          OnboardingStepRow(number: 1, text: String(localized: "Open the Passwords app"))
+          OnboardingStepRow(number: 2, text: String(localized: "Choose File → Export All Passwords…"))
+          OnboardingStepRow(number: 3, text: String(localized: "Authenticate, then save the CSV file"))
+          OnboardingStepRow(number: 4, text: String(localized: "Import that file below"))
         }
       },
-      primaryTitle: "Import CSV…",
+      primaryTitle: String(localized: "Import CSV…"),
       primaryAction: onImportCSV,
-      secondaryTitle: "Skip",
+      secondaryTitle: String(localized: "Skip"),
       secondaryAction: onSkip
     )
   }
@@ -45,5 +45,9 @@ private struct OnboardingStepRow: View {
         .font(.system(size: 12))
       Spacer(minLength: 0)
     }
+    // 851-2466: without this, VoiceOver reads the number and the instruction as two separate
+    // elements ("1." then, on a second stop, "Open the Passwords app") — combine them into the
+    // one sentence a sighted reader gets in a single glance, e.g. "1. Open the Passwords app".
+    .accessibilityElement(children: .combine)
   }
 }

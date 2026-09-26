@@ -20,11 +20,11 @@ struct OnboardingAgentsView: View {
   var body: some View {
     OnboardingPageView(
       icon: .symbol(name: "sparkles", tint: .pink),
-      title: "Agents",
+      title: String(localized: "Agents"),
       subtitle:
-        "The \(LilPasswordsKit.cliName) CLI and MCP server let your coding agents read your vault. "
-        + "Any local process that can run \(LilPasswordsKit.cliName) can read everything while "
-        + "\(LilPasswordsKit.productName) is unlocked, and every access is logged.",
+        String(localized: "The \(LilPasswordsKit.cliName) CLI and MCP server let your coding agents read your vault. ")
+        + String(localized: "Any local process that can run \(LilPasswordsKit.cliName) can read everything while ")
+        + String(localized: "\(LilPasswordsKit.productName) is unlocked, and every access is logged."),
       content: {
         VStack(spacing: 14) {
           Toggle("Allow agents to access passwords", isOn: $agentSettings.agentAccessEnabled)
@@ -55,9 +55,9 @@ struct OnboardingAgentsView: View {
           }
         }
       },
-      primaryTitle: "Continue",
+      primaryTitle: String(localized: "Continue"),
       primaryAction: onContinue,
-      secondaryTitle: "Skip",
+      secondaryTitle: String(localized: "Skip"),
       secondaryAction: onSkip
     )
   }
