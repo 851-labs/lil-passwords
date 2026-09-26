@@ -4,16 +4,18 @@ import LilPasswordsKit
 
 /// The app-side seam between the UI and the vault.
 ///
-/// `VaultStore` (851-2404, encrypted SQLite) and the XPC-connected helper that will front it
-/// (851-2427) are both still in progress, so UI code depends on this protocol rather than on
-/// either concrete implementation. Once the real store lands, only its conformance needs to
-/// change — call sites in `App/Sources/MainWindow` stay the same. Kept intentionally small:
-/// enough for browsing, viewing, and editing items, and nothing that leans on persistence
-/// details (transactions, migrations, sync) no one has settled on yet.
+/// UI code depends on this protocol rather than on a concrete store, so swapping what's behind
+/// it — `VaultStoreViewModel` (backed by the real, async, actor-isolated `VaultStoring` from
+/// 851-2404) today, and eventually one that talks to `LilPasswordsAgent` over XPC (851-2427) —
+/// never touches call sites in `App/Sources/MainWindow`. Kept intentionally small and
+/// synchronous-looking: enough for browsing, viewing, and editing items, with the async/actor
+/// bridging (and its error handling) entirely the conforming type's problem.
 @MainActor
 protocol VaultViewModel: AnyObject {
-  /// Every item currently in the vault. Order is not guaranteed to be stable or meaningful;
-  /// sort for display as needed.
+  /// Every item currently in the vault, including ones in "Recently Deleted"
+  /// (`PasswordItem.deletedAt != nil`) — filtering those out for a particular category is the
+  /// caller's job, same as `VaultStoring.allItems()`. Order is not guaranteed to be stable or
+  /// meaningful; sort for display as needed.
   var items: [PasswordItem] { get }
 
   /// Publishes the current `items`, and again every time it changes. New subscribers receive
@@ -25,6 +27,8 @@ protocol VaultViewModel: AnyObject {
   /// callers don't need to (and shouldn't rely on whatever `modifiedAt` they passed in).
   func save(_ item: PasswordItem)
 
-  /// Removes the item with the given id. Does nothing if no item has that id.
+  /// Moves the item with the given id to "Recently Deleted" (`PasswordItem.deletedAt` set to
+  /// now) — the same user-facing soft delete as `VaultStoring.delete(id:)`, not a permanent,
+  /// unrecoverable removal. Does nothing if no item has that id.
   func delete(_ id: UUID)
 }

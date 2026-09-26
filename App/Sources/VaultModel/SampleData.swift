@@ -84,16 +84,16 @@ import LilPasswordsKit
     }()
   }
 
-  extension InMemoryVaultViewModel {
+  extension VaultStoreViewModel {
     /// Seeds sample data when this process was launched with `-SeedSampleData YES`, so previews,
     /// tophat, and manual testing all get believable data without needing a real vault. Never
     /// available outside Debug builds, and does nothing unless explicitly requested — a plain
     /// debug launch still starts from an empty vault.
-    static func makeForCurrentLaunch() -> InMemoryVaultViewModel {
+    static func makeForCurrentLaunch() -> VaultStoreViewModel {
       guard UserDefaults.standard.string(forKey: "SeedSampleData") == "YES" else {
-        return InMemoryVaultViewModel()
+        return VaultStoreViewModel()
       }
-      return InMemoryVaultViewModel(items: SampleData.items)
+      return VaultStoreViewModel(seedItems: SampleData.items)
     }
   }
 #endif

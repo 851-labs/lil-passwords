@@ -30,9 +30,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
   private static func makeDefaultVaultViewModel() -> VaultViewModel {
     #if DEBUG
-      return InMemoryVaultViewModel.makeForCurrentLaunch()
+      return VaultStoreViewModel.makeForCurrentLaunch()
     #else
-      return InMemoryVaultViewModel()
+      return VaultStoreViewModel()
     #endif
   }
 }
