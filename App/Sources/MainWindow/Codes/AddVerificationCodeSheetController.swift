@@ -70,7 +70,8 @@ final class AddVerificationCodeSheetController: NSWindowController {
       completion(.cancelled)
       return
     }
-    controller.allItems = dataSource.items.nonDeleted().sorted(by: PasswordItem.sortComparator(for: .title))
+    controller.allItems = dataSource.items.nonDeleted().sorted(
+      by: PasswordItem.sortComparator(for: .title, direction: .ascending))
     controller.filteredItems = controller.allItems
     controller.showPickItemStep()
     // The sheet's completion handler is the only strong reference keeping `controller` (and
@@ -493,7 +494,9 @@ extension AddVerificationCodeSheetController: NSTableViewDataSource, NSTableView
   func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
     guard filteredItems.indices.contains(row) else { return nil }
     let cell = ItemRowCellView.dequeue(from: tableView, owner: self)
-    cell.configure(with: filteredItems[row])
+    // This picker list doesn't use the item list's rounded, inset selection highlight (851-2463),
+    // so there's no selection shape for a hairline to visually cut through — always show it.
+    cell.configure(with: filteredItems[row], hidesSeparator: false)
     return cell
   }
 

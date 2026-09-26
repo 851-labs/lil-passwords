@@ -24,6 +24,8 @@ struct AppSettingsTests {
     #expect(settings.warnAboutCompromisedPasswords == true)
     #expect(settings.showInMenuBar == true)
     #expect(settings.menuBarBrowserSuggestionsEnabled == false)
+    #expect(settings.itemListSortField == .title)
+    #expect(settings.itemListSortDirection == .ascending)
   }
 
   @Test("round-trips every setting")
@@ -50,6 +52,12 @@ struct AppSettingsTests {
 
     settings.menuBarBrowserSuggestionsEnabled = true
     #expect(settings.menuBarBrowserSuggestionsEnabled == true)
+
+    settings.itemListSortField = .createdAt
+    #expect(settings.itemListSortField == .createdAt)
+
+    settings.itemListSortDirection = .descending
+    #expect(settings.itemListSortDirection == .descending)
   }
 
   @Test("clamps password length to the supported range")

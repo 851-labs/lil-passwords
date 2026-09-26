@@ -73,11 +73,20 @@ final class ItemRowCellView: NSTableCellView {
     ])
   }
 
-  func configure(with item: PasswordItem) {
+  /// - Parameter hidesSeparator: Whether this row's bottom hairline should be hidden — true when
+  ///   this row, or the row immediately below it, is selected, so no hairline ever cuts through a
+  ///   rounded selection highlight (851-2463). Kept in sync after the initial `configure` call by
+  ///   `setSeparatorHidden(_:)`, since selection changes don't re-invoke `configure`.
+  func configure(with item: PasswordItem, hidesSeparator: Bool) {
     iconView.image = MonogramIcon.icon(for: item.title, dimension: 40)
     titleField.stringValue = item.title
     let subtitle = item.usernames.first(where: { !$0.isEmpty })
     subtitleField.stringValue = subtitle ?? ""
     subtitleField.isHidden = subtitle == nil
+    separator.isHidden = hidesSeparator
+  }
+
+  func setSeparatorHidden(_ hidden: Bool) {
+    separator.isHidden = hidden
   }
 }

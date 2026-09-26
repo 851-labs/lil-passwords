@@ -24,11 +24,23 @@ protocol ItemListViewControllerDelegate: AnyObject {
 @MainActor
 final class ItemListViewController: NSViewController {
   private let dataSource: VaultViewModel
+  private let settings: AppSettings
   private var cancellable: AnyCancellable?
 
   private(set) var currentCategory: SidebarCategory = .all
   private var searchQuery: String = ""
-  private var sortField: PasswordItemSortField = .title
+
+  /// Backed by `AppSettings` rather than a plain stored property, so the chosen field/direction
+  /// survive relaunch (851-2463's sort-menu spec).
+  private var sortField: PasswordItemSortField {
+    get { settings.itemListSortField }
+    set { settings.itemListSortField = newValue }
+  }
+  private var sortDirection: SortDirection {
+    get { settings.itemListSortDirection }
+    set { settings.itemListSortDirection = newValue }
+  }
+
   private var rows: [PasswordItem] = []
 
   weak var delegate: ItemListViewControllerDelegate?
@@ -57,19 +69,33 @@ final class ItemListViewController: NSViewController {
     title: "Copy Verification Code", action: nil, keyEquivalent: "")
   private let deleteMenuItem = NSMenuItem(title: "Delete", action: nil, keyEquivalent: "")
 
+  /// Two sections (851-2463, matching Apple Passwords' own sort menu): which field to sort by,
+  /// then a separator, then which direction — each with its own checkmark, kept in sync by
+  /// `updateSortMenuCheckmarks()`.
   private lazy var sortMenu: NSMenu = {
     let menu = NSMenu()
     for field in PasswordItemSortField.allCases {
       let item = NSMenuItem(title: sortMenuTitle(for: field), action: #selector(selectSortField(_:)), keyEquivalent: "")
       item.target = self
+      item.image = NSImage(systemSymbolName: sortMenuIconName(for: field), accessibilityDescription: nil)
       item.representedObject = field
+      menu.addItem(item)
+    }
+    menu.addItem(.separator())
+    for direction in SortDirection.allCases {
+      let item = NSMenuItem(
+        title: sortMenuTitle(for: direction), action: #selector(selectSortDirection(_:)), keyEquivalent: "")
+      item.target = self
+      item.image = NSImage(systemSymbolName: sortMenuIconName(for: direction), accessibilityDescription: nil)
+      item.representedObject = direction
       menu.addItem(item)
     }
     return menu
   }()
 
-  init(dataSource: VaultViewModel) {
+  init(dataSource: VaultViewModel, settings: AppSettings = .shared) {
     self.dataSource = dataSource
+    self.settings = settings
     super.init(nibName: nil, bundle: nil)
   }
 
@@ -157,7 +183,12 @@ final class ItemListViewController: NSViewController {
   /// wiring the rest of the toolbar's cross-controller controls use (see `MainSplitViewController.newPassword`'s
   /// doc comment for why the codebase prefers this over responder-chain nil-targeting here).
   @objc func showSortMenu(_ sender: NSButton) {
+    // `NSMenu.popUp` runs its own modal tracking loop and doesn't return until the menu is
+    // dismissed, so bracketing the call is enough to keep the button visibly pressed for exactly
+    // as long as the menu is open (851-2463's sort-menu spec) — no delegate/notification needed.
+    sender.layer?.backgroundColor = NSColor.toolbarCapsuleButtonHighlight.cgColor
     sortMenu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 4), in: sender)
+    sender.layer?.backgroundColor = nil
   }
 
   // MARK: Configuration
@@ -220,6 +251,31 @@ final class ItemListViewController: NSViewController {
     }
   }
 
+  private func sortMenuIconName(for field: PasswordItemSortField) -> String {
+    switch field {
+    case .title: return "textformat"
+    case .website: return "safari"
+    case .createdAt: return "plus.circle"
+    case .modifiedAt: return "pencil.line"
+    }
+  }
+
+  private func sortMenuTitle(for direction: SortDirection) -> String {
+    switch direction {
+    case .ascending: return "Ascending"
+    case .descending: return "Descending"
+    }
+  }
+
+  /// Matches Apple Passwords' own sort menu (`sort-menu-dark.png`): Ascending pairs with
+  /// `arrow.down` and Descending with `arrow.up`, not the more "obvious" reverse pairing.
+  private func sortMenuIconName(for direction: SortDirection) -> String {
+    switch direction {
+    case .ascending: return "arrow.down"
+    case .descending: return "arrow.up"
+    }
+  }
+
   // MARK: Row computation
 
   private func rebuildRows(preservingSelection: Bool) {
@@ -247,7 +303,7 @@ final class ItemListViewController: NSViewController {
       return rankedRows(from: filtered)
     }
 
-    return filtered.sorted(by: PasswordItem.sortComparator(for: sortField))
+    return filtered.sorted(by: PasswordItem.sortComparator(for: sortField, direction: sortDirection))
   }
 
   private func rankedRows(from items: [PasswordItem]) -> [PasswordItem] {
@@ -295,7 +351,11 @@ final class ItemListViewController: NSViewController {
 
   private func updateSortMenuCheckmarks() {
     for item in sortMenu.items {
-      item.state = (item.representedObject as? PasswordItemSortField) == sortField ? .on : .off
+      if let field = item.representedObject as? PasswordItemSortField {
+        item.state = field == sortField ? .on : .off
+      } else if let direction = item.representedObject as? SortDirection {
+        item.state = direction == sortDirection ? .on : .off
+      }
     }
   }
 
@@ -304,6 +364,13 @@ final class ItemListViewController: NSViewController {
   @objc private func selectSortField(_ sender: NSMenuItem) {
     guard let field = sender.representedObject as? PasswordItemSortField, field != sortField else { return }
     sortField = field
+    updateSortMenuCheckmarks()
+    rebuildRows(preservingSelection: true)
+  }
+
+  @objc private func selectSortDirection(_ sender: NSMenuItem) {
+    guard let direction = sender.representedObject as? SortDirection, direction != sortDirection else { return }
+    sortDirection = direction
     updateSortMenuCheckmarks()
     rebuildRows(preservingSelection: true)
   }
@@ -354,7 +421,7 @@ extension ItemListViewController: NSTableViewDataSource {
 extension ItemListViewController: NSTableViewDelegate {
   func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
     let cell = ItemRowCellView.dequeue(from: tableView, owner: self)
-    cell.configure(with: rows[row])
+    cell.configure(with: rows[row], hidesSeparator: hidesSeparator(atRow: row))
     return cell
   }
 
@@ -370,6 +437,29 @@ extension ItemListViewController: NSTableViewDelegate {
 
   func tableViewSelectionDidChange(_ notification: Notification) {
     delegate?.itemListViewController(self, didChangeSelection: selectedItems())
+    updateSeparatorVisibility()
+  }
+
+  /// Whether row `row`'s own hairline (drawn at its bottom edge) should be hidden: either because
+  /// `row` itself is selected (hides the separator "below" it), or because `row + 1` is selected
+  /// (hides the separator "above" that row, which is this row's bottom edge) — matching Apple
+  /// Passwords, which never draws a hairline through a rounded selection highlight (851-2463).
+  private func hidesSeparator(atRow row: Int) -> Bool {
+    let selected = tableView.selectedRowIndexes
+    return selected.contains(row) || selected.contains(row + 1)
+  }
+
+  /// Re-applies `hidesSeparator(atRow:)` to every currently on-screen row. Selection changes don't
+  /// re-invoke `tableView(_:viewFor:row:)` on their own, so without this, a row's hairline
+  /// wouldn't update until it was scrolled off-screen and back (or the table reloaded) after its
+  /// neighbor's selection state changed.
+  private func updateSeparatorVisibility() {
+    for row in rows.indices {
+      guard let cell = tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? ItemRowCellView else {
+        continue
+      }
+      cell.setSeparatorHidden(hidesSeparator(atRow: row))
+    }
   }
 }
 

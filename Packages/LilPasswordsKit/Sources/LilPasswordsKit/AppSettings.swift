@@ -112,6 +112,8 @@ public final class AppSettings: @unchecked Sendable {
     static let warnAboutCompromisedPasswords = "AppSettings.warnAboutCompromisedPasswords"
     static let showInMenuBar = "AppSettings.showInMenuBar"
     static let menuBarBrowserSuggestionsEnabled = "AppSettings.menuBarBrowserSuggestionsEnabled"
+    static let itemListSortField = "AppSettings.itemListSortField"
+    static let itemListSortDirection = "AppSettings.itemListSortDirection"
   }
 
   /// Smallest and largest custom password length offered in Settings → General.
@@ -134,6 +136,8 @@ public final class AppSettings: @unchecked Sendable {
       Key.warnAboutCompromisedPasswords: true,
       Key.showInMenuBar: true,
       Key.menuBarBrowserSuggestionsEnabled: false,
+      Key.itemListSortField: PasswordItemSortField.title.rawValue,
+      Key.itemListSortDirection: SortDirection.ascending.rawValue,
     ])
   }
 
@@ -208,6 +212,19 @@ public final class AppSettings: @unchecked Sendable {
   // helper-owned, ACL'd Keychain item, gated by verified caller identity and read/written only via
   // `AgentRequest.getAgentSettings`/`.setAgentSettings` — see `AgentSettingsStoring`'s doc comment
   // for the full rationale.
+
+  /// The item list's sort field, chosen from the toolbar's sort menu (851-2463) and persisted so
+  /// it survives relaunch.
+  public var itemListSortField: PasswordItemSortField {
+    get { PasswordItemSortField(rawValue: defaults.string(forKey: Key.itemListSortField) ?? "") ?? .title }
+    set { set(newValue.rawValue, forKey: Key.itemListSortField) }
+  }
+
+  /// The item list's sort direction, chosen from the same menu.
+  public var itemListSortDirection: SortDirection {
+    get { SortDirection(rawValue: defaults.string(forKey: Key.itemListSortDirection) ?? "") ?? .ascending }
+    set { set(newValue.rawValue, forKey: Key.itemListSortDirection) }
+  }
 
   private func set(_ value: some Any, forKey key: String) {
     defaults.set(value, forKey: key)

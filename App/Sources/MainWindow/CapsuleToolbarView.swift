@@ -36,6 +36,12 @@ final class CapsuleToolbarView: NSView {
       button.translatesAutoresizingMaskIntoConstraints = false
       button.widthAnchor.constraint(equalToConstant: 32).isActive = true
       button.heightAnchor.constraint(equalToConstant: 28).isActive = true
+      // Layer-backed (rather than relying on the bezel's own mouse-down highlight, which a
+      // borderless `.regularSquare` button doesn't draw) so callers like `ItemListViewController`
+      // can paint a pressed-looking background behind a specific button — e.g. the sort button
+      // while its menu is open (851-2463).
+      button.wantsLayer = true
+      button.layer?.cornerRadius = 6
       if index > 0 {
         arranged.append(makeDivider())
       }
@@ -87,6 +93,17 @@ extension NSColor {
       appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
         ? NSColor.white.withAlphaComponent(0.14)
         : NSColor.black.withAlphaComponent(0.08)
+    }
+  }
+
+  /// The pressed/highlighted background painted behind a capsule button while it's "active" —
+  /// e.g. the sort button for as long as its menu is open (851-2463) — noticeably darker/lighter
+  /// than `toolbarCapsuleBackground` so it reads as a distinct pressed state on top of it.
+  static var toolbarCapsuleButtonHighlight: NSColor {
+    NSColor(name: nil) { appearance in
+      appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        ? NSColor.white.withAlphaComponent(0.28)
+        : NSColor.black.withAlphaComponent(0.18)
     }
   }
 }

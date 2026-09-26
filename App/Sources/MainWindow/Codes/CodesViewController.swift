@@ -166,7 +166,8 @@ final class CodesViewController: NSViewController {
   }
 
   private func rebuildRows() {
-    let items = dataSource.items.withVerificationCode().sorted(by: PasswordItem.sortComparator(for: .title))
+    let items = dataSource.items.withVerificationCode().sorted(
+      by: PasswordItem.sortComparator(for: .title, direction: .ascending))
     var newRows: [Row] = []
     var lastKey: String?
     for item in items {
