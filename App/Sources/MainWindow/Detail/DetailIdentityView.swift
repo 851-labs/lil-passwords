@@ -93,6 +93,12 @@ final class DetailIdentityView: NSView {
     titleField.isHidden = !isEditing
   }
 
+  /// Swaps in a real fetched website icon (851-2459) once one loads, without re-running the rest
+  /// of `configure` — the title/editing state haven't changed, only the icon has.
+  func setIcon(_ icon: NSImage) {
+    iconView.image = icon
+  }
+
   @objc
   private func titleFieldChanged() {
     onTitleChange?(titleField.stringValue)

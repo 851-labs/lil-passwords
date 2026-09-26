@@ -3,8 +3,8 @@ import LilPasswordsKit
 
 /// Draws the colored rounded-square monogram icons Apple Passwords shows next to each item in the
 /// list when a site has no favicon: a flat tinted square with the item's first letter centered
-/// inside it in white. Shared with 851-2421 (favicon fetching), which will fall back to this when
-/// no favicon is available.
+/// inside it in white. Shared with 851-2459 (website icon fetching, see `WebsiteIconLoader`), which
+/// falls back to this when no real icon is available or "Show website icons" is off.
 @MainActor
 enum MonogramIcon {
   private static var cache: [CacheKey: NSImage] = [:]

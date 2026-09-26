@@ -3,16 +3,22 @@ import Foundation
 /// Which kind of local security issue a ``SecurityFindings/Group`` collects. Matches the
 /// sections Apple Passwords' own Security view groups flagged items under.
 ///
-/// `compromised` isn't modeled yet — it depends on a Have I Been Pwned lookup (a separate,
-/// post-MVP ticket) that this build has no network access to perform — so ``SecurityFindings``
-/// never produces a group for it today.
+/// `compromised` (851-2458) is the one kind ``SecurityFindings/build(from:auditor:compromisedIDs:)``
+/// can't determine on its own: unlike ``SecurityAuditor``'s reused/weak checks, which are pure and
+/// need nothing but the passwords already in memory, "has this password appeared in a known data
+/// leak" requires an opt-in, k-anonymity lookup against Have I Been Pwned's Pwned Passwords range
+/// API (``CompromisedPasswordChecker``) — network I/O that only runs in the app, only while the
+/// user has turned it on, and never inside this pure, synchronous builder. Callers that have
+/// already run that check pass its result in as `compromisedIDs`.
 public enum SecurityIssueKind: String, Sendable, Hashable, CaseIterable {
+  case compromised
   case reused
   case weak
 
   /// The section header shown above this group's rows.
   public var groupTitle: String {
     switch self {
+    case .compromised: return "Compromised Passwords"
     case .reused: return "Reused Passwords"
     case .weak: return "Weak Passwords"
     }
@@ -22,6 +28,10 @@ public enum SecurityIssueKind: String, Sendable, Hashable, CaseIterable {
   /// for the same recommendation.
   public var reasonText: String {
     switch self {
+    case .compromised:
+      return
+        "This password has appeared in a data leak, which puts this account at high risk of "
+        + "compromise. You should change your password immediately."
     case .reused:
       return
         "This password has been used on multiple accounts. Reusing passwords makes it easier "
@@ -48,8 +58,8 @@ public struct SecurityFindings: Sendable, Hashable {
     public let itemIDs: [UUID]
   }
 
-  /// Non-empty groups, in a fixed order: reused before weak, matching Apple Passwords' own
-  /// Security view ordering.
+  /// Non-empty groups, in a fixed order — compromised before reused before weak, matching Apple
+  /// Passwords' own Security view ordering (compromised is the most urgent finding, so it leads).
   public let groups: [Group]
 
   /// Every flagged item's id, deduplicated — an item that's both reused and weak is still one
@@ -67,9 +77,16 @@ public struct SecurityFindings: Sendable, Hashable {
   /// ``PasswordItem/securityWarningHidden`` is `true` is excluded from every group here, the same
   /// way ``SecurityAuditor/audit(_:)`` excludes it from its own output, but (per that method's
   /// documentation) still counts toward flagging *other* items it shares a password with.
+  ///
+  /// - Parameter compromisedIDs: Ids of items whose password ``CompromisedPasswordChecker`` has
+  ///   already confirmed appears in a known data leak (851-2458). Empty unless a caller has
+  ///   opted in (Settings → General → "Detect compromised passwords") and already run that async
+  ///   check itself — this method stays synchronous and never performs the lookup. Ids outside
+  ///   `items`, already-deleted, or hidden-warning items are ignored, same as the other two kinds.
   public static func build(
     from items: [PasswordItem],
-    auditor: SecurityAuditor = SecurityAuditor()
+    auditor: SecurityAuditor = SecurityAuditor(),
+    compromisedIDs: Set<UUID> = []
   ) -> SecurityFindings {
     let candidates = items.nonDeleted()
     let inputs = candidates.map {
@@ -77,9 +94,14 @@ public struct SecurityFindings: Sendable, Hashable {
     }
     let issuesByID = auditor.audit(inputs)
 
+    var compromisedGroupIDs: [UUID] = []
     var reusedIDs: [UUID] = []
     var weakIDs: [UUID] = []
     for item in candidates {
+      guard !item.securityWarningHidden else { continue }
+      if compromisedIDs.contains(item.id) {
+        compromisedGroupIDs.append(item.id)
+      }
       guard let issues = issuesByID[item.id] else { continue }
       if issues.contains(.reused) {
         reusedIDs.append(item.id)
@@ -90,6 +112,9 @@ public struct SecurityFindings: Sendable, Hashable {
     }
 
     var groups: [Group] = []
+    if !compromisedGroupIDs.isEmpty {
+      groups.append(Group(kind: .compromised, itemIDs: compromisedGroupIDs))
+    }
     if !reusedIDs.isEmpty {
       groups.append(Group(kind: .reused, itemIDs: reusedIDs))
     }

@@ -34,6 +34,17 @@ final class ObservableAppSettings: ObservableObject {
     didSet { settings.warnAboutCompromisedPasswords = warnAboutCompromisedPasswords }
   }
 
+  /// 851-2458: whether the Security view is allowed to run `CompromisedPasswordChecker` at all.
+  @Published var detectCompromisedPasswords: Bool {
+    didSet { settings.detectCompromisedPasswords = detectCompromisedPasswords }
+  }
+
+  /// 851-2459: whether the list, detail, menu bar, and New Password sheet are allowed to fetch
+  /// and cache real website icons via `IconFetcher` instead of always showing `MonogramIcon`.
+  @Published var showWebsiteIcons: Bool {
+    didSet { settings.showWebsiteIcons = showWebsiteIcons }
+  }
+
   @Published var showInMenuBar: Bool {
     didSet { settings.showInMenuBar = showInMenuBar }
   }
@@ -54,6 +65,8 @@ final class ObservableAppSettings: ObservableObject {
     defaultPasswordLength = settings.defaultPasswordLength
     includeSymbolsInGeneratedPasswords = settings.includeSymbolsInGeneratedPasswords
     warnAboutCompromisedPasswords = settings.warnAboutCompromisedPasswords
+    detectCompromisedPasswords = settings.detectCompromisedPasswords
+    showWebsiteIcons = settings.showWebsiteIcons
     showInMenuBar = settings.showInMenuBar
     menuBarBrowserSuggestionsEnabled = settings.menuBarBrowserSuggestionsEnabled
   }

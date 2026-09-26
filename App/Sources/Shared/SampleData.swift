@@ -270,6 +270,20 @@ public enum SampleData {
           createdAt: days(40),
           modifiedAt: days(40)
         ),
+        // "password123" is one of the most common leaked passwords on Have I Been Pwned's Pwned
+        // Passwords list, so with "Detect compromised passwords" (851-2458) turned on, this item
+        // is what actually populates the Security view's "Compromised Passwords" group — a real
+        // `CompromisedPasswordChecker` lookup against the real HIBP range API confirms it, the
+        // same as it would for a real vault item; only the vault contents here are fake.
+        PasswordItem(
+          title: "Duolingo",
+          usernames: ["jordan.reyes@icloud.com"],
+          password: "password123",
+          websites: [URL(string: "https://www.duolingo.com")!],
+          group: "Personal",
+          createdAt: days(30),
+          modifiedAt: days(30)
+        ),
       ]
     }
   #endif

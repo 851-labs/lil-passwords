@@ -74,8 +74,9 @@ public enum SecurityIssue: Sendable, Hashable {
 /// - **Reused**: entries that share the exact same password.
 ///
 /// Everything here runs entirely on-device: there is no network access and
-/// no integration with breach-list services such as HIBP (that's a
-/// separate, post-MVP check).
+/// no integration with breach-list services such as HIBP. That's
+/// ``CompromisedPasswordChecker`` instead (851-2458) — a separate, opt-in,
+/// async component, deliberately kept out of this pure/synchronous auditor.
 public struct SecurityAuditor: Sendable {
   private static let lowEntropyThresholdBits: Double = 40
   private static let patternMinimumLength = 4

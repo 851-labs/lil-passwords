@@ -60,4 +60,54 @@ import Testing
     #expect(findings.groups.isEmpty)
     #expect(findings.uniqueItemIDs.isEmpty)
   }
+
+  @Test func flagsCompromisedIDsPassedIn() {
+    let leaked = PasswordItem(title: "Leaked", password: "password123")
+    let safe = PasswordItem(title: "Safe", password: "Correct-Horse-Battery-Staple-42!")
+
+    let findings = SecurityFindings.build(from: [leaked, safe], compromisedIDs: [leaked.id])
+
+    let compromised = findings.groups.first { $0.kind == .compromised }
+    #expect(compromised?.itemIDs == [leaked.id])
+  }
+
+  @Test func compromisedGroupComesBeforeReusedAndWeak() {
+    let compromised = PasswordItem(title: "Compromised", password: "Unique-One-77-Xyz!")
+    let reusedA = PasswordItem(title: "ReusedA", password: "Shared-Two-88-Xyz!")
+    let reusedB = PasswordItem(title: "ReusedB", password: "Shared-Two-88-Xyz!")
+    let weak = PasswordItem(title: "Weak", password: "password")
+
+    let findings = SecurityFindings.build(
+      from: [compromised, reusedA, reusedB, weak],
+      compromisedIDs: [compromised.id]
+    )
+
+    #expect(findings.groups.map(\.kind) == [.compromised, .reused, .weak])
+  }
+
+  @Test func ignoresCompromisedIDsForDeletedOrHiddenWarningItems() {
+    var deleted = PasswordItem(title: "Deleted", password: "password123")
+    deleted.deletedAt = Date()
+    var hidden = PasswordItem(title: "Hidden", password: "password123")
+    hidden.securityWarningHidden = true
+
+    let findings = SecurityFindings.build(
+      from: [deleted, hidden],
+      compromisedIDs: [deleted.id, hidden.id]
+    )
+
+    #expect(findings.groups.isEmpty)
+  }
+
+  @Test func compromisedContributesToUniqueItemIDsAlongsideOtherKinds() {
+    let compromisedOnly = PasswordItem(title: "A", password: "Unique-One-77-Xyz!")
+    let weakOnly = PasswordItem(title: "B", password: "password")
+
+    let findings = SecurityFindings.build(
+      from: [compromisedOnly, weakOnly],
+      compromisedIDs: [compromisedOnly.id]
+    )
+
+    #expect(findings.uniqueItemIDs == Set([compromisedOnly.id, weakOnly.id]))
+  }
 }

@@ -27,6 +27,8 @@ struct AppSettingsTests {
     #expect(settings.itemListSortField == .title)
     #expect(settings.itemListSortDirection == .ascending)
     #expect(settings.hasCompletedOnboarding == false)
+    #expect(settings.detectCompromisedPasswords == false)
+    #expect(settings.showWebsiteIcons == false)
   }
 
   @Test("round-trips every setting")
@@ -62,6 +64,12 @@ struct AppSettingsTests {
 
     settings.hasCompletedOnboarding = true
     #expect(settings.hasCompletedOnboarding == true)
+
+    settings.detectCompromisedPasswords = true
+    #expect(settings.detectCompromisedPasswords == true)
+
+    settings.showWebsiteIcons = true
+    #expect(settings.showWebsiteIcons == true)
   }
 
   @Test("clamps password length to the supported range")

@@ -30,8 +30,25 @@ struct GeneralSettingsView: View {
       Section {
         Toggle("Warn about compromised or reused passwords", isOn: $settings.warnAboutCompromisedPasswords)
           .toggleStyle(.switch)
+        Toggle("Detect compromised passwords", isOn: $settings.detectCompromisedPasswords)
+          .toggleStyle(.switch)
       } header: {
         Text("Security Recommendations")
+      } footer: {
+        Text(
+          "Checks each password against known data leaks by sending only the first 5 characters of its hash — "
+            + "never the password itself — to Have I Been Pwned.")
+      }
+
+      // 851-2459. Off by default: fetching an icon tells that site (and anything on the network
+      // path to it) that this Mac has an account there.
+      Section {
+        Toggle("Show website icons", isOn: $settings.showWebsiteIcons)
+          .toggleStyle(.switch)
+      } header: {
+        Text("Website Icons")
+      } footer: {
+        Text("Fetching icons reveals which sites you have accounts for to those sites.")
       }
 
       // 851-2425. "Show in menu bar" is the actual visibility toggle for the `NSStatusItem`;
