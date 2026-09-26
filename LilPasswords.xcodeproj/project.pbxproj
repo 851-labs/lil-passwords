@@ -284,16 +284,16 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					0E0291E7D58CBE39A251C44B = {
-						DevelopmentTeam = "";
-						ProvisioningStyle = Automatic;
+						DevelopmentTeam = WH4QW9ND3J;
+						ProvisioningStyle = Manual;
 					};
 					4807B7DB294ECA66F2907C7F = {
-						DevelopmentTeam = "";
-						ProvisioningStyle = Automatic;
+						DevelopmentTeam = WH4QW9ND3J;
+						ProvisioningStyle = Manual;
 					};
 					C6C645DBFB45116D7AB9C120 = {
-						DevelopmentTeam = "";
-						ProvisioningStyle = Automatic;
+						DevelopmentTeam = WH4QW9ND3J;
+						ProvisioningStyle = Manual;
 					};
 				};
 			};
