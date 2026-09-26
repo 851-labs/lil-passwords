@@ -34,7 +34,7 @@ final class OnboardingCreateVaultViewModel: ObservableObject {
         onVaultCreated(recoveryKeyDisplayString)
       } catch {
         isCreating = false
-        errorMessage = "Couldn't create your vault: \(error.localizedDescription)"
+        errorMessage = String(localized: "Couldn't create your vault: \(error.localizedDescription)")
       }
     }
   }

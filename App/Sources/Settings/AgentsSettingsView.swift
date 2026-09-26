@@ -101,16 +101,26 @@ struct AgentsSettingsView: View {
   /// `~/.local/bin` (the fallback location — see `CLIInstaller`'s documentation) isn't guaranteed
   /// to be on every shell's `PATH` out of the box, unlike `/usr/local/bin`, so the footer calls that
   /// out only when it's actually relevant.
+  ///
+  /// Returned as `String`, not `LocalizedStringKey` — this feeds `Text(_:)` below via the verbatim
+  /// `Text(String)` initializer, which does *not* auto-localize, unlike `Text("literal")`'s
+  /// `LocalizedStringKey` initializer. Each branch is wrapped in `String(localized:)` individually
+  /// so it still gets extracted into the catalog.
   private var cliInstallFooterText: String {
     switch cliInstall.status {
     case .notInstalled:
-      return "Installs a \"\(LilPasswordsKit.cliName)\" command so agents (and you) can use it from a terminal."
+      return String(
+        localized: "Installs a \"\(LilPasswordsKit.cliName)\" command so agents (and you) can use it from a terminal."
+      )
     case .installed(let path) where path.hasPrefix(NSHomeDirectory() + "/.local/bin"):
-      return "Installed to \(path). If your terminal can't find it, add ~/.local/bin to your shell's PATH."
+      return String(
+        localized: "Installed to \(path). If your terminal can't find it, add ~/.local/bin to your shell's PATH."
+      )
     case .installed(let path):
-      return "Installed to \(path)."
+      return String(localized: "Installed to \(path).")
     case .pointsElsewhere(let path, let target):
-      return "Something else is already at \(path) (pointing to \(target)). Installing will replace it."
+      return String(
+        localized: "Something else is already at \(path) (pointing to \(target)). Installing will replace it.")
     }
   }
 }
@@ -141,14 +151,16 @@ private struct CLIInstallSectionBody: View {
     }
   }
 
+  // Returned as `String`, not `LocalizedStringKey` — see `cliInstallFooterText`'s doc comment
+  // above for why each branch needs its own `String(localized:)` wrap.
   private var statusText: String {
     switch viewModel.status {
     case .notInstalled:
-      return "Not installed"
+      return String(localized: "Not installed")
     case .installed(let path):
-      return "Installed at \(path)"
+      return String(localized: "Installed at \(path)")
     case .pointsElsewhere(let path, let target):
-      return "A different program is at \(path) (\(target))"
+      return String(localized: "A different program is at \(path) (\(target))")
     }
   }
 }
@@ -180,11 +192,13 @@ private struct AgentConnectionRow: View {
     }
   }
 
+  // Returned as `String`, not `LocalizedStringKey` — see `AgentsSettingsView.cliInstallFooterText`'s
+  // doc comment for why each branch needs its own `String(localized:)` wrap.
   private var statusText: String {
     switch viewModel.status(for: agent) {
-    case .notConfigured: return "Not connected"
-    case .configured: return "Connected"
-    case .configuredDifferently: return "Configured differently"
+    case .notConfigured: return String(localized: "Not connected")
+    case .configured: return String(localized: "Connected")
+    case .configuredDifferently: return String(localized: "Configured differently")
     }
   }
 }

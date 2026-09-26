@@ -116,7 +116,8 @@ final class AgentConnectionsViewModel: ObservableObject {
       }
       lastErrorMessage = nil
     } catch {
-      lastErrorMessage = "Couldn't set up \(agent.displayName) automatically. Try Copy Setup instead."
+      lastErrorMessage = String(
+        localized: "Couldn't set up \(agent.displayName) automatically. Try Copy Setup instead.")
     }
     refresh()
   }

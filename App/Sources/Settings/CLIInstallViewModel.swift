@@ -47,7 +47,8 @@ final class CLIInstallViewModel: ObservableObject {
       _ = try installer.install()
       lastErrorMessage = nil
     } catch {
-      lastErrorMessage = "Couldn't install the \(LilPasswordsKit.cliName) command: \(error.localizedDescription)"
+      lastErrorMessage = String(
+        localized: "Couldn't install the \(LilPasswordsKit.cliName) command: \(error.localizedDescription)")
     }
     refresh()
   }
@@ -57,7 +58,8 @@ final class CLIInstallViewModel: ObservableObject {
       try installer.uninstall()
       lastErrorMessage = nil
     } catch {
-      lastErrorMessage = "Couldn't remove the \(LilPasswordsKit.cliName) command: \(error.localizedDescription)"
+      lastErrorMessage = String(
+        localized: "Couldn't remove the \(LilPasswordsKit.cliName) command: \(error.localizedDescription)")
     }
     refresh()
   }
