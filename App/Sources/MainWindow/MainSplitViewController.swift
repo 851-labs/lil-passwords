@@ -6,8 +6,10 @@ import LilPasswordsKit
 ///
 /// Codes/Security/Deleted (851-2418/851-2419/851-2420) are single full-width views in Apple
 /// Passwords, not list+detail splits, so for those three categories the list column collapses and
-/// `detailItem`'s view controller is swapped to the matching full-width controller; selecting
-/// `.all`/`.passkeys`/`.wifi` restores the normal list+detail layout.
+/// `detailItem`'s hosted content is swapped (via `DetailContainerViewController`) to the matching
+/// full-width controller; selecting `.all`/`.passkeys`/`.wifi` restores the normal list+detail
+/// layout. `detailItem.viewController` itself is set once and never reassigned — see
+/// `DetailContainerViewController`'s doc comment for why.
 @MainActor
 final class MainSplitViewController: NSSplitViewController {
   let sidebarViewController: SidebarViewController
@@ -16,6 +18,8 @@ final class MainSplitViewController: NSSplitViewController {
   let codesViewController: CodesViewController
   let securityViewController: SecurityViewController
   let deletedViewController: DeletedViewController
+
+  private let detailContainerViewController = DetailContainerViewController()
 
   private var sidebarItem: NSSplitViewItem!
   private var listItem: NSSplitViewItem!
@@ -63,7 +67,8 @@ final class MainSplitViewController: NSSplitViewController {
     listItem.canCollapse = true
     listItem.titlebarSeparatorStyle = .line
 
-    let detailItem = NSSplitViewItem(viewController: detailViewController)
+    detailContainerViewController.setContentViewController(detailViewController)
+    let detailItem = NSSplitViewItem(viewController: detailContainerViewController)
     detailItem.minimumThickness = 360
     detailItem.canCollapse = false
     detailItem.titlebarSeparatorStyle = .line
@@ -106,10 +111,10 @@ final class MainSplitViewController: NSSplitViewController {
 extension MainSplitViewController: SidebarViewControllerDelegate {
   func sidebarViewController(_ controller: SidebarViewController, didSelect category: SidebarCategory) {
     if let fullWidthViewController = fullWidthViewController(for: category) {
-      detailItem.viewController = fullWidthViewController
+      detailContainerViewController.setContentViewController(fullWidthViewController)
       listItem.isCollapsed = true
     } else {
-      detailItem.viewController = detailViewController
+      detailContainerViewController.setContentViewController(detailViewController)
       listItem.isCollapsed = false
       listViewController.select(category: category)
       detailViewController.showNoSelection(for: category)
