@@ -21,7 +21,22 @@ import Testing
 /// this suite has twice hung a CI job for its full 30-minute timeout with zero output when one
 /// of those calls never returned — a per-test time limit turns that into a fast, attributable
 /// failure (naming exactly which test timed out) instead of another silent freeze.
-@Suite(.timeLimit(.minutes(1)))
+///
+/// `.serialized`: root cause of the CI-only hang, found by `sample`-ing the stuck process on CI
+/// (see .github/workflows/ci.yml's E2E step) — the hang wasn't in our helper/XPC/MCP code at all,
+/// it was the Swift runtime itself, spinning inside `swift::MetadataCacheEntryBase::
+/// awaitSatisfyingState` while instantiating generic metadata reachable from `Client.connect
+/// (transport:)`'s `AsyncThrowingStream` plumbing (in the MCP Swift SDK). That function is a
+/// classic lock-free-cache "wait for the other thread to finish instantiating this same generic
+/// type" spin, and this suite is the only one in the package that calls it — every test here
+/// starts its own `Client` and calls `connect(transport:)`, and without `.serialized` swift-testing
+/// runs them all in parallel, so on first run every one of those tasks would race to instantiate
+/// the exact same generic metadata simultaneously. That race apparently never loses on a beefier
+/// dev Mac, but reliably livelocks on CI's more core-constrained runner. Serializing this suite
+/// means only one test ever does that first-time instantiation at once, removing the race outright
+/// — it's a suite-local, always-safe fix regardless of whether it's also a genuine Swift runtime
+/// bug worth reporting upstream.
+@Suite(.timeLimit(.minutes(1)), .serialized)
 struct MCPStdioSessionTests {
   /// Starts a `LilpassE2EHelper` plus a `lilpass mcp` child process wired to it, connects an MCP
   /// `Client` over their shared stdio pipes, and returns everything the caller needs to talk to it
