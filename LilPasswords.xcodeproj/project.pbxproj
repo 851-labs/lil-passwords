@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		1C49D3CFE10E6FD7DDC06E50 /* LilPasswordsAgent in Embed Dependencies */ = {isa = PBXBuildFile; fileRef = F2BF470827AD396CCE39BD0D /* LilPasswordsAgent */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		52AE76DCC3AC2462FF5865C7 /* ArgumentParser in Frameworks */ = {isa = PBXBuildFile; productRef = D76C83E588F934A906F858F8 /* ArgumentParser */; };
+		685D83EF594BA43461B318E3 /* LilpwCore in Frameworks */ = {isa = PBXBuildFile; productRef = F86E109BE2B39D751788D159 /* LilpwCore */; };
 		75DF806B28149C6EA83418AE /* LilPasswordsKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1C98477EB7D07F3015822E98 /* LilPasswordsKit */; };
 		78FFF7FF14F6A9EACB0E37E6 /* LilPasswordsKit in Frameworks */ = {isa = PBXBuildFile; productRef = B41A41E642B0A614A5A75DA7 /* LilPasswordsKit */; };
 		C68E97F864E0BE5A9CD3AAE3 /* LilPasswordsKit in Frameworks */ = {isa = PBXBuildFile; productRef = E539F5199FCE7076CD81B5FA /* LilPasswordsKit */; };
@@ -105,6 +107,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				75DF806B28149C6EA83418AE /* LilPasswordsKit in Frameworks */,
+				685D83EF594BA43461B318E3 /* LilpwCore in Frameworks */,
+				52AE76DCC3AC2462FF5865C7 /* ArgumentParser in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -219,6 +223,8 @@
 			name = lilpw;
 			packageProductDependencies = (
 				1C98477EB7D07F3015822E98 /* LilPasswordsKit */,
+				F86E109BE2B39D751788D159 /* LilpwCore */,
+				D76C83E588F934A906F858F8 /* ArgumentParser */,
 			);
 			productName = lilpw;
 			productReference = E987E5C00D681F00EA3D6EAD /* lilpw */;
@@ -307,6 +313,7 @@
 			mainGroup = 7947B44B282CBC4A3964C805;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				BD178B7702B51B6E018967C0 /* XCRemoteSwiftPackageReference "swift-argument-parser" */,
 				71839368EC70ECC54454B357 /* XCLocalSwiftPackageReference "Packages/LilPasswordsKit" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -646,6 +653,17 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		BD178B7702B51B6E018967C0 /* XCRemoteSwiftPackageReference "swift-argument-parser" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-argument-parser";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.5.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		1C98477EB7D07F3015822E98 /* LilPasswordsKit */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -655,9 +673,18 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = LilPasswordsKit;
 		};
+		D76C83E588F934A906F858F8 /* ArgumentParser */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BD178B7702B51B6E018967C0 /* XCRemoteSwiftPackageReference "swift-argument-parser" */;
+			productName = ArgumentParser;
+		};
 		E539F5199FCE7076CD81B5FA /* LilPasswordsKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LilPasswordsKit;
+		};
+		F86E109BE2B39D751788D159 /* LilpwCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LilpwCore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -12,6 +12,14 @@ configFiles:
 packages:
   LilPasswordsKit:
     path: Packages/LilPasswordsKit
+  # Only the `lilpw` CLI target depends on this — kept out of
+  # Packages/LilPasswordsKit/Package.swift so LilpwCore (and the rest of
+  # LilPasswordsKit) stays free of argument-parsing concerns; see
+  # LilpwCore's own doc comments for the split between "logic" (testable,
+  # no ArgumentParser) and "argument parsing" (the CLI target only).
+  ArgumentParser:
+    url: https://github.com/apple/swift-argument-parser
+    from: 1.5.0
 targets:
   LilPasswords:
     type: application
@@ -88,6 +96,10 @@ targets:
         type: syncedFolder
     dependencies:
       - package: LilPasswordsKit
+      - package: LilPasswordsKit
+        product: LilpwCore
+      - package: ArgumentParser
+        product: ArgumentParser
     settings:
       base:
         PRODUCT_NAME: lilpw

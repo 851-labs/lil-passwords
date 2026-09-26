@@ -5,7 +5,13 @@ let package = Package(
   name: "LilPasswordsKit",
   platforms: [.macOS(.v13)],
   products: [
-    .library(name: "LilPasswordsKit", targets: ["LilPasswordsKit"])
+    .library(name: "LilPasswordsKit", targets: ["LilPasswordsKit"]),
+    // The `lilpw` CLI's logic (item resolution, exit codes, command results), kept separate from
+    // `LilPasswordsKit` itself so the CLI's concerns don't leak into the app/agent's shared core,
+    // and separate from the CLI target (`CLI/Sources`, an XcodeGen `tool` target) so it's a plain
+    // SwiftPM library `swift test` can exercise directly — see `LilpwCoreTests` for the in-process
+    // `AgentServer` + `InMemoryVaultStore` harness this buys.
+    .library(name: "LilpwCore", targets: ["LilpwCore"]),
   ],
   targets: [
     .target(
@@ -20,6 +26,21 @@ let package = Package(
       name: "LilPasswordsKitTests",
       dependencies: ["LilPasswordsKit"],
       resources: [.copy("Fixtures")]
+    ),
+    // No swift-argument-parser dependency here on purpose: parsing lives in the CLI target
+    // (`project.yml`'s `lilpw` target), which is the only place that needs it. `LilpwCore` only
+    // ever sees already-parsed Swift values, so this package stays free of that dependency.
+    .target(
+      name: "LilpwCore",
+      dependencies: ["LilPasswordsKit"]
+    ),
+    .testTarget(
+      // Depends on `LilPasswordsKit` too (not just `LilpwCore`) so its tests can build the same
+      // in-process `AgentServer` + `InMemoryVaultStore` + anonymous-`NSXPCListener` harness
+      // `AgentXPCEndToEndTests` uses, via `@testable import LilPasswordsKit` for the test-only
+      // `AgentClient(endpoint:connectionSecurity:)` initializer.
+      name: "LilpwCoreTests",
+      dependencies: ["LilpwCore", "LilPasswordsKit"]
     ),
   ]
 )
