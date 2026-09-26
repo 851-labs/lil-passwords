@@ -2,9 +2,15 @@ import AppKit
 import Combine
 import LilPasswordsKit
 
-/// The detail column: shows the selected item — a large icon/title header plus grouped
-/// User Name, Password, Verification Code, Websites, and Notes sections — or the "nothing
-/// selected" empty state, matching Apple Passwords.
+/// The detail column: shows the selected item — one primary card (icon/title, then User Name,
+/// Password, Verification Code, Websites, and Created rows) plus a separate Notes card — or the
+/// "nothing selected" empty state, matching Apple Passwords (851-2463).
+///
+/// Before 851-2463 each of those groups was its own separate rounded card with a leading-aligned
+/// header above them; now everything but Notes lives inside one shared `DetailSectionContainerView`
+/// ("primary card"), matching the reference screenshot's single card containing the centered
+/// icon/title followed by hairline-divided field rows. The Edit/Cancel/Done control also moved out
+/// of this view entirely, into the toolbar (`DetailEditToolbarView`, wired via `editControl` below).
 ///
 /// Reads and writes go through `VaultViewModel` (the in-memory stand-in for `VaultStore`,
 /// 851-2404), so once the real vault lands this controller doesn't change, only what's injected
@@ -33,18 +39,44 @@ final class DetailViewController: NSViewController {
   private var usernameListEditor: EditableListEditor?
   private var websiteListEditor: EditableListEditor?
 
+  /// The primary card's rows, assembled by `rebuildPrimaryCard()` from whichever of these pieces
+  /// are non-empty right now. Kept as separate arrays/values (rather than recomputing everything
+  /// inline in `rebuildPrimaryCard()`) because `EditableListEditor`'s `onRowsChange` needs to
+  /// update just its own slice — username or website rows — and trigger a rebuild, independently
+  /// of the other groups.
+  private var usernameRows: [NSView] = []
+  private var passwordRow: NSView?
+  private var verificationRows: [NSView] = []
+  private var websiteRows: [NSView] = []
+  private var createdRow: NSView?
+
   private let emptyStateView = EmptyStateView()
   private let contentContainer = NSView()
   private let scrollView = NSScrollView()
   private let documentStack = NSStackView()
 
-  private let headerView = DetailHeaderView()
+  private let identityView = DetailIdentityView()
+  private let primaryCard = DetailSectionContainerView()
+  private let notesCard = DetailSectionContainerView()
 
-  private let usernameSection = DetailSectionContainerView()
-  private let passwordSection = DetailSectionContainerView()
-  private let verificationSection = DetailSectionContainerView()
-  private let websitesSection = DetailSectionContainerView()
-  private let notesSection = DetailSectionContainerView()
+  /// The toolbar's Edit/Cancel/Done control (851-2463): owned and laid out by
+  /// `MainToolbarController`, over the detail column. `MainWindowController` hands it over after
+  /// constructing both controllers, same pattern as `ItemListViewController.listTitleView`.
+  weak var editControl: DetailEditToolbarView? {
+    didSet {
+      editControl?.onEditTapped = { [weak self] in self?.editTapped() }
+      editControl?.onCancelTapped = { [weak self] in self?.cancelTapped() }
+      editControl?.onDoneTapped = { [weak self] in self?.doneTapped() }
+      updateEditControlState()
+    }
+  }
+
+  private static let createdDateFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .none
+    return formatter
+  }()
 
   init(vaultViewModel: VaultViewModel) {
     self.vaultViewModel = vaultViewModel
@@ -99,6 +131,7 @@ final class DetailViewController: NSViewController {
     )
     emptyStateView.isHidden = false
     contentContainer.isHidden = true
+    updateEditControlState()
   }
 
   /// Shows `item`'s detail. Callers (currently just `MainSplitViewController`, until the item
@@ -125,6 +158,7 @@ final class DetailViewController: NSViewController {
     emptyStateView.configure(symbolName: "checkmark.circle.fill", title: "\(count) Items Selected", message: nil)
     emptyStateView.isHidden = false
     contentContainer.isHidden = true
+    updateEditControlState()
   }
 
   private func handleItemsChanged() {
@@ -190,24 +224,14 @@ final class DetailViewController: NSViewController {
     documentStack.edgeInsets = NSEdgeInsets(top: 8, left: 24, bottom: 24, right: 24)
     documentStack.translatesAutoresizingMaskIntoConstraints = false
 
-    headerView.onTitleChange = { [weak self] newTitle in
+    identityView.onTitleChange = { [weak self] newTitle in
       self?.draft?.title = newTitle
     }
-    headerView.onEditTapped = { [weak self] in self?.editTapped() }
-    headerView.onCancelTapped = { [weak self] in self?.cancelTapped() }
-    headerView.onDoneTapped = { [weak self] in self?.doneTapped() }
 
-    for section in [usernameSection, passwordSection, verificationSection, websitesSection, notesSection] {
-      documentStack.addArrangedSubview(section)
-      section.widthAnchor.constraint(equalTo: documentStack.widthAnchor, constant: -48).isActive = true
+    for card in [primaryCard, notesCard] {
+      documentStack.addArrangedSubview(card)
+      card.widthAnchor.constraint(equalTo: documentStack.widthAnchor, constant: -48).isActive = true
     }
-    documentStack.addArrangedSubview(headerView)
-    documentStack.setCustomSpacing(24, after: headerView)
-    // The header reads best first; `addArrangedSubview` above just registered widths, so move it
-    // to the front now that every view exists.
-    documentStack.removeArrangedSubview(headerView)
-    documentStack.insertArrangedSubview(headerView, at: 0)
-    headerView.widthAnchor.constraint(equalTo: documentStack.widthAnchor, constant: -48).isActive = true
 
     let flippedDocumentView = FlippedView()
     flippedDocumentView.translatesAutoresizingMaskIntoConstraints = false
@@ -283,68 +307,95 @@ final class DetailViewController: NSViewController {
     return URL(string: "https://\(string)")
   }
 
+  private func updateEditControlState() {
+    editControl?.isEnabled = item != nil
+    editControl?.setEditing(isEditing)
+  }
+
   // MARK: Content
 
   private func reloadContent() {
     guard let displayItem = isEditing ? draft : item else { return }
 
-    headerView.configure(
+    identityView.configure(
       title: displayItem.title,
       icon: MonogramIcon.icon(for: displayItem.title, dimension: 64),
-      modifiedAt: displayItem.modifiedAt,
       isEditing: isEditing
     )
 
-    configureUsernameSection(displayItem)
-    configurePasswordSection(displayItem)
-    configureVerificationSection(displayItem)
-    configureWebsitesSection(displayItem)
-    configureNotesSection(displayItem)
+    configureUsernameRows(displayItem)
+    configurePasswordRow(displayItem)
+    configureVerificationRows(displayItem)
+    configureWebsiteRows(displayItem)
+    createdRow = makeCreatedRow(displayItem)
+    rebuildPrimaryCard()
+
+    configureNotesCard(displayItem)
+    updateEditControlState()
   }
 
-  private func configureUsernameSection(_ displayItem: PasswordItem) {
+  /// Assembles the primary card's rows from whichever pieces are currently populated: the
+  /// centered identity view always first, then User Name(s), Password, Verification Code,
+  /// Websites, and finally Created — one shared `DetailSectionContainerView`, matching Apple
+  /// Passwords' single-card layout (851-2463).
+  private func rebuildPrimaryCard() {
+    var rows: [NSView] = [identityView]
+    rows.append(contentsOf: usernameRows)
+    if let passwordRow {
+      rows.append(passwordRow)
+    }
+    rows.append(contentsOf: verificationRows)
+    rows.append(contentsOf: websiteRows)
+    if let createdRow {
+      rows.append(createdRow)
+    }
+    primaryCard.setRows(rows)
+  }
+
+  private func configureUsernameRows(_ displayItem: PasswordItem) {
     if isEditing {
-      usernameSection.isHidden = false
       usernameListEditor = EditableListEditor(
-        section: usernameSection,
         values: displayItem.usernames,
         placeholder: "Username or Email",
-        addButtonTitle: "Add Username"
-      ) { [weak self] newValues in
-        self?.draft?.usernames = newValues
-      }
+        addButtonTitle: "Add Username",
+        onChange: { [weak self] newValues in
+          self?.draft?.usernames = newValues
+        },
+        onRowsChange: { [weak self] rows in
+          self?.usernameRows = rows
+          self?.rebuildPrimaryCard()
+        }
+      )
     } else {
       usernameListEditor = nil
-      usernameSection.isHidden = displayItem.usernames.isEmpty
       // Apple Passwords labels only the first row when there's more than one username (using
       // the plural "User Names"), leaving the rest unlabeled rather than repeating the label.
       let label = displayItem.usernames.count > 1 ? "User Names" : "User Name"
-      let rows: [NSView] = displayItem.usernames.enumerated().map { index, username in
+      usernameRows = displayItem.usernames.enumerated().map { index, username in
         let row = DetailValueRowView()
         row.configure(label: index == 0 ? label : "", value: username)
         row.onCopy = { Pasteboard.copySecret(username) }
         return row
       }
-      usernameSection.setRows(rows)
     }
   }
 
-  private func configurePasswordSection(_ displayItem: PasswordItem) {
+  private func configurePasswordRow(_ displayItem: PasswordItem) {
     if isEditing {
       let row = PasswordEditRowView(value: displayItem.password)
       row.onValueChange = { [weak self] newValue in
         self?.draft?.password = newValue
       }
-      passwordSection.setRows([row])
+      passwordRow = row
     } else {
       let row = PasswordRowView()
       row.configure(password: displayItem.password)
       row.onCopy = { Pasteboard.copySecret(displayItem.password) }
-      passwordSection.setRows([row])
+      passwordRow = row
     }
   }
 
-  private func configureVerificationSection(_ displayItem: PasswordItem) {
+  private func configureVerificationRows(_ displayItem: PasswordItem) {
     if isEditing {
       var rows: [NSView] = [
         makeInfoRow(displayItem.totpURI != nil ? "Verification code is set up." : "No verification code.")
@@ -358,46 +409,53 @@ final class DetailViewController: NSViewController {
           }
         )
       }
-      verificationSection.setRows(rows)
+      verificationRows = rows
     } else {
       let row = VerificationCodeRowView()
       row.configure(totp: displayItem.totp)
       row.onCopy = { code in Pasteboard.copySecret(code) }
       row.onSetUp = { [weak self] in self?.presentVerificationCodeSetup() }
-      verificationSection.setRows([row])
+      verificationRows = [row]
     }
   }
 
-  private func configureWebsitesSection(_ displayItem: PasswordItem) {
+  private func configureWebsiteRows(_ displayItem: PasswordItem) {
     if isEditing {
-      websitesSection.isHidden = false
       websiteListEditor = EditableListEditor(
-        section: websitesSection,
         values: websiteDrafts,
         placeholder: "Website",
-        addButtonTitle: "Add Website"
-      ) { [weak self] newValues in
-        self?.websiteDrafts = newValues
-      }
+        addButtonTitle: "Add Website",
+        onChange: { [weak self] newValues in
+          self?.websiteDrafts = newValues
+        },
+        onRowsChange: { [weak self] rows in
+          self?.websiteRows = rows
+          self?.rebuildPrimaryCard()
+        }
+      )
     } else {
       websiteListEditor = nil
-      websitesSection.isHidden = displayItem.websites.isEmpty
-      let rows: [NSView] = displayItem.websites.map { url in
+      websiteRows = displayItem.websites.map { url in
         let row = WebsiteRowView()
         row.configure(url: url)
         return row
       }
-      websitesSection.setRows(rows)
     }
   }
 
-  private func configureNotesSection(_ displayItem: PasswordItem) {
-    notesSection.isHidden = !isEditing && displayItem.notes.isEmpty
+  private func makeCreatedRow(_ displayItem: PasswordItem) -> NSView {
+    let row = DetailValueRowView()
+    row.configure(label: "Created", value: Self.createdDateFormatter.string(from: displayItem.createdAt))
+    return row
+  }
+
+  private func configureNotesCard(_ displayItem: PasswordItem) {
+    notesCard.isHidden = !isEditing && displayItem.notes.isEmpty
     let row = NotesRowView(notes: displayItem.notes, isEditing: isEditing)
     row.onValueChange = { [weak self] newValue in
       self?.draft?.notes = newValue
     }
-    notesSection.setRows([row])
+    notesCard.setRows([row])
   }
 
   private func makeInfoRow(_ text: String) -> NSView {

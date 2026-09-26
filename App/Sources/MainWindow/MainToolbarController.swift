@@ -1,26 +1,51 @@
 import AppKit
 
-/// Builds and manages the unified toolbar: sidebar toggle, a search field spanning the list
-/// column, a "+" add button, and a share button, matching Apple Passwords' toolbar layout. The
-/// search field sits *in the toolbar row itself* — not the toolbar's old centered/principal
-/// position, and not below the toolbar either — flanked by a tracking separator on each side
-/// (the sidebar/list divider and the list/detail divider) so its width tracks the list column
-/// (851-2461). Query text and focus are still handled by `ItemListViewController`, which is handed
-/// this field's `NSSearchField` instance (see `searchField` below) rather than owning one itself.
+/// Builds and manages the unified toolbar, matching Apple Passwords' per-column layout (851-2463):
+///
+/// - Over the list column: a two-line title (category name + "N Items", `ListTitleToolbarView`)
+///   leading, and a capsule housing the sort menu and "+" trailing (`CapsuleToolbarView`).
+/// - Over the detail column: an Edit/Cancel/Done control (`DetailEditToolbarView`) leading, and a
+///   search field filling the rest of that column's toolbar width.
+///
+/// A tracking separator sits on each divider (sidebar/list, list/detail) so both title-bearing
+/// regions above resize with their column. Query text/focus for the search field are still handled
+/// by `ItemListViewController` (851-2417); edit state is still handled by `DetailViewController`
+/// (851-2414) — this controller only builds and lays out the toolbar chrome, same as before this
+/// ticket, just rearranged. The share button from before 851-2463 is gone entirely: there's no
+/// destination for it yet, and Apple's own detail toolbar in the reference this ticket matches
+/// against doesn't show one either.
 @MainActor
 final class MainToolbarController: NSObject, NSToolbarDelegate {
   static let toolbarIdentifier = NSToolbar.Identifier("MainWindowToolbar")
 
   private enum ItemIdentifier {
-    static let search = NSToolbarItem.Identifier("SearchItem")
+    static let listTitle = NSToolbarItem.Identifier("ListTitleItem")
+    static let listActions = NSToolbarItem.Identifier("ListActionsItem")
     static let listDetailTrackingSeparator = NSToolbarItem.Identifier("ListDetailTrackingSeparator")
-    static let add = NSToolbarItem.Identifier("AddItem")
-    static let share = NSToolbarItem.Identifier("ShareItem")
+    static let edit = NSToolbarItem.Identifier("EditItem")
+    static let search = NSToolbarItem.Identifier("SearchItem")
   }
 
   /// The split view whose dividers the tracking separators follow: divider 0 (sidebar/list) for
   /// `.sidebarTrackingSeparator`, divider 1 (list/detail) for `ItemIdentifier.listDetailTrackingSeparator`.
   weak var splitView: NSSplitView?
+
+  /// Leading over the list column: the current category's name + item count. `ItemListViewController`
+  /// pushes new text into this whenever its rows are rebuilt (rename from before this ticket, when
+  /// this text lived in the list's own in-content header row rather than the toolbar).
+  let listTitleView = ListTitleToolbarView()
+
+  /// Trailing over the list column, grouped in one capsule: sort-options menu and "+". `sortButton`'s
+  /// target/action is wired by `MainWindowController` once `ItemListViewController` exists (mirrors
+  /// how `searchField.delegate` is wired below); `addButton` stays entirely self-contained here,
+  /// exactly as the standalone "+" toolbar item was before this ticket (see `showAddMenu` below) —
+  /// only its position moved, not its wiring, so 851-2416's sheet keeps opening from it unchanged.
+  private let listActionsView: CapsuleToolbarView
+  var sortButton: NSButton { listActionsView.buttons[0] }
+
+  /// Leading over the detail column: Edit, or Cancel/Done while editing. Its closures are wired by
+  /// `DetailViewController`, same pattern as `searchField`'s delegate below.
+  let editControl = DetailEditToolbarView()
 
   /// Built once, up front, rather than fabricated fresh each time `toolbar(_:itemForItemIdentifier:...)`
   /// is called — `MainWindowController` needs a stable `NSSearchField` reference to hand to
@@ -28,10 +53,11 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
   private lazy var searchToolbarItem: NSSearchToolbarItem = {
     let item = NSSearchToolbarItem(itemIdentifier: ItemIdentifier.search)
     item.searchField.placeholderString = "Search"
-    // Between the two tracking separators below, the search field's width normally stretches to
-    // fill the list column automatically. This is a fallback minimum in case that tracking doesn't
-    // kick in (e.g. an extreme resize), so it never collapses to unreadably narrow.
-    item.preferredWidthForSearchField = 260
+    // The search field now spans the *detail* column (851-2463, reversing 851-2461's list-column
+    // placement): only one tracking separator precedes it, so its width stretches from there to
+    // the toolbar's trailing edge. This is a fallback minimum in case that stretch doesn't kick in
+    // (e.g. an extreme resize), so it never collapses to unreadably narrow.
+    item.preferredWidthForSearchField = 200
     return item
   }()
 
@@ -39,6 +65,23 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
   /// receive its text-change/cancel delegate callbacks — `MainToolbarController` builds the field,
   /// but doesn't know anything about search query handling itself.
   var searchField: NSSearchField { searchToolbarItem.searchField }
+
+  override init() {
+    let sortButton = NSButton(
+      image: NSImage(systemSymbolName: "arrow.up.arrow.down", accessibilityDescription: "Sort") ?? NSImage(),
+      target: nil,
+      action: nil
+    )
+    let addButton = NSButton(
+      image: NSImage(systemSymbolName: "plus", accessibilityDescription: "New Item") ?? NSImage(),
+      target: nil,
+      action: nil
+    )
+    listActionsView = CapsuleToolbarView(buttons: [sortButton, addButton])
+    super.init()
+    addButton.target = self
+    addButton.action = #selector(showAddMenu(_:))
+  }
 
   func makeToolbar() -> NSToolbar {
     let toolbar = NSToolbar(identifier: Self.toolbarIdentifier)
@@ -53,11 +96,12 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     [
       .toggleSidebar,
       .sidebarTrackingSeparator,
-      ItemIdentifier.search,
-      ItemIdentifier.listDetailTrackingSeparator,
+      ItemIdentifier.listTitle,
       .flexibleSpace,
-      ItemIdentifier.add,
-      ItemIdentifier.share,
+      ItemIdentifier.listActions,
+      ItemIdentifier.listDetailTrackingSeparator,
+      ItemIdentifier.edit,
+      ItemIdentifier.search,
     ]
   }
 
@@ -78,36 +122,31 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
       guard let splitView else { return nil }
       return NSTrackingSeparatorToolbarItem(identifier: itemIdentifier, splitView: splitView, dividerIndex: 0)
 
-    case ItemIdentifier.search:
-      return searchToolbarItem
+    case ItemIdentifier.listTitle:
+      let item = NSToolbarItem(itemIdentifier: itemIdentifier)
+      item.view = listTitleView
+      item.label = "Category"
+      item.visibilityPriority = .high
+      return item
+
+    case ItemIdentifier.listActions:
+      let item = NSToolbarItem(itemIdentifier: itemIdentifier)
+      item.view = listActionsView
+      item.label = "List Actions"
+      return item
 
     case ItemIdentifier.listDetailTrackingSeparator:
       guard let splitView else { return nil }
       return NSTrackingSeparatorToolbarItem(identifier: itemIdentifier, splitView: splitView, dividerIndex: 1)
 
-    case ItemIdentifier.add:
+    case ItemIdentifier.edit:
       let item = NSToolbarItem(itemIdentifier: itemIdentifier)
-      let button = NSButton(
-        image: NSImage(systemSymbolName: "plus", accessibilityDescription: "New Item") ?? NSImage(),
-        target: self,
-        action: #selector(showAddMenu(_:))
-      )
-      item.view = button
-      item.label = "New Item"
+      item.view = editControl
+      item.label = "Edit"
       return item
 
-    case ItemIdentifier.share:
-      let item = NSToolbarItem(itemIdentifier: itemIdentifier)
-      let button = NSButton(
-        image: NSImage(systemSymbolName: "square.and.arrow.up", accessibilityDescription: "Share") ?? NSImage(),
-        target: nil,
-        action: nil
-      )
-      // Disabled until something is selected; there's nothing to select yet.
-      button.isEnabled = false
-      item.view = button
-      item.label = "Share"
-      return item
+    case ItemIdentifier.search:
+      return searchToolbarItem
 
     default:
       return nil

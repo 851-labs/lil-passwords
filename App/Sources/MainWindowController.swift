@@ -104,11 +104,18 @@ final class MainWindowController: NSWindowController {
     window.contentViewController = lockScreenViewController
 
     toolbarController.splitView = splitViewController.splitView
-    // The search field lives in the toolbar (851-2461), spanning the list column between two
-    // tracking separators, but `ItemListViewController` still owns query handling/focus — hand it
-    // the field and make it the delegate.
+    // The search field lives in the toolbar, spanning the detail column (851-2463), but
+    // `ItemListViewController` still owns query handling/focus — hand it the field and make it
+    // the delegate.
     toolbarController.searchField.delegate = splitViewController.listViewController
     splitViewController.listViewController.searchField = toolbarController.searchField
+    // The sort button now lives in the toolbar's list-actions capsule (851-2463); targeted
+    // directly at `ItemListViewController` rather than through the responder chain, matching
+    // `MainSplitViewController.newPassword`'s own reasoning for preferring an explicit target.
+    toolbarController.sortButton.target = splitViewController.listViewController
+    toolbarController.sortButton.action = #selector(ItemListViewController.showSortMenu(_:))
+    splitViewController.listViewController.listTitleView = toolbarController.listTitleView
+    splitViewController.detailViewController.editControl = toolbarController.editControl
     window.toolbar = toolbarController.makeToolbar()
     window.toolbar?.isVisible = false
 

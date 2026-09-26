@@ -1,28 +1,33 @@
 import AppKit
 
-/// Drives one `DetailSectionContainerView` showing an editable, reorderable list of strings —
-/// used in edit mode for both usernames and websites, which need the same add/remove/reorder
-/// behavior over different underlying fields.
+/// Drives an editable, reorderable list of strings — used in edit mode for both usernames and
+/// websites, which need the same add/remove/reorder behavior over different underlying fields.
+///
+/// Hands its rendered rows to `onRowsChange` rather than writing straight into a
+/// `DetailSectionContainerView` itself (851-2463): the detail pane's primary card now combines
+/// identity, username, password, verification, website, and "Created" rows into one shared card
+/// (matching Apple Passwords), so `DetailViewController` owns the single `setRows` call that
+/// assembles all of those together instead of each piece managing its own section.
 @MainActor
 final class EditableListEditor {
-  private weak var section: DetailSectionContainerView?
   private var values: [String]
   private let placeholder: String
   private let addButtonTitle: String
   private let onChange: ([String]) -> Void
+  private let onRowsChange: ([NSView]) -> Void
 
   init(
-    section: DetailSectionContainerView,
     values: [String],
     placeholder: String,
     addButtonTitle: String,
-    onChange: @escaping ([String]) -> Void
+    onChange: @escaping ([String]) -> Void,
+    onRowsChange: @escaping ([NSView]) -> Void
   ) {
-    self.section = section
     self.values = values
     self.placeholder = placeholder
     self.addButtonTitle = addButtonTitle
     self.onChange = onChange
+    self.onRowsChange = onRowsChange
     refresh()
   }
 
@@ -36,7 +41,7 @@ final class EditableListEditor {
         refresh()
       }
     )
-    section?.setRows(rows)
+    onRowsChange(rows)
   }
 
   private func makeRow(at index: Int) -> NSView {
