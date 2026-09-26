@@ -9,39 +9,55 @@ protocol ItemListViewControllerDelegate: AnyObject {
   func itemListViewController(_ controller: ItemListViewController, didChangeSelection items: [PasswordItem])
 }
 
-/// The content column: the list of items for the selected sidebar category — an `NSTableView`
-/// with alphabetical section headers, a sort-options menu, multi-select, and a context menu
-/// (851-2414), plus live search (851-2417).
+/// The content column: a single, continuous list of items for the selected sidebar category — an
+/// `NSTableView` with a sort-options menu, multi-select, and a context menu (851-2414), plus live
+/// search (851-2417).
+///
+/// Matching Apple Passwords (851-2463), this list has no alphabetical section headers — the
+/// category name and item count live in the toolbar (`ListTitleToolbarView`, pushed to it below)
+/// instead of an in-content header row, and the list itself scrolls underneath the translucent
+/// toolbar.
 ///
 /// `VaultStore` (851-2404) and the XPC helper (851-2427) aren't ready yet, so this is built
 /// against ``VaultViewModel``, a small app-side protocol backed by an in-memory item list today
 /// and by the real store later, with no other change needed here.
 @MainActor
 final class ItemListViewController: NSViewController {
-  private enum Row {
-    case section(String)
-    case item(PasswordItem)
-  }
-
   private let dataSource: VaultViewModel
+  private let settings: AppSettings
   private var cancellable: AnyCancellable?
 
   private(set) var currentCategory: SidebarCategory = .all
   private var searchQuery: String = ""
-  private var sortField: PasswordItemSortField = .title
-  private var rows: [Row] = []
+
+  /// Backed by `AppSettings` rather than a plain stored property, so the chosen field/direction
+  /// survive relaunch (851-2463's sort-menu spec).
+  private var sortField: PasswordItemSortField {
+    get { settings.itemListSortField }
+    set { settings.itemListSortField = newValue }
+  }
+  private var sortDirection: SortDirection {
+    get { settings.itemListSortDirection }
+    set { settings.itemListSortDirection = newValue }
+  }
+
+  private var rows: [PasswordItem] = []
 
   weak var delegate: ItemListViewControllerDelegate?
 
-  /// The toolbar's search field (851-2461): owned and laid out by `MainToolbarController`, not
-  /// here — it sits in the toolbar row itself, spanning the list column via a pair of
-  /// `NSTrackingSeparatorToolbarItem`s. `MainWindowController` hands it over after constructing
-  /// both controllers, along with setting its delegate to `self`, so ⌘F/query handling can stay
-  /// here without this view controller owning any toolbar UI.
+  /// The toolbar's search field: owned and laid out by `MainToolbarController`, not here — it sits
+  /// in the toolbar row itself, over the detail column (851-2463). `MainWindowController` hands it
+  /// over after constructing both controllers, along with setting its delegate to `self`, so
+  /// ⌘F/query handling can stay here without this view controller owning any toolbar UI.
   weak var searchField: NSSearchField?
-  private let headerBar = NSView()
-  private let countLabel = NSTextField(labelWithString: "")
-  private let sortButton = NSButton()
+
+  /// The toolbar's two-line title (category name + "N Items"), pushed to whenever `rebuildRows`
+  /// runs. Owned and laid out by `MainToolbarController`; this is a weak reference handed over by
+  /// `MainWindowController`, same pattern as `searchField` above.
+  weak var listTitleView: ListTitleToolbarView? {
+    didSet { updateListTitle() }
+  }
+
   private let scrollView = NSScrollView()
   private let tableView = ItemTableView()
   private let emptyStateView = EmptyStateView()
@@ -53,19 +69,33 @@ final class ItemListViewController: NSViewController {
     title: "Copy Verification Code", action: nil, keyEquivalent: "")
   private let deleteMenuItem = NSMenuItem(title: "Delete", action: nil, keyEquivalent: "")
 
+  /// Two sections (851-2463, matching Apple Passwords' own sort menu): which field to sort by,
+  /// then a separator, then which direction — each with its own checkmark, kept in sync by
+  /// `updateSortMenuCheckmarks()`.
   private lazy var sortMenu: NSMenu = {
     let menu = NSMenu()
     for field in PasswordItemSortField.allCases {
       let item = NSMenuItem(title: sortMenuTitle(for: field), action: #selector(selectSortField(_:)), keyEquivalent: "")
       item.target = self
+      item.image = NSImage(systemSymbolName: sortMenuIconName(for: field), accessibilityDescription: nil)
       item.representedObject = field
+      menu.addItem(item)
+    }
+    menu.addItem(.separator())
+    for direction in SortDirection.allCases {
+      let item = NSMenuItem(
+        title: sortMenuTitle(for: direction), action: #selector(selectSortDirection(_:)), keyEquivalent: "")
+      item.target = self
+      item.image = NSImage(systemSymbolName: sortMenuIconName(for: direction), accessibilityDescription: nil)
+      item.representedObject = direction
       menu.addItem(item)
     }
     return menu
   }()
 
-  init(dataSource: VaultViewModel) {
+  init(dataSource: VaultViewModel, settings: AppSettings = .shared) {
     self.dataSource = dataSource
+    self.settings = settings
     super.init(nibName: nil, bundle: nil)
   }
 
@@ -76,37 +106,31 @@ final class ItemListViewController: NSViewController {
 
   override func loadView() {
     let view = NSView()
-    configureHeaderBar()
     configureTableView()
     configureEmptyStateView()
 
-    view.addSubview(headerBar)
     view.addSubview(scrollView)
     view.addSubview(emptyStateView)
 
-    headerBar.translatesAutoresizingMaskIntoConstraints = false
     scrollView.translatesAutoresizingMaskIntoConstraints = false
     emptyStateView.translatesAutoresizingMaskIntoConstraints = false
 
     NSLayoutConstraint.activate([
-      headerBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-      headerBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-      // Anchored to the safe area (not `view.topAnchor`) because the window uses a transparent
-      // unified toolbar (`titlebarAppearsTransparent = true`): this split-view item's content
-      // extends *behind* the toolbar, so pinning to the plain top anchor drew content underneath
-      // the titlebar instead of below it. The search field itself now lives in the toolbar row
-      // (851-2461), so the "N Items"/sort row is the first thing below the toolbar here.
-      headerBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-      headerBar.heightAnchor.constraint(equalToConstant: 24),
-
+      // Pinned to the raw view edges, not the safe area guide: matching Apple Passwords
+      // (851-2463), the list scrolls *underneath* the translucent unified toolbar rather than
+      // stopping below it. `NSScrollView.automaticallyAdjustsContentInsets` (on by default) reads
+      // `view.safeAreaInsets` to keep the table's actual content — and its resting scroll
+      // position — clear of the toolbar, without this view controller doing that math itself.
       scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
       scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-      scrollView.topAnchor.constraint(equalTo: headerBar.bottomAnchor),
+      scrollView.topAnchor.constraint(equalTo: view.topAnchor),
       scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
+      // The empty state has no scrollable content of its own, so it stays below the toolbar
+      // rather than scrolling under it.
       emptyStateView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
       emptyStateView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-      emptyStateView.topAnchor.constraint(equalTo: headerBar.bottomAnchor),
+      emptyStateView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
       emptyStateView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
     ])
 
@@ -135,10 +159,29 @@ final class ItemListViewController: NSViewController {
     rebuildRows(preservingSelection: false)
   }
 
+  #if DEBUG
+    /// Selects the row whose title case-insensitively matches `title`, if one is currently
+    /// showing — used by `MainWindowController`'s `-InitialSelectedItemTitle` DEBUG launch arg to
+    /// produce a deterministic "row selected" tophat screenshot (851-2463) without driving a live
+    /// click through System Events/AX. `rows` may still be empty at the moment this is first
+    /// called (the vault's items load asynchronously, slightly after unlock), so this retries a
+    /// few times a beat apart rather than silently giving up on the first miss.
+    func selectItem(withTitle title: String, remainingAttempts: Int = 10) {
+      if let index = rows.firstIndex(where: { $0.title.caseInsensitiveCompare(title) == .orderedSame }) {
+        tableView.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
+        tableView.scrollRowToVisible(index)
+        return
+      }
+      guard remainingAttempts > 0 else { return }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+        self?.selectItem(withTitle: title, remainingAttempts: remainingAttempts - 1)
+      }
+    }
+  #endif
+
   /// Focuses and selects-all in the toolbar's search field, in response to ⌘F (851-2417),
   /// forwarded here by `MainWindowController`'s local event monitor. The field itself lives in the
-  /// toolbar (851-2461), owned by `MainToolbarController`; `searchField` above is just a weak
-  /// reference to it.
+  /// toolbar, owned by `MainToolbarController`; `searchField` above is just a weak reference to it.
   func focusSearchField() {
     guard let searchField else { return }
     view.window?.makeFirstResponder(searchField)
@@ -155,49 +198,32 @@ final class ItemListViewController: NSViewController {
     rebuildRows(preservingSelection: false)
   }
 
-  // MARK: Configuration
-
-  private func configureHeaderBar() {
-    countLabel.translatesAutoresizingMaskIntoConstraints = false
-    countLabel.font = .systemFont(ofSize: 11)
-    countLabel.textColor = .secondaryLabelColor
-
-    sortButton.translatesAutoresizingMaskIntoConstraints = false
-    sortButton.bezelStyle = .texturedRounded
-    sortButton.isBordered = false
-    sortButton.image = NSImage(systemSymbolName: "arrow.up.arrow.down.circle", accessibilityDescription: "Sort")
-    sortButton.imagePosition = .imageOnly
-    sortButton.target = self
-    sortButton.action = #selector(showSortMenu(_:))
-    sortButton.toolTip = "Sort By"
-
-    headerBar.addSubview(countLabel)
-    headerBar.addSubview(sortButton)
-    NSLayoutConstraint.activate([
-      countLabel.leadingAnchor.constraint(equalTo: headerBar.leadingAnchor, constant: 10),
-      countLabel.centerYAnchor.constraint(equalTo: headerBar.centerYAnchor),
-
-      sortButton.trailingAnchor.constraint(equalTo: headerBar.trailingAnchor, constant: -8),
-      sortButton.centerYAnchor.constraint(equalTo: headerBar.centerYAnchor),
-      sortButton.widthAnchor.constraint(equalToConstant: 22),
-      sortButton.heightAnchor.constraint(equalToConstant: 22),
-    ])
+  /// The sort menu button now lives in the toolbar (`CapsuleToolbarView`, `MainToolbarController`);
+  /// `MainWindowController` targets it directly at this selector, matching the direct target/action
+  /// wiring the rest of the toolbar's cross-controller controls use (see `MainSplitViewController.newPassword`'s
+  /// doc comment for why the codebase prefers this over responder-chain nil-targeting here).
+  @objc func showSortMenu(_ sender: NSButton) {
+    // `NSMenu.popUp` runs its own modal tracking loop and doesn't return until the menu is
+    // dismissed, so bracketing the call is enough to keep the button visibly pressed for exactly
+    // as long as the menu is open (851-2463's sort-menu spec) — no delegate/notification needed.
+    sender.layer?.backgroundColor = NSColor.toolbarCapsuleButtonHighlight.cgColor
+    sortMenu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 4), in: sender)
+    sender.layer?.backgroundColor = nil
   }
+
+  // MARK: Configuration
 
   private func configureTableView() {
     tableView.headerView = nil
     tableView.usesAlternatingRowBackgroundColors = false
     tableView.allowsMultipleSelection = true
     tableView.allowsEmptySelection = true
-    tableView.floatsGroupRows = true
     // `NSTableView.Style.inset` (tried first, per design review) turned out not to draw a rounded,
     // inset selection highlight on its own here — with a single plain column (no outline/source
     // list), its selection still fills edge-to-edge as a square rectangle. `InsetTableRowView`
     // below draws that shape directly instead, matching the sidebar's `.sourceList` look, so the
-    // base style stays `.plain` (confirmed not to disturb section header alignment).
-    // `intercellSpacing` stays zeroed since row/section spacing is fully controlled by
-    // `tableView(_:heightOfRow:)` below — anything else just stacks on top of that and produces a
-    // "twice the row height" look between sections.
+    // base style stays `.plain`. `intercellSpacing` stays zeroed since row spacing is fully
+    // controlled by `tableView(_:heightOfRow:)` below.
     tableView.style = .plain
     tableView.intercellSpacing = NSSize(width: 0, height: 0)
     tableView.dataSource = self
@@ -245,6 +271,31 @@ final class ItemListViewController: NSViewController {
     }
   }
 
+  private func sortMenuIconName(for field: PasswordItemSortField) -> String {
+    switch field {
+    case .title: return "textformat"
+    case .website: return "safari"
+    case .createdAt: return "plus.circle"
+    case .modifiedAt: return "pencil.line"
+    }
+  }
+
+  private func sortMenuTitle(for direction: SortDirection) -> String {
+    switch direction {
+    case .ascending: return "Ascending"
+    case .descending: return "Descending"
+    }
+  }
+
+  /// Matches Apple Passwords' own sort menu (`sort-menu-dark.png`): Ascending pairs with
+  /// `arrow.down` and Descending with `arrow.up`, not the more "obvious" reverse pairing.
+  private func sortMenuIconName(for direction: SortDirection) -> String {
+    switch direction {
+    case .ascending: return "arrow.down"
+    case .descending: return "arrow.up"
+    }
+  }
+
   // MARK: Row computation
 
   private func rebuildRows(preservingSelection: Bool) {
@@ -255,48 +306,27 @@ final class ItemListViewController: NSViewController {
     tableView.reloadData()
 
     if !previouslySelectedIDs.isEmpty {
-      let indices = rows.indices.filter { index in
-        if case .item(let item) = rows[index] { return previouslySelectedIDs.contains(item.id) }
-        return false
-      }
+      let indices = rows.indices.filter { previouslySelectedIDs.contains(rows[$0].id) }
       if !indices.isEmpty {
         tableView.selectRowIndexes(IndexSet(indices), byExtendingSelection: false)
       }
     }
 
     updateEmptyState()
-    updateCountLabel()
+    updateListTitle()
   }
 
-  private func computeRows() -> [Row] {
+  private func computeRows() -> [PasswordItem] {
     let filtered = dataSource.items.filter { currentCategory.matches($0) }
 
     guard searchQuery.isEmpty else {
       return rankedRows(from: filtered)
     }
 
-    let sorted = filtered.sorted(by: PasswordItem.sortComparator(for: sortField))
-    guard sortField == .title else {
-      return sorted.map { Row.item($0) }
-    }
-    return sectionedRows(from: sorted)
+    return filtered.sorted(by: PasswordItem.sortComparator(for: sortField, direction: sortDirection))
   }
 
-  private func sectionedRows(from items: [PasswordItem]) -> [Row] {
-    var rows: [Row] = []
-    var lastKey: String?
-    for item in items {
-      let key = item.titleSectionKey
-      if key != lastKey {
-        rows.append(.section(key))
-        lastKey = key
-      }
-      rows.append(.item(item))
-    }
-    return rows
-  }
-
-  private func rankedRows(from items: [PasswordItem]) -> [Row] {
+  private func rankedRows(from items: [PasswordItem]) -> [PasswordItem] {
     items.compactMap { item -> (PasswordItem, Double)? in
       guard let score = item.searchScore(for: searchQuery) else { return nil }
       return (item, score)
@@ -304,12 +334,11 @@ final class ItemListViewController: NSViewController {
     .sorted { lhs, rhs in
       lhs.1 == rhs.1 ? lhs.0.title.localizedStandardCompare(rhs.0.title) == .orderedAscending : lhs.1 > rhs.1
     }
-    .map { Row.item($0.0) }
+    .map(\.0)
   }
 
   private func updateEmptyState() {
-    let hasItems = rows.contains { if case .item = $0 { return true } else { return false } }
-    headerBar.isHidden = !hasItems
+    let hasItems = !rows.isEmpty
     scrollView.isHidden = !hasItems
     emptyStateView.isHidden = hasItems
     guard !hasItems else { return }
@@ -329,31 +358,28 @@ final class ItemListViewController: NSViewController {
     }
   }
 
-  private func updateCountLabel() {
-    let count = rows.reduce(into: 0) { partial, row in
-      if case .item = row { partial += 1 }
-    }
-    countLabel.stringValue = count == 1 ? "1 Item" : "\(count) Items"
+  private func updateListTitle() {
+    let subtitle = rows.count == 1 ? "1 Item" : "\(rows.count) Items"
+    listTitleView?.configure(title: currentCategory.title, subtitle: subtitle)
   }
 
   private func selectedItems() -> [PasswordItem] {
     tableView.selectedRowIndexes.compactMap { index in
-      guard rows.indices.contains(index), case .item(let item) = rows[index] else { return nil }
-      return item
+      rows.indices.contains(index) ? rows[index] : nil
     }
   }
 
   private func updateSortMenuCheckmarks() {
     for item in sortMenu.items {
-      item.state = (item.representedObject as? PasswordItemSortField) == sortField ? .on : .off
+      if let field = item.representedObject as? PasswordItemSortField {
+        item.state = field == sortField ? .on : .off
+      } else if let direction = item.representedObject as? SortDirection {
+        item.state = direction == sortDirection ? .on : .off
+      }
     }
   }
 
   // MARK: Actions
-
-  @objc private func showSortMenu(_ sender: NSButton) {
-    sortMenu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 4), in: sender)
-  }
 
   @objc private func selectSortField(_ sender: NSMenuItem) {
     guard let field = sender.representedObject as? PasswordItemSortField, field != sortField else { return }
@@ -362,26 +388,30 @@ final class ItemListViewController: NSViewController {
     rebuildRows(preservingSelection: true)
   }
 
+  @objc private func selectSortDirection(_ sender: NSMenuItem) {
+    guard let direction = sender.representedObject as? SortDirection, direction != sortDirection else { return }
+    sortDirection = direction
+    updateSortMenuCheckmarks()
+    rebuildRows(preservingSelection: true)
+  }
+
   @objc private func copyUsername(_ sender: Any?) {
     guard let item = selectedItems().first, selectedItems().count == 1,
       let username = item.usernames.first(where: { !$0.isEmpty })
     else { return }
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(username, forType: .string)
+    Pasteboard.copySecret(username)
   }
 
   @objc private func copyPassword(_ sender: Any?) {
     let items = selectedItems()
     guard items.count == 1, !items[0].password.isEmpty else { return }
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(items[0].password, forType: .string)
+    Pasteboard.copySecret(items[0].password)
   }
 
   @objc private func copyVerificationCode(_ sender: Any?) {
     let items = selectedItems()
     guard items.count == 1, let totp = items[0].totp else { return }
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(totp.code(), forType: .string)
+    Pasteboard.copySecret(totp.code())
   }
 
   @objc private func deleteMenuAction(_ sender: Any?) {
@@ -407,53 +437,53 @@ extension ItemListViewController: NSTableViewDataSource {
 
 extension ItemListViewController: NSTableViewDelegate {
   func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-    switch rows[row] {
-    case .section(let title):
-      let cell = SectionHeaderCellView.dequeue(from: tableView, owner: self)
-      cell.configure(title: title)
-      return cell
-    case .item(let item):
-      let cell = ItemRowCellView.dequeue(from: tableView, owner: self)
-      cell.configure(with: item)
-      return cell
-    }
+    let cell = ItemRowCellView.dequeue(from: tableView, owner: self)
+    cell.configure(with: rows[row], hidesSeparator: hidesSeparator(atRow: row))
+    return cell
   }
 
   func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-    switch rows[row] {
-    case .section: return 28
-    case .item: return 40
-    }
-  }
-
-  func tableView(_ tableView: NSTableView, isGroupRow row: Int) -> Bool {
-    if case .section = rows[row] { return true }
-    return false
+    // Tall enough for the 40pt icon plus vertical breathing room, matching Apple Passwords
+    // (851-2463) — up from 40pt before this ticket's icons grew from 28pt.
+    56
   }
 
   func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-    // Only item rows get the rounded/inset selection; section headers keep the default row view
-    // so `floatsGroupRows`/group-row chrome above is unaffected.
-    switch rows[row] {
-    case .item: return InsetTableRowView()
-    case .section: return nil
-    }
-  }
-
-  func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
-    if case .section = rows[row] { return false }
-    return true
+    InsetTableRowView()
   }
 
   func tableViewSelectionDidChange(_ notification: Notification) {
     delegate?.itemListViewController(self, didChangeSelection: selectedItems())
+    updateSeparatorVisibility()
+  }
+
+  /// Whether row `row`'s own hairline (drawn at its bottom edge) should be hidden: either because
+  /// `row` itself is selected (hides the separator "below" it), or because `row + 1` is selected
+  /// (hides the separator "above" that row, which is this row's bottom edge) — matching Apple
+  /// Passwords, which never draws a hairline through a rounded selection highlight (851-2463).
+  private func hidesSeparator(atRow row: Int) -> Bool {
+    let selected = tableView.selectedRowIndexes
+    return selected.contains(row) || selected.contains(row + 1)
+  }
+
+  /// Re-applies `hidesSeparator(atRow:)` to every currently on-screen row. Selection changes don't
+  /// re-invoke `tableView(_:viewFor:row:)` on their own, so without this, a row's hairline
+  /// wouldn't update until it was scrolled off-screen and back (or the table reloaded) after its
+  /// neighbor's selection state changed.
+  private func updateSeparatorVisibility() {
+    for row in rows.indices {
+      guard let cell = tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? ItemRowCellView else {
+        continue
+      }
+      cell.setSeparatorHidden(hidesSeparator(atRow: row))
+    }
   }
 }
 
 extension ItemListViewController: NSMenuDelegate {
   func menuNeedsUpdate(_ menu: NSMenu) {
     let clickedRow = tableView.clickedRow
-    guard clickedRow >= 0, rows.indices.contains(clickedRow), case .item = rows[clickedRow] else {
+    guard clickedRow >= 0, rows.indices.contains(clickedRow) else {
       setContextMenuEnabled(false, false, false, false)
       return
     }
@@ -509,14 +539,21 @@ fileprivate extension SidebarCategory {
   }
 }
 
-/// A row view that draws its own rounded, inset selection highlight for item rows — matching the
-/// sidebar's `.sourceList` look — since `NSTableView.Style.inset` doesn't produce that shape by
-/// itself for a plain single-column table view (see `configureTableView()` above for why).
+/// A row view that draws its own rounded, inset selection highlight — matching the sidebar's
+/// `.sourceList` look — since `NSTableView.Style.inset` doesn't produce that shape by itself for a
+/// plain single-column table view (see `configureTableView()` above for why).
 private final class InsetTableRowView: NSTableRowView {
   override func drawSelection(in dirtyRect: NSRect) {
     guard selectionHighlightStyle != .none else { return }
-    let insetRect = bounds.insetBy(dx: 8, dy: 1)
-    let path = NSBezierPath(roundedRect: insetRect, xRadius: 6, yRadius: 6)
+    // At this row's 56pt height, a small fixed radius with almost no vertical inset (as this
+    // originally shipped: dy: 1, radius 6) reads as a barely-softened square at a glance — the
+    // 851-2463 review's "square gray block" callout — since the sidebar's own `.sourceList`
+    // selection is short enough (~28pt rows) that a similar radius already looks like a full
+    // pill. Matching that *look* here means insetting on all four sides enough to visibly float
+    // the highlight off the row's edges, with a radius large enough to read as clearly rounded
+    // rather than just corner-nicked, instead of matching the sidebar's exact numbers.
+    let insetRect = bounds.insetBy(dx: 8, dy: 4)
+    let path = NSBezierPath(roundedRect: insetRect, xRadius: 10, yRadius: 10)
     (isEmphasized ? NSColor.controlAccentColor : NSColor.unemphasizedSelectedContentBackgroundColor).setFill()
     path.fill()
   }

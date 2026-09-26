@@ -86,7 +86,9 @@ final class VerificationCodeRowView: NSView {
     NSLayoutConstraint.activate([
       heightAnchor.constraint(greaterThanOrEqualToConstant: 36),
 
-      label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+      // 16pt — see `DetailValueRowView`'s matching comment: lines this row's label up with
+      // `CardView`'s divider inset and `KeyValueRow`'s own label inset.
+      label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
       label.centerYAnchor.constraint(equalTo: centerYAnchor),
 
       codeStack.leadingAnchor.constraint(greaterThanOrEqualTo: label.trailingAnchor, constant: 8),

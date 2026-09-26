@@ -8,32 +8,55 @@ public enum PasswordItemSortField: String, CaseIterable, Sendable {
   case website
 }
 
+/// Which way a ``PasswordItemSortField`` orders items, chosen independently of the field itself
+/// from the sort menu's second section (851-2463) and persisted in `AppSettings`.
+public enum SortDirection: String, CaseIterable, Sendable {
+  case ascending
+  case descending
+}
+
 extension PasswordItem {
-  /// A comparator for `field`, suitable for `Array.sorted(by:)`, with deterministic tie-breaking
-  /// so equal-looking rows don't jitter between re-sorts: title/website order ties fall back to
-  /// title, then to `id`, and title itself falls back to `id`.
-  ///
-  /// `title` and `website` sort ascending (A→Z, matching Finder/Contacts); `createdAt` and
-  /// `modifiedAt` sort descending (newest first), since that's what's usually useful when
-  /// browsing by date.
-  public static func sortComparator(for field: PasswordItemSortField) -> (PasswordItem, PasswordItem) -> Bool {
+  /// A comparator for `field`/`direction`, suitable for `Array.sorted(by:)`. `direction` only
+  /// flips `field`'s own ordering — ties always fall back to title (A→Z), then `id`, regardless
+  /// of `direction`, so switching Ascending/Descending reorders by the chosen field without also
+  /// scrambling the secondary tie-break a user never asked to reverse.
+  public static func sortComparator(
+    for field: PasswordItemSortField,
+    direction: SortDirection
+  ) -> (PasswordItem, PasswordItem) -> Bool {
+    let primaryOrder = primaryOrdering(for: field)
+    return { a, b in
+      switch primaryOrder(a, b) {
+      case .orderedAscending: return direction == .ascending
+      case .orderedDescending: return direction == .descending
+      case .orderedSame: return orderedByTitle(a, b)
+      }
+    }
+  }
+
+  /// `field`'s own natural ordering (title/website A→Z, date fields oldest-first), independent of
+  /// `direction` and before the title/id tie-break is applied.
+  private static func primaryOrdering(for field: PasswordItemSortField) -> (PasswordItem, PasswordItem) ->
+    ComparisonResult
+  {
     switch field {
     case .title:
-      return { a, b in orderedByTitle(a, b) }
+      return { a, b in a.title.localizedStandardCompare(b.title) }
     case .website:
       return { a, b in
         let lhs = a.websites.first?.host ?? ""
         let rhs = b.websites.first?.host ?? ""
-        switch lhs.localizedStandardCompare(rhs) {
-        case .orderedAscending: return true
-        case .orderedDescending: return false
-        case .orderedSame: return orderedByTitle(a, b)
-        }
+        return lhs.localizedStandardCompare(rhs)
       }
     case .createdAt:
-      return { a, b in a.createdAt == b.createdAt ? orderedByTitle(a, b) : a.createdAt > b.createdAt }
+      return { a, b in
+        a.createdAt == b.createdAt ? .orderedSame : (a.createdAt < b.createdAt ? .orderedAscending : .orderedDescending)
+      }
     case .modifiedAt:
-      return { a, b in a.modifiedAt == b.modifiedAt ? orderedByTitle(a, b) : a.modifiedAt > b.modifiedAt }
+      return { a, b in
+        a.modifiedAt == b.modifiedAt
+          ? .orderedSame : (a.modifiedAt < b.modifiedAt ? .orderedAscending : .orderedDescending)
+      }
     }
   }
 

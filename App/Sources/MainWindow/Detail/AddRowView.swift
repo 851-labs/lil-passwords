@@ -42,8 +42,10 @@ final class AddRowView: NSView {
     addSubview(button)
     NSLayoutConstraint.activate([
       heightAnchor.constraint(greaterThanOrEqualToConstant: 32),
-      button.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-      button.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -12),
+      // 16pt/-16pt — see `DetailValueRowView`'s matching comment: lines this row's button up with
+      // `CardView`'s divider inset and `KeyValueRow`'s own label inset.
+      button.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+      button.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -16),
       button.centerYAnchor.constraint(equalTo: centerYAnchor),
     ])
   }

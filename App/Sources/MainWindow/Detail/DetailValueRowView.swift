@@ -60,7 +60,10 @@ final class DetailValueRowView: NSView {
     NSLayoutConstraint.activate([
       heightAnchor.constraint(greaterThanOrEqualToConstant: 36),
 
-      labelField.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+      // 16pt, matching `CardView`'s divider inset (851-2463/#32) and `KeyValueRow`'s own label
+      // inset, so this row's text lines up with the "Created" row's `KeyValueRow` above/below it
+      // and with the dividers between them, instead of jogging in/out by 4pt at each boundary.
+      labelField.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
       labelField.centerYAnchor.constraint(equalTo: centerYAnchor),
 
       valueField.leadingAnchor.constraint(greaterThanOrEqualTo: labelField.trailingAnchor, constant: 8),

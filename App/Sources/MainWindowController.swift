@@ -55,6 +55,10 @@ final class MainWindowController: NSWindowController {
 
     /// Guards `-AutoUnlockForTophat` (see `requestAutoUnlockIfNeeded()`) so it only fires once.
     private var hasRequestedAutoUnlock = false
+
+    /// Guards `-InitialSelectedItemTitle` (see `applyInitialSelectedItemOverrideIfNeeded()`) so it
+    /// only fires the first time unlocked content is shown.
+    private var hasAppliedInitialSelectedItemOverride = false
   #endif
 
   init(agentClient: AgentClient, helperAgentRegistrar: any HelperAgentRegistering) {
@@ -104,11 +108,24 @@ final class MainWindowController: NSWindowController {
     window.contentViewController = lockScreenViewController
 
     toolbarController.splitView = splitViewController.splitView
-    // The search field lives in the toolbar (851-2461), spanning the list column between two
-    // tracking separators, but `ItemListViewController` still owns query handling/focus — hand it
-    // the field and make it the delegate.
+    // The search field lives in the toolbar, spanning the detail column (851-2463), but
+    // `ItemListViewController` still owns query handling/focus — hand it the field and make it
+    // the delegate.
     toolbarController.searchField.delegate = splitViewController.listViewController
     splitViewController.listViewController.searchField = toolbarController.searchField
+    // The sort button now lives in the toolbar's list-actions capsule (851-2463); targeted
+    // directly at `ItemListViewController` rather than through the responder chain, matching
+    // `MainSplitViewController.newPassword`'s own reasoning for preferring an explicit target.
+    toolbarController.sortButton.target = splitViewController.listViewController
+    toolbarController.sortButton.action = #selector(ItemListViewController.showSortMenu(_:))
+    splitViewController.listViewController.listTitleView = toolbarController.listTitleView
+    splitViewController.detailViewController.editControl = toolbarController.editControl
+    // Codes/Security/Deleted (851-2418/851-2419/851-2420) replace the list+detail split with a
+    // full-width view; none of this toolbar's list/detail-column chrome applies to those, so it's
+    // added/removed to match (851-2463) — see `MainToolbarController.setFullWidthModeActive(_:)`.
+    splitViewController.onFullWidthModeChange = { [weak toolbarController] isFullWidth in
+      toolbarController?.setFullWidthModeActive(isFullWidth)
+    }
     window.toolbar = toolbarController.makeToolbar()
     window.toolbar?.isVisible = false
 
@@ -286,6 +303,7 @@ final class MainWindowController: NSWindowController {
     window?.toolbar?.isVisible = true
     #if DEBUG
       applyInitialSidebarCategoryOverrideIfNeeded()
+      applyInitialSelectedItemOverrideIfNeeded()
     #endif
   }
 
@@ -307,6 +325,19 @@ final class MainWindowController: NSWindowController {
       else { return }
       hasAppliedInitialSidebarCategoryOverride = true
       splitViewController.sidebarViewController.selectCategory(category)
+    }
+
+    /// `-InitialSelectedItemTitle <title>` (e.g. `-InitialSelectedItemTitle Amazon`) selects the
+    /// matching row in the item list as soon as the vault unlocks, DEBUG-only — same rationale and
+    /// same "no System Events/AX" constraint as `-InitialSidebarCategory` above, but for producing
+    /// a deterministic "row selected" tophat screenshot (851-2463) instead of driving a live click.
+    /// Applied after `applyInitialSidebarCategoryOverrideIfNeeded()` so the list is already showing
+    /// whichever category the row is expected to be found in. Never compiled into Release builds.
+    private func applyInitialSelectedItemOverrideIfNeeded() {
+      guard !hasAppliedInitialSelectedItemOverride else { return }
+      guard let title = UserDefaults.standard.string(forKey: "InitialSelectedItemTitle") else { return }
+      hasAppliedInitialSelectedItemOverride = true
+      splitViewController.listViewController.selectItem(withTitle: title)
     }
 
     /// `-AutoUnlockForTophat YES` drives `lockCoordinator.unlock()` as soon as `.locked` is

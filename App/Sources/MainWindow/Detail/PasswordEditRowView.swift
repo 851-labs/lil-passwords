@@ -51,7 +51,9 @@ final class PasswordEditRowView: NSView {
     let stack = NSStackView(views: [secureField, plainField, revealButton])
     stack.orientation = .horizontal
     stack.spacing = 6
-    stack.edgeInsets = NSEdgeInsets(top: 6, left: 12, bottom: 6, right: 8)
+    // 16pt leading — see `DetailValueRowView`'s matching comment: lines this row's field up with
+    // `CardView`'s divider inset and `KeyValueRow`'s own label inset.
+    stack.edgeInsets = NSEdgeInsets(top: 6, left: 16, bottom: 6, right: 8)
     stack.translatesAutoresizingMaskIntoConstraints = false
 
     addSubview(stack)

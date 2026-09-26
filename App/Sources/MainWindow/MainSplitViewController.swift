@@ -19,6 +19,12 @@ final class MainSplitViewController: NSSplitViewController {
   let securityViewController: SecurityViewController
   let deletedViewController: DeletedViewController
 
+  /// Fires whenever selecting a sidebar category switches into or out of a full-width category
+  /// view (Codes/Security/Deleted) — `MainWindowController` wires this to
+  /// `MainToolbarController.setFullWidthModeActive(_:)` so the toolbar's list/detail-column items
+  /// (which have nothing to apply to over a full-width view) come and go with it.
+  var onFullWidthModeChange: ((Bool) -> Void)?
+
   private let detailContainerViewController = DetailContainerViewController()
 
   private var sidebarItem: NSSplitViewItem!
@@ -113,11 +119,21 @@ extension MainSplitViewController: SidebarViewControllerDelegate {
     if let fullWidthViewController = fullWidthViewController(for: category) {
       detailContainerViewController.setContentViewController(fullWidthViewController)
       listItem.isCollapsed = true
+      // `detailViewController` (and the toolbar's Edit/Cancel/Done control, 851-2463) stay alive
+      // even though `detailContainerViewController` no longer hosts their view — `editControl`
+      // lives in the *toolbar*, which is independent of the split view's content and therefore
+      // still visible/clickable while a full-width view is showing. Reset here so a draft that
+      // was mid-edit when the user switched away can't be silently committed or discarded by a
+      // Return/Esc keypress meant for the full-width view, and so Edit itself is disabled rather
+      // than reopening an editor for content that isn't on screen.
+      detailViewController.showNoSelection(for: category)
+      onFullWidthModeChange?(true)
     } else {
       detailContainerViewController.setContentViewController(detailViewController)
       listItem.isCollapsed = false
       listViewController.select(category: category)
       detailViewController.showNoSelection(for: category)
+      onFullWidthModeChange?(false)
     }
   }
 }
