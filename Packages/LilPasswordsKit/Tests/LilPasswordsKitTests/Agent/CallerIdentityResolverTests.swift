@@ -102,3 +102,29 @@ private final class CallerIdentityProbePingObject: NSObject, CallerIdentityProbe
     reply()
   }
 }
+
+extension CallerIdentityResolverTests {
+  @Test func resolveProcessChainStartsWithTheCurrentProcessAndWalksAtLeastOneAncestor() {
+    let chain = CallerIdentityResolver.resolveProcessChain(pid: ProcessInfo.processInfo.processIdentifier)
+
+    // The test runner is a real process with at least one live ancestor (its parent, however many
+    // hops up to launchd/pid 1 that ends up being in this environment), so the chain should have
+    // more than just the test binary's own name.
+    #expect(chain.count >= 2)
+    #expect(
+      chain.first
+        == CallerIdentityResolver.resolve(pid: ProcessInfo.processInfo.processIdentifier).processPath.map {
+          ($0 as NSString).lastPathComponent
+        })
+  }
+
+  @Test func resolveProcessChainForAnImplausiblePidFailsGracefullyInsteadOfCrashing() {
+    let chain = CallerIdentityResolver.resolveProcessChain(pid: pid_t.max)
+    #expect(chain.isEmpty)
+  }
+
+  @Test func resolveProcessChainNeverExceedsMaxDepth() {
+    let chain = CallerIdentityResolver.resolveProcessChain(pid: ProcessInfo.processInfo.processIdentifier, maxDepth: 1)
+    #expect(chain.count <= 1)
+  }
+}

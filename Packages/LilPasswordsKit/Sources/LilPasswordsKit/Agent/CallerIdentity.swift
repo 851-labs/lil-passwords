@@ -155,6 +155,34 @@ public enum CallerIdentityResolver {
     return info[kSecCodeInfoIdentifier as String] as? String
   }
 
+  /// Walks the process tree starting at `pid` itself, out through its ancestors, for 851-2429's
+  /// access log to render a full "which tool spawned which tool" chain — e.g.
+  /// `["lilpw", "node", "claude"]` for a `lilpw` invocation made by a Node-based MCP server that
+  /// Claude Desktop itself launched — rather than just the one-hop ``parentProcessName(of:)`` used
+  /// by ``resolve(pid:)`` above.
+  ///
+  /// Every hop is resolved the same best-effort way as ``resolve(pid:)``: a name that can't be
+  /// resolved just ends the chain there instead of throwing, since a caller identity that's harder
+  /// to fully attribute is still more useful logged than not logged at all. `maxDepth` bounds the
+  /// walk so an unusual process tree (or, in principle, a pid recycled into a cycle) can't spin
+  /// forever; real ancestor chains are a handful of hops at most (shell → MCP client → MCP server →
+  /// `lilpw`), so the default is generous.
+  ///
+  /// Must be called promptly after the pid is observed (e.g. at XPC connection-accept time, not
+  /// lazily whenever a log entry finally gets written): a short-lived CLI invocation's ancestors
+  /// may already have exited or been reassigned by the time this runs otherwise.
+  public static func resolveProcessChain(pid: pid_t, maxDepth: Int = 8) -> [String] {
+    var chain: [String] = []
+    var currentPID = pid
+    for _ in 0..<maxDepth {
+      guard let name = processName(of: currentPID) else { break }
+      chain.append(name)
+      guard let ancestorPID = parentPID(of: currentPID), ancestorPID != currentPID, ancestorPID > 1 else { break }
+      currentPID = ancestorPID
+    }
+    return chain
+  }
+
   private static func processPath(of pid: pid_t) -> String? {
     // `PROC_PIDPATHINFO_MAXSIZE` is a `<libproc.h>` macro (`4 * MAXPATHLEN`), not imported into
     // Swift; `MAXPATHLEN` itself is available via Darwin, so compute it the same way libproc does.
@@ -175,8 +203,12 @@ public enum CallerIdentityResolver {
 
   private static func parentProcessName(of pid: pid_t) -> String? {
     guard let parentPID = parentPID(of: pid) else { return nil }
+    return processName(of: parentPID)
+  }
+
+  private static func processName(of pid: pid_t) -> String? {
     var buffer = [Int8](repeating: 0, count: Int(MAXCOMLEN) * 4)
-    let length = proc_name(parentPID, &buffer, UInt32(buffer.count))
+    let length = proc_name(pid, &buffer, UInt32(buffer.count))
     guard length > 0 else { return nil }
     return string(fromNulTerminated: buffer)
   }

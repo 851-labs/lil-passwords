@@ -20,10 +20,30 @@ public struct AccessEvent: Sendable {
   public var request: AgentRequest
   public var succeeded: Bool
 
-  public init(date: Date = Date(), caller: CallerIdentity, request: AgentRequest, succeeded: Bool) {
+  /// The response `AgentServer` produced for `request`, when `succeeded` — `nil` on failure (there
+  /// is none) or if a caller building an `AccessEvent` by hand doesn't have one (e.g. existing
+  /// tests written before this property existed; defaulted so they keep compiling unchanged).
+  ///
+  /// This exists so a real ``AccessLogging`` conformer can recover the item id/title a
+  /// query-based `getItem(.query(...))` resolved to — `request` alone only has the raw query
+  /// string, not which item it matched. `deleteItem` has no equivalent: its response
+  /// (`AgentResponse.deleted`) carries no payload at all, so a query-based delete is logged with
+  /// only the operation name and no item id/title — a deliberate, documented gap rather than a
+  /// reason to add a payload to `.deleted` and risk a wire-protocol conflict with concurrent work
+  /// on `AgentProtocol.swift`.
+  public var response: AgentResponse?
+
+  public init(
+    date: Date = Date(),
+    caller: CallerIdentity,
+    request: AgentRequest,
+    response: AgentResponse? = nil,
+    succeeded: Bool
+  ) {
     self.date = date
     self.caller = caller
     self.request = request
+    self.response = response
     self.succeeded = succeeded
   }
 }
