@@ -22,6 +22,12 @@ final class EmptyStateView: NSView {
     imageView.translatesAutoresizingMaskIntoConstraints = false
     imageView.symbolConfiguration = .init(pointSize: 40, weight: .regular)
     imageView.contentTintColor = .tertiaryLabelColor
+    imageView.imageScaling = .scaleProportionallyUpOrDown
+    // SF Symbols report varying intrinsic sizes at the same point size (a shield glyph isn't the
+    // same height as a key), which is what let the image and title overlap in some categories.
+    // Pin the image view to a fixed box so every symbol lays out identically.
+    imageView.setContentHuggingPriority(.required, for: .vertical)
+    imageView.setContentCompressionResistancePriority(.required, for: .vertical)
 
     titleField.translatesAutoresizingMaskIntoConstraints = false
     titleField.font = .systemFont(ofSize: 16, weight: .semibold)
@@ -37,11 +43,14 @@ final class EmptyStateView: NSView {
     let stack = NSStackView(views: [imageView, titleField, messageField])
     stack.orientation = .vertical
     stack.alignment = .centerX
-    stack.spacing = 6
+    stack.spacing = 8
+    stack.setCustomSpacing(12, after: imageView)
     stack.translatesAutoresizingMaskIntoConstraints = false
 
     addSubview(stack)
     NSLayoutConstraint.activate([
+      imageView.widthAnchor.constraint(equalToConstant: 44),
+      imageView.heightAnchor.constraint(equalToConstant: 44),
       stack.centerXAnchor.constraint(equalTo: centerXAnchor),
       stack.centerYAnchor.constraint(equalTo: centerYAnchor),
       stack.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -48),

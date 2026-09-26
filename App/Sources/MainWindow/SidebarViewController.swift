@@ -47,7 +47,16 @@ final class SidebarViewController: NSViewController {
   }
 
   override func loadView() {
-    view = NSView()
+    // `NSSplitViewItem(sidebarWithViewController:)` marks this column as a sidebar, but it
+    // doesn't paint the vibrant/glass material itself — without an actual `NSVisualEffectView`
+    // behind the outline view, the column just shows through to the plain window background,
+    // which is what made it read as flat and indistinguishable from the content column. This is
+    // the system "sidebar" material: vibrant on macOS 13-15, floating glass on macOS 26.
+    let effectView = NSVisualEffectView()
+    effectView.material = .sidebar
+    effectView.blendingMode = .behindWindow
+    effectView.state = .followsWindowActiveState
+    view = effectView
   }
 
   override func viewDidLoad() {
@@ -74,6 +83,9 @@ final class SidebarViewController: NSViewController {
     outlineView.dataSource = self
     outlineView.delegate = self
     outlineView.autosaveExpandedItems = false
+    // Let the sidebar material (set up in loadView) show through instead of painting the
+    // opaque `.controlBackgroundColor` the outline view uses by default.
+    outlineView.backgroundColor = .clear
 
     let column = NSTableColumn(identifier: Column.identifier)
     column.title = "Sidebar"
