@@ -1,11 +1,11 @@
 import Foundation
 import LilPasswordsKit
 
-/// A single field on a ``PasswordItem`` that `lilpw get --field`, `lilpw read`, `lilpw run --env`,
-/// and `lilpw inject` can extract.
+/// A single field on a ``PasswordItem`` that `lilpass get --field`, `lilpass read`, `lilpass run --env`,
+/// and `lilpass inject` can extract.
 ///
 /// `String`-backed (rather than, say, a raw `KeyPath`) so it round-trips through `--field <value>`,
-/// a `lilpw://` secret reference's last path component, and `--json` output identically.
+/// a `lilpass://` secret reference's last path component, and `--json` output identically.
 public enum ItemField: String, CaseIterable, Sendable, Equatable, Codable {
   case password
   case username
@@ -28,7 +28,7 @@ public enum SecretResolver {
 
     case .username:
       guard let username = item.usernames.first else {
-        throw LilpwError(exitCode: .notFound, message: "\"\(item.title)\" has no username")
+        throw LilpassError(exitCode: .notFound, message: "\"\(item.title)\" has no username")
       }
       return username
 
@@ -37,7 +37,7 @@ public enum SecretResolver {
 
     case .website:
       guard let website = item.websites.first else {
-        throw LilpwError(exitCode: .notFound, message: "\"\(item.title)\" has no website")
+        throw LilpassError(exitCode: .notFound, message: "\"\(item.title)\" has no website")
       }
       return website.absoluteString
 
@@ -46,7 +46,7 @@ public enum SecretResolver {
         let result = try await client.totpCode(.id(item.id))
         return result.code
       } catch {
-        throw LilpwError.from(error)
+        throw LilpassError.from(error)
       }
     }
   }

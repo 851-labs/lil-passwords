@@ -1,7 +1,7 @@
 import Foundation
 import LilPasswordsKit
 
-/// The non-secret view of a ``PasswordItem`` `lilpw list` and `lilpw search` print.
+/// The non-secret view of a ``PasswordItem`` `lilpass list` and `lilpass search` print.
 ///
 /// Deliberately omits `password` and `notes` (either can hold a secret) and the live TOTP code
 /// (which needs a fresh ``AgentClient/totpCode(_:)`` call, not just the item) — 851-2430 requires
@@ -25,12 +25,12 @@ public struct ItemSummary: Codable, Sendable, Equatable {
   }
 }
 
-/// The full, secret-including view of a single item `lilpw get <item>` prints when called without
+/// The full, secret-including view of a single item `lilpass get <item>` prints when called without
 /// `--field`. Unlike ``ItemSummary``, this does include `password` and `notes` — `get` (with or
 /// without `--field`) is one of 851-2430's explicit secret-revealing commands.
 ///
 /// Still omits the live TOTP code for the same reason `ItemSummary` does (it needs a fresh
-/// `AgentClient` call); `hasTOTP` tells a caller whether `lilpw totp <item>` will work.
+/// `AgentClient` call); `hasTOTP` tells a caller whether `lilpass totp <item>` will work.
 public struct ItemDetail: Codable, Sendable, Equatable {
   public let id: UUID
   public let title: String
@@ -53,8 +53,8 @@ public struct ItemDetail: Codable, Sendable, Equatable {
   }
 }
 
-/// A single resolved field's value, e.g. the payload of `lilpw get --field password` or
-/// `lilpw read`.
+/// A single resolved field's value, e.g. the payload of `lilpass get --field password` or
+/// `lilpass read`.
 public struct FieldValue: Codable, Sendable, Equatable {
   public let item: String
   public let field: ItemField

@@ -6,18 +6,18 @@ let package = Package(
   platforms: [.macOS(.v13)],
   products: [
     .library(name: "LilPasswordsKit", targets: ["LilPasswordsKit"]),
-    // The `lilpw` CLI's logic (item resolution, exit codes, command results), kept separate from
+    // The `lilpass` CLI's logic (item resolution, exit codes, command results), kept separate from
     // `LilPasswordsKit` itself so the CLI's concerns don't leak into the app/agent's shared core,
     // and separate from the CLI target (`CLI/Sources`, an XcodeGen `tool` target) so it's a plain
-    // SwiftPM library `swift test` can exercise directly — see `LilpwCoreTests` for the in-process
+    // SwiftPM library `swift test` can exercise directly — see `LilpassCoreTests` for the in-process
     // `AgentServer` + `InMemoryVaultStore` harness this buys.
-    .library(name: "LilpwCore", targets: ["LilpwCore"]),
-    // `lilpw mcp`'s tool definitions and dispatch, built on top of `LilpwCore` the same way the CLI
+    .library(name: "LilpassCore", targets: ["LilpassCore"]),
+    // `lilpass mcp`'s tool definitions and dispatch, built on top of `LilpassCore` the same way the CLI
     // itself is (851-2431). Unlike ArgumentParser (kept out of this package entirely, see below),
     // the MCP SDK dependency lives here rather than in the CLI target: the glue between MCP tool
-    // calls and `LilpwCommands` is genuine, unit-testable logic (argument extraction, error mapping
+    // calls and `LilpassCommands` is genuine, unit-testable logic (argument extraction, error mapping
     // to the same messages the CLI prints), not CLI-parsing plumbing.
-    .library(name: "LilpwMCP", targets: ["LilpwMCP"]),
+    .library(name: "LilpassMCP", targets: ["LilpassMCP"]),
   ],
   dependencies: [
     .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.11.0")
@@ -37,37 +37,37 @@ let package = Package(
       resources: [.copy("Fixtures")]
     ),
     // No swift-argument-parser dependency here on purpose: parsing lives in the CLI target
-    // (`project.yml`'s `lilpw` target), which is the only place that needs it. `LilpwCore` only
+    // (`project.yml`'s `lilpass` target), which is the only place that needs it. `LilpassCore` only
     // ever sees already-parsed Swift values, so this package stays free of that dependency.
     .target(
-      name: "LilpwCore",
+      name: "LilpassCore",
       dependencies: ["LilPasswordsKit"]
     ),
     .testTarget(
-      // Depends on `LilPasswordsKit` too (not just `LilpwCore`) so its tests can build the same
+      // Depends on `LilPasswordsKit` too (not just `LilpassCore`) so its tests can build the same
       // in-process `AgentServer` + `InMemoryVaultStore` + anonymous-`NSXPCListener` harness
       // `AgentXPCEndToEndTests` uses, via `@testable import LilPasswordsKit` for the test-only
       // `AgentClient(endpoint:connectionSecurity:)` initializer.
-      name: "LilpwCoreTests",
-      dependencies: ["LilpwCore", "LilPasswordsKit"]
+      name: "LilpassCoreTests",
+      dependencies: ["LilpassCore", "LilPasswordsKit"]
     ),
     .target(
-      name: "LilpwMCP",
+      name: "LilpassMCP",
       dependencies: [
-        "LilpwCore",
+        "LilpassCore",
         "LilPasswordsKit",
         .product(name: "MCP", package: "swift-sdk"),
       ]
     ),
     .testTarget(
       // Its own `Support/Harness.swift` copy, deliberately duplicated rather than shared with
-      // `LilpwCoreTests` — see that file's doc comment (and `LilpwCoreTests`' own) for why: SwiftPM
+      // `LilpassCoreTests` — see that file's doc comment (and `LilpassCoreTests`' own) for why: SwiftPM
       // has no way for one file to belong to two test targets, and each target's copy needs
       // `@testable import LilPasswordsKit` for the same test-only `AgentClient` initializer.
-      name: "LilpwMCPTests",
+      name: "LilpassMCPTests",
       dependencies: [
-        "LilpwMCP",
-        "LilpwCore",
+        "LilpassMCP",
+        "LilpassCore",
         "LilPasswordsKit",
         .product(name: "MCP", package: "swift-sdk"),
       ]

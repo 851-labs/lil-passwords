@@ -8,7 +8,7 @@ import Foundation
 ///
 /// Darwin notifications carry no payload and aren't restricted by App Sandbox either way, and —
 /// unlike `NSDistributedNotificationCenter` or a `CFRunLoop`-driven callback — delivery doesn't
-/// depend on the observing process pumping a run loop, which matters for `lilpw`/test-runner
+/// depend on the observing process pumping a run loop, which matters for `lilpass`/test-runner
 /// style processes that never do.
 enum DarwinNotifications {
   /// The name this project's processes agree on. Individual `VaultStore` instances can override

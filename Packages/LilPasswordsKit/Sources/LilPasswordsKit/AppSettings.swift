@@ -5,13 +5,13 @@ import Foundation
 /// The app isn't sandboxed (see `docs/adr/0001-storage-and-process-model.md`), so any process
 /// that knows the suite name can read the same domain: `LilPasswordsAgent` reads
 /// ``autoLockInterval``, ``clipboardClearInterval``, and the agent-access toggles to enforce them
-/// (851-2411, 851-2423, 851-2428), and `lilpw` can do the same. The app is the only writer today
+/// (851-2411, 851-2423, 851-2428), and `lilpass` can do the same. The app is the only writer today
 /// — everything here is edited from the Settings window (851-2424).
 public final class AppSettings: @unchecked Sendable {
   /// The default, shared instance every process should use unless a test needs isolation.
   public static let shared = AppSettings()
 
-  /// The `UserDefaults` suite name shared by the app, `LilPasswordsAgent`, and `lilpw`.
+  /// The `UserDefaults` suite name shared by the app, `LilPasswordsAgent`, and `lilpass`.
   ///
   /// Deliberately distinct from the app's own bundle identifier (`com.851labs.lilpasswords`):
   /// passing an app's own bundle ID as `UserDefaults(suiteName:)` is documented as nonsensical —

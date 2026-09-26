@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
 	<!--
-	Intentionally empty, and it must stay that way: lilpw can never hold a
+	Intentionally empty, and it must stay that way: lilpass can never hold a
 	restricted entitlement (keychain-access-groups, app-groups, etc.) because,
 	whether run embedded in Contents/Helpers or standalone (e.g. from
 	/usr/local/bin), it has no way to carry a provisioning profile that would
-	authorize one. This is exactly why lilpw talks to LilPasswordsAgent over
+	authorize one. This is exactly why lilpass talks to LilPasswordsAgent over
 	XPC for anything that needs the vault key — see
 	docs/adr/0001-storage-and-process-model.md.
 	-->

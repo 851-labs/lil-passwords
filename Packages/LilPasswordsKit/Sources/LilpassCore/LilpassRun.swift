@@ -1,18 +1,18 @@
 import Foundation
 import LilPasswordsKit
 
-/// `lilpw run --env KEY=lilpw://item/field -- <cmd> [args...]`: resolves every `--env` secret
+/// `lilpass run --env KEY=lilpass://item/field -- <cmd> [args...]`: resolves every `--env` secret
 /// reference, then execs `<cmd>` with those key/value pairs injected into its environment.
-public enum LilpwRun {
-  /// Parses one `--env` argument's `KEY=lilpw://item/field` shape.
+public enum LilpassRun {
+  /// Parses one `--env` argument's `KEY=lilpass://item/field` shape.
   public static func parseAssignment(_ raw: String) throws -> (key: String, reference: SecretReference) {
     guard let equalsIndex = raw.firstIndex(of: "=") else {
-      throw LilpwError(exitCode: .usage, message: "--env expects KEY=lilpw://item/field, got \"\(raw)\"")
+      throw LilpassError(exitCode: .usage, message: "--env expects KEY=lilpass://item/field, got \"\(raw)\"")
     }
     let key = String(raw[raw.startIndex..<equalsIndex])
     let referenceString = String(raw[raw.index(after: equalsIndex)...])
     guard !key.isEmpty, let reference = SecretReference(string: referenceString) else {
-      throw LilpwError(exitCode: .usage, message: "--env expects KEY=lilpw://item/field, got \"\(raw)\"")
+      throw LilpassError(exitCode: .usage, message: "--env expects KEY=lilpass://item/field, got \"\(raw)\"")
     }
     return (key, reference)
   }
@@ -25,7 +25,7 @@ public enum LilpwRun {
     var resolved: [String: String] = [:]
     for raw in assignments {
       let (key, reference) = try parseAssignment(raw)
-      let item = try await LilpwCommands.resolveItem(reference.item, client: client)
+      let item = try await LilpassCommands.resolveItem(reference.item, client: client)
       resolved[key] = try await SecretResolver.value(for: reference.field, in: item, client: client)
     }
     return resolved
@@ -33,13 +33,13 @@ public enum LilpwRun {
 
   /// Execs `executable` (resolved against `PATH` via `/usr/bin/env`, matching a shell's own lookup)
   /// with `arguments`, its environment the current process's own environment overlaid with `env`,
-  /// and stdio inherited unmodified — `lilpw run` itself never reads or prints the child's output,
+  /// and stdio inherited unmodified — `lilpass run` itself never reads or prints the child's output,
   /// so a resolved secret only ever reaches the child as an environment variable.
   ///
-  /// - Returns: The child's exit code, unmodified. `lilpw run`'s own exit code is always the
-  ///   command's exit code, not one of `LilpwExitCode`'s cases (that's why this returns a plain
+  /// - Returns: The child's exit code, unmodified. `lilpass run`'s own exit code is always the
+  ///   command's exit code, not one of `LilpassExitCode`'s cases (that's why this returns a plain
   ///   `Int32` rather than throwing on a nonzero exit).
-  /// - Throws: `LilpwError` (exit code `.generic`) if `executable` can't even be launched.
+  /// - Throws: `LilpassError` (exit code `.generic`) if `executable` can't even be launched.
   public static func run(executable: String, arguments: [String], env: [String: String]) throws -> Int32 {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
@@ -54,7 +54,7 @@ public enum LilpwRun {
     do {
       try process.run()
     } catch {
-      throw LilpwError(exitCode: .generic, message: "couldn't run \"\(executable)\": \(error)")
+      throw LilpassError(exitCode: .generic, message: "couldn't run \"\(executable)\": \(error)")
     }
     process.waitUntilExit()
     return process.terminationStatus

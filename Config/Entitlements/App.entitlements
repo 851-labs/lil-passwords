@@ -10,7 +10,7 @@
 	  DB with LilPasswordsAgent) buys nothing here. App and helper share a plain
 	  directory instead; see docs/adr/0001-storage-and-process-model.md.
 	- No keychain-access-groups. Only LilPasswordsAgent touches the Keychain
-	  (legacy file-based keychain, no entitlement required); the app and lilpw
+	  (legacy file-based keychain, no entitlement required); the app and lilpass
 	  never read the vault key directly, so there is nothing to share an access
 	  group with. keychain-access-groups is also a *restricted* entitlement:
 	  AMFI kills a process that carries it without a matching provisioning

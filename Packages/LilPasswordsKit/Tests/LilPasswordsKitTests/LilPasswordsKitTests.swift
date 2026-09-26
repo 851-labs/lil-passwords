@@ -4,5 +4,5 @@ import Testing
 
 @Test func productNames() {
   #expect(LilPasswordsKit.productName == "lil passwords")
-  #expect(LilPasswordsKit.cliName == "lilpw")
+  #expect(LilPasswordsKit.cliName == "lilpass")
 }

@@ -1,7 +1,7 @@
 import Foundation
 
 /// An async/await client for `LilPasswordsAgent`'s Mach service, used by both the app and
-/// `lilpw`.
+/// `lilpass`.
 ///
 /// Owns at most one `NSXPCConnection`, created lazily on first use and torn down on invalidation
 /// or interruption so the next call reconnects rather than reusing a dead connection.

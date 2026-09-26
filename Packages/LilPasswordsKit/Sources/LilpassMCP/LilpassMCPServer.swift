@@ -1,20 +1,20 @@
 import Foundation
 import LilPasswordsKit
-import LilpwCore
+import LilpassCore
 import MCP
 
-/// Builds the `lilpw mcp` server: a stdio MCP server exposing five read-only tools that wrap
-/// `LilpwCommands`, the exact same logic layer the `lilpw` CLI itself calls (851-2431).
+/// Builds the `lilpass mcp` server: a stdio MCP server exposing five read-only tools that wrap
+/// `LilpassCommands`, the exact same logic layer the `lilpass` CLI itself calls (851-2431).
 ///
 /// Every tool here is read-only (`readOnlyHint: true`) — none of them mutate the vault, matching
-/// `lilpw`'s own command set (nothing in 851-2430 writes to the vault either). Every tool's error
-/// text is `LilpwError.from(_:).message`, the identical safe-to-print message the CLI writes to
+/// `lilpass`'s own command set (nothing in 851-2430 writes to the vault either). Every tool's error
+/// text is `LilpassError.from(_:).message`, the identical safe-to-print message the CLI writes to
 /// stderr for the same failure, satisfying "errors must map to MCP tool errors with the same
 /// messages as the CLI." Only the transport differs: an MCP `CallTool.Result(isError: true)`
-/// instead of a stderr line plus one of `LilpwExitCode`'s process exit codes.
-public enum LilpwMCP {
-  /// `lilpw mcp`'s server identity, echoed to clients during `initialize`.
-  public static let serverName = "lilpw"
+/// instead of a stderr line plus one of `LilpassExitCode`'s process exit codes.
+public enum LilpassMCP {
+  /// `lilpass mcp`'s server identity, echoed to clients during `initialize`.
+  public static let serverName = "lilpass"
   public static let serverVersion = "1.0.0"
 
   /// Builds a fully configured `Server` with every tool handler registered, ready for
@@ -86,7 +86,7 @@ public enum LilpwMCP {
       name: "get_password",
       description: """
         Get the full record for one password item, including its password and notes. Identify the \
-        item by title, id, or any other identifier lilpw's item resolver accepts. Fails if no item \
+        item by title, id, or any other identifier lilpass's item resolver accepts. Fails if no item \
         matches, or if more than one item matches (rather than guessing which one you meant).
         """,
       inputSchema: .object([
@@ -145,7 +145,7 @@ public enum LilpwMCP {
 
   // MARK: - Dispatch
 
-  /// A generated password's JSON shape — `LilpwCommands.generate` itself just returns a bare
+  /// A generated password's JSON shape — `LilpassCommands.generate` itself just returns a bare
   /// `String`, but every other tool here returns a JSON object, so this wraps it for consistency
   /// rather than returning an unstructured string as this tool's only exception.
   private struct GeneratedPassword: Codable, Sendable {
@@ -157,49 +157,49 @@ public enum LilpwMCP {
       switch params.name {
       case "list_passwords":
         let category = params.arguments?["category"]?.stringValue
-        let items = try await LilpwCommands.list(client: client, category: category)
+        let items = try await LilpassCommands.list(client: client, category: category)
         return try encoded(items)
 
       case "search_passwords":
         let query = try requireString("query", from: params)
-        let items = try await LilpwCommands.search(client: client, query: query)
+        let items = try await LilpassCommands.search(client: client, query: query)
         return try encoded(items)
 
       case "get_password":
         let item = try requireString("item", from: params)
-        let detail = try await LilpwCommands.getDetail(client: client, identifier: item)
+        let detail = try await LilpassCommands.getDetail(client: client, identifier: item)
         return try encoded(detail)
 
       case "get_verification_code":
         let item = try requireString("item", from: params)
-        let code = try await LilpwCommands.totp(client: client, identifier: item)
+        let code = try await LilpassCommands.totp(client: client, identifier: item)
         return try encoded(code)
 
       case "generate_password":
         let length = params.arguments?["length"].flatMap { Int($0) }
         let noSymbols = params.arguments?["noSymbols"]?.boolValue ?? false
-        let password = try await LilpwCommands.generate(client: client, length: length, noSymbols: noSymbols)
+        let password = try await LilpassCommands.generate(client: client, length: length, noSymbols: noSymbols)
         return try encoded(GeneratedPassword(password: password))
 
       default:
         return errorResult("Unknown tool: \(params.name)")
       }
     } catch {
-      return errorResult(LilpwError.from(error).message)
+      return errorResult(LilpassError.from(error).message)
     }
   }
 
-  /// Reads a required, non-empty string argument, throwing a `LilpwError` (mapped to the same
+  /// Reads a required, non-empty string argument, throwing a `LilpassError` (mapped to the same
   /// "usage" exit-code family the CLI would use for a bad argument) if it's missing or blank.
   private static func requireString(_ key: String, from params: CallTool.Parameters) throws -> String {
     guard let value = params.arguments?[key]?.stringValue, !value.isEmpty else {
-      throw LilpwError(exitCode: .usage, message: "\(params.name) requires a non-empty \"\(key)\" argument")
+      throw LilpassError(exitCode: .usage, message: "\(params.name) requires a non-empty \"\(key)\" argument")
     }
     return value
   }
 
   private static func encoded<T: Encodable>(_ value: T) throws -> CallTool.Result {
-    guard let json = LilpwJSON.string(value) else {
+    guard let json = LilpassJSON.string(value) else {
       return errorResult("failed to encode tool result")
     }
     return CallTool.Result(content: [.text(text: json, annotations: nil, _meta: nil)], isError: false)

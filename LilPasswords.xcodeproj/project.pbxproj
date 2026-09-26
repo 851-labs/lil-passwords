@@ -7,25 +7,25 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		18DBFFAF699B21118F7DE3E8 /* lilpass in Embed Dependencies */ = {isa = PBXBuildFile; fileRef = C1EE44597B7D4A967C806C1E /* lilpass */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		1C49D3CFE10E6FD7DDC06E50 /* LilPasswordsAgent in Embed Dependencies */ = {isa = PBXBuildFile; fileRef = F2BF470827AD396CCE39BD0D /* LilPasswordsAgent */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		52AE76DCC3AC2462FF5865C7 /* LilpwMCP in Frameworks */ = {isa = PBXBuildFile; productRef = B48E20BA012BACC2B4566E71 /* LilpwMCP */; };
-		685D83EF594BA43461B318E3 /* LilpwCore in Frameworks */ = {isa = PBXBuildFile; productRef = F86E109BE2B39D751788D159 /* LilpwCore */; };
-		75DF806B28149C6EA83418AE /* LilPasswordsKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1C98477EB7D07F3015822E98 /* LilPasswordsKit */; };
 		78FFF7FF14F6A9EACB0E37E6 /* LilPasswordsKit in Frameworks */ = {isa = PBXBuildFile; productRef = B41A41E642B0A614A5A75DA7 /* LilPasswordsKit */; };
+		79287A7FC0FE66AC92E1BFC4 /* LilPasswordsKit in Frameworks */ = {isa = PBXBuildFile; productRef = 5EBA761A968E93EEADB84FEA /* LilPasswordsKit */; };
 		C68E97F864E0BE5A9CD3AAE3 /* LilPasswordsKit in Frameworks */ = {isa = PBXBuildFile; productRef = E539F5199FCE7076CD81B5FA /* LilPasswordsKit */; };
-		D97B8D9FFD1D443D7B49DCAF /* lilpw in Embed Dependencies */ = {isa = PBXBuildFile; fileRef = E987E5C00D681F00EA3D6EAD /* lilpw */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		DC954091C6AD0DF0339D5D6D /* ArgumentParser in Frameworks */ = {isa = PBXBuildFile; productRef = D76C83E588F934A906F858F8 /* ArgumentParser */; };
 		DCF7C7F33992843800251E37 /* com.851labs.lilpasswords.agent.plist in CopyFiles */ = {isa = PBXBuildFile; fileRef = 1205EE660A0836A88635F51F /* com.851labs.lilpasswords.agent.plist */; };
+		E4B94333172C44B03CF0C9BC /* LilpassCore in Frameworks */ = {isa = PBXBuildFile; productRef = 23A2A855BC2ABEAE1636380C /* LilpassCore */; };
 		EA16D8D61ED6C27BADEA23DF /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 3EF65E8227AAFAF25E3C67B9 /* Sparkle */; };
+		F053D6A6E91FDCE6AE923B3F /* LilpassMCP in Frameworks */ = {isa = PBXBuildFile; productRef = A4C7E267F9F9C2E52C8B987F /* LilpassMCP */; };
+		FAB20C989F973F9A6AD5EF11 /* ArgumentParser in Frameworks */ = {isa = PBXBuildFile; productRef = BC999D5C891E8E474D84F3FD /* ArgumentParser */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		82FBCDF6F8F66FC9386DA405 /* PBXContainerItemProxy */ = {
+		0985D8A9D2900A16BEE74D9B /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 9DD56955C3C8D41688239CF2 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 0E0291E7D58CBE39A251C44B;
-			remoteInfo = lilpw;
+			remoteGlobalIDString = C7BA3BBB2757E54A90FDA6C6;
+			remoteInfo = lilpass;
 		};
 		85CF5696180923F9EE86BB69 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -44,7 +44,7 @@
 			dstSubfolderSpec = 1;
 			files = (
 				1C49D3CFE10E6FD7DDC06E50 /* LilPasswordsAgent in Embed Dependencies */,
-				D97B8D9FFD1D443D7B49DCAF /* lilpw in Embed Dependencies */,
+				18DBFFAF699B21118F7DE3E8 /* lilpass in Embed Dependencies */,
 			);
 			name = "Embed Dependencies";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -65,8 +65,8 @@
 		1205EE660A0836A88635F51F /* com.851labs.lilpasswords.agent.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = com.851labs.lilpasswords.agent.plist; sourceTree = "<group>"; };
 		1552750737D8BD27B57FCF51 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
 		9752809980BB70168B33CB2C /* LilPasswordsKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LilPasswordsKit; path = Packages/LilPasswordsKit; sourceTree = SOURCE_ROOT; };
+		C1EE44597B7D4A967C806C1E /* lilpass */ = {isa = PBXFileReference; includeInIndex = 0; path = lilpass; sourceTree = BUILT_PRODUCTS_DIR; };
 		E16AB1A3115C01ADF6D2E139 /* LilPasswords.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LilPasswords.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		E987E5C00D681F00EA3D6EAD /* lilpw */ = {isa = PBXFileReference; includeInIndex = 0; path = lilpw; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2BF470827AD396CCE39BD0D /* LilPasswordsAgent */ = {isa = PBXFileReference; includeInIndex = 0; path = LilPasswordsAgent; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -104,17 +104,6 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		3069302E6B0D78ABFB4C2DA3 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				75DF806B28149C6EA83418AE /* LilPasswordsKit in Frameworks */,
-				685D83EF594BA43461B318E3 /* LilpwCore in Frameworks */,
-				52AE76DCC3AC2462FF5865C7 /* LilpwMCP in Frameworks */,
-				DC954091C6AD0DF0339D5D6D /* ArgumentParser in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		36CCC4E76E3367C3AD14AC69 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -129,6 +118,17 @@
 			buildActionMask = 2147483647;
 			files = (
 				78FFF7FF14F6A9EACB0E37E6 /* LilPasswordsKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C29AB4EB39CD1B7027D60A2E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				79287A7FC0FE66AC92E1BFC4 /* LilPasswordsKit in Frameworks */,
+				E4B94333172C44B03CF0C9BC /* LilpassCore in Frameworks */,
+				F053D6A6E91FDCE6AE923B3F /* LilpassMCP in Frameworks */,
+				FAB20C989F973F9A6AD5EF11 /* ArgumentParser in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -191,9 +191,9 @@
 		A903EE70C6B646F3E5436F31 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				C1EE44597B7D4A967C806C1E /* lilpass */,
 				E16AB1A3115C01ADF6D2E139 /* LilPasswords.app */,
 				F2BF470827AD396CCE39BD0D /* LilPasswordsAgent */,
-				E987E5C00D681F00EA3D6EAD /* lilpw */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -209,32 +209,6 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		0E0291E7D58CBE39A251C44B /* lilpw */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 7C9C8683C652A3B3AAD4CB40 /* Build configuration list for PBXNativeTarget "lilpw" */;
-			buildPhases = (
-				FD35CB94712B97E7E68D06A3 /* Sources */,
-				629D63ADFF8F950F3A746381 /* Resources */,
-				3069302E6B0D78ABFB4C2DA3 /* Frameworks */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				027A1C65B96B36F2C7C8C45F /* Sources */,
-			);
-			name = lilpw;
-			packageProductDependencies = (
-				1C98477EB7D07F3015822E98 /* LilPasswordsKit */,
-				F86E109BE2B39D751788D159 /* LilpwCore */,
-				B48E20BA012BACC2B4566E71 /* LilpwMCP */,
-				D76C83E588F934A906F858F8 /* ArgumentParser */,
-			);
-			productName = lilpw;
-			productReference = E987E5C00D681F00EA3D6EAD /* lilpw */;
-			productType = "com.apple.product-type.tool";
-		};
 		4807B7DB294ECA66F2907C7F /* LilPasswordsAgent */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = D1DE33B9C08B5F49AC883F2E /* Build configuration list for PBXNativeTarget "LilPasswordsAgent" */;
@@ -272,7 +246,7 @@
 			);
 			dependencies = (
 				02BACF80CDDA64EAC0D740DB /* PBXTargetDependency */,
-				EA7AD4626BF0F5C52529A5C9 /* PBXTargetDependency */,
+				AFF7F6DB66C28A8088734966 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				8BD3E7C9863E5099B2172F5C /* Sources */,
@@ -286,6 +260,32 @@
 			productReference = E16AB1A3115C01ADF6D2E139 /* LilPasswords.app */;
 			productType = "com.apple.product-type.application";
 		};
+		C7BA3BBB2757E54A90FDA6C6 /* lilpass */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 10A5398CBFEF17D5B4A05CB6 /* Build configuration list for PBXNativeTarget "lilpass" */;
+			buildPhases = (
+				CBAB91E54BB09B186410CD05 /* Sources */,
+				7DBF4ED6AC78AB401CD7E95E /* Resources */,
+				C29AB4EB39CD1B7027D60A2E /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				027A1C65B96B36F2C7C8C45F /* Sources */,
+			);
+			name = lilpass;
+			packageProductDependencies = (
+				5EBA761A968E93EEADB84FEA /* LilPasswordsKit */,
+				23A2A855BC2ABEAE1636380C /* LilpassCore */,
+				A4C7E267F9F9C2E52C8B987F /* LilpassMCP */,
+				BC999D5C891E8E474D84F3FD /* ArgumentParser */,
+			);
+			productName = lilpass;
+			productReference = C1EE44597B7D4A967C806C1E /* lilpass */;
+			productType = "com.apple.product-type.tool";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -295,15 +295,15 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
-					0E0291E7D58CBE39A251C44B = {
-						DevelopmentTeam = WH4QW9ND3J;
-						ProvisioningStyle = Manual;
-					};
 					4807B7DB294ECA66F2907C7F = {
 						DevelopmentTeam = WH4QW9ND3J;
 						ProvisioningStyle = Manual;
 					};
 					C6C645DBFB45116D7AB9C120 = {
+						DevelopmentTeam = WH4QW9ND3J;
+						ProvisioningStyle = Manual;
+					};
+					C7BA3BBB2757E54A90FDA6C6 = {
 						DevelopmentTeam = WH4QW9ND3J;
 						ProvisioningStyle = Manual;
 					};
@@ -330,7 +330,7 @@
 			targets = (
 				C6C645DBFB45116D7AB9C120 /* LilPasswords */,
 				4807B7DB294ECA66F2907C7F /* LilPasswordsAgent */,
-				0E0291E7D58CBE39A251C44B /* lilpw */,
+				C7BA3BBB2757E54A90FDA6C6 /* lilpass */,
 			);
 		};
 /* End PBXProject section */
@@ -350,7 +350,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		629D63ADFF8F950F3A746381 /* Resources */ = {
+		7DBF4ED6AC78AB401CD7E95E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -374,7 +374,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		FD35CB94712B97E7E68D06A3 /* Sources */ = {
+		CBAB91E54BB09B186410CD05 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -389,10 +389,10 @@
 			target = 4807B7DB294ECA66F2907C7F /* LilPasswordsAgent */;
 			targetProxy = 85CF5696180923F9EE86BB69 /* PBXContainerItemProxy */;
 		};
-		EA7AD4626BF0F5C52529A5C9 /* PBXTargetDependency */ = {
+		AFF7F6DB66C28A8088734966 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 0E0291E7D58CBE39A251C44B /* lilpw */;
-			targetProxy = 82FBCDF6F8F66FC9386DA405 /* PBXContainerItemProxy */;
+			target = C7BA3BBB2757E54A90FDA6C6 /* lilpass */;
+			targetProxy = 0985D8A9D2900A16BEE74D9B /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -452,6 +452,22 @@
 			};
 			name = Release;
 		};
+		399003BCCC2397F0D6CBA1A5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/Entitlements/CLI.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.851labs.lilpasswords.cli;
+				PRODUCT_NAME = lilpass;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
 		5B1418CDC302F6E1BC9488C1 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -500,22 +516,6 @@
 				SDKROOT = macosx;
 			};
 			name = Release;
-		};
-		9DC7D475B78C4D582B126663 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = Config/Entitlements/CLI.entitlements;
-				COMBINE_HIDPI_IMAGES = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.851labs.lilpasswords.cli;
-				PRODUCT_NAME = lilpw;
-				SDKROOT = macosx;
-				SKIP_INSTALL = YES;
-			};
-			name = Debug;
 		};
 		A3014E95082860AD0C915A49 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -596,7 +596,7 @@
 			};
 			name = Debug;
 		};
-		F1F318EAF2D7BE557BC80582 /* Release */ = {
+		DFF60599B0D9FB3C75FDD581 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = Config/Entitlements/CLI.entitlements;
@@ -606,7 +606,7 @@
 					"@executable_path/../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.851labs.lilpasswords.cli;
-				PRODUCT_NAME = lilpw;
+				PRODUCT_NAME = lilpass;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
 			};
@@ -615,6 +615,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		10A5398CBFEF17D5B4A05CB6 /* Build configuration list for PBXNativeTarget "lilpass" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				399003BCCC2397F0D6CBA1A5 /* Debug */,
+				DFF60599B0D9FB3C75FDD581 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		421137312003CE382C4C37BB /* Build configuration list for PBXProject "LilPasswords" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -629,15 +638,6 @@
 			buildConfigurations = (
 				B4264596ED7EFC693AFCC2AC /* Debug */,
 				88773AF7766897C03ECA82F1 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Debug;
-		};
-		7C9C8683C652A3B3AAD4CB40 /* Build configuration list for PBXNativeTarget "lilpw" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				9DC7D475B78C4D582B126663 /* Debug */,
-				F1F318EAF2D7BE557BC80582 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -680,24 +680,28 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		1C98477EB7D07F3015822E98 /* LilPasswordsKit */ = {
+		23A2A855BC2ABEAE1636380C /* LilpassCore */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = LilPasswordsKit;
+			productName = LilpassCore;
 		};
 		3EF65E8227AAFAF25E3C67B9 /* Sparkle */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 8B0421D3E31315F971591AC3 /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
 		};
+		5EBA761A968E93EEADB84FEA /* LilPasswordsKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LilPasswordsKit;
+		};
+		A4C7E267F9F9C2E52C8B987F /* LilpassMCP */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LilpassMCP;
+		};
 		B41A41E642B0A614A5A75DA7 /* LilPasswordsKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LilPasswordsKit;
 		};
-		B48E20BA012BACC2B4566E71 /* LilpwMCP */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = LilpwMCP;
-		};
-		D76C83E588F934A906F858F8 /* ArgumentParser */ = {
+		BC999D5C891E8E474D84F3FD /* ArgumentParser */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = BD178B7702B51B6E018967C0 /* XCRemoteSwiftPackageReference "swift-argument-parser" */;
 			productName = ArgumentParser;
@@ -705,10 +709,6 @@
 		E539F5199FCE7076CD81B5FA /* LilPasswordsKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LilPasswordsKit;
-		};
-		F86E109BE2B39D751788D159 /* LilpwCore */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = LilpwCore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

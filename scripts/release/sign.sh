@@ -81,9 +81,9 @@ fi
 
 # --- 2. Embedded helper tools (Contents/Helpers) ----------------------------
 AGENT_PATH="$APP_PATH/Contents/Helpers/LilPasswordsAgent"
-CLI_PATH="$APP_PATH/Contents/Helpers/lilpw"
+CLI_PATH="$APP_PATH/Contents/Helpers/lilpass"
 [[ -f "$AGENT_PATH" ]] || die "$AGENT_PATH not found — was LilPasswordsAgent embedded?"
-[[ -f "$CLI_PATH" ]] || die "$CLI_PATH not found — was lilpw embedded?"
+[[ -f "$CLI_PATH" ]] || die "$CLI_PATH not found — was lilpass embedded?"
 codesign_with_entitlements "$AGENT_PATH" "Config/Entitlements/Agent.entitlements"
 codesign_with_entitlements "$CLI_PATH" "Config/Entitlements/CLI.entitlements"
 

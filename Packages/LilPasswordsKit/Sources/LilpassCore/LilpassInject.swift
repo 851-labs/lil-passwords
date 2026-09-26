@@ -1,20 +1,20 @@
 import Foundation
 import LilPasswordsKit
 
-/// `lilpw inject -i template -o out`: replaces every `{{ lilpw://item/field }}` placeholder in a
+/// `lilpass inject -i template -o out`: replaces every `{{ lilpass://item/field }}` placeholder in a
 /// template's text with its resolved secret value.
-public enum LilpwInject {
-  /// Matches `{{ lilpw://... }}`, capturing the reference (group 1) with its surrounding
+public enum LilpassInject {
+  /// Matches `{{ lilpass://... }}`, capturing the reference (group 1) with its surrounding
   /// whitespace trimmed. `\S+?` (non-greedy) stops at the first `}}` rather than swallowing past a
   /// second placeholder on the same line.
-  private static let referencePattern = try! NSRegularExpression(pattern: #"\{\{\s*(lilpw://\S+?)\s*\}\}"#)
+  private static let referencePattern = try! NSRegularExpression(pattern: #"\{\{\s*(lilpass://\S+?)\s*\}\}"#)
 
   /// Replaces every placeholder in `template` and returns the substituted text.
   ///
   /// Resolves every placeholder before substituting any of them: if the *last* placeholder in a
   /// large template fails to resolve (locked, not found, ambiguous, malformed), nothing is
   /// substituted — a partially-filled-in template, with some secrets present and others still
-  /// showing raw `{{ lilpw://... }}` text, is worse than no output at all. The CLI only writes
+  /// showing raw `{{ lilpass://... }}` text, is worse than no output at all. The CLI only writes
   /// `-o`'s file after this returns successfully.
   public static func inject(template: String, client: AgentClient) async throws -> String {
     let fullRange = NSRange(template.startIndex..<template.endIndex, in: template)
@@ -28,9 +28,9 @@ public enum LilpwInject {
 
       let referenceString = String(template[referenceRange])
       guard let reference = SecretReference(string: referenceString) else {
-        throw LilpwError(exitCode: .usage, message: "not a valid lilpw:// reference: \"\(referenceString)\"")
+        throw LilpassError(exitCode: .usage, message: "not a valid lilpass:// reference: \"\(referenceString)\"")
       }
-      let item = try await LilpwCommands.resolveItem(reference.item, client: client)
+      let item = try await LilpassCommands.resolveItem(reference.item, client: client)
       let value = try await SecretResolver.value(for: reference.field, in: item, client: client)
       replacements.append((matchRange, value))
     }

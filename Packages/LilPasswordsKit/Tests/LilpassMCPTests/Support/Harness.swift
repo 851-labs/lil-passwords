@@ -3,19 +3,15 @@ import Foundation
 @testable import LilPasswordsKit
 
 /// The same in-process `AgentServer` + `InMemoryVaultStore` + anonymous `NSXPCListener` harness
-/// `AgentXPCEndToEndTests` uses, reused here so `LilpwCore`'s command logic is tested against a
-/// real, launchd-free XPC round trip rather than a hand-rolled fake `AgentClient`.
-///
-/// Lives in `LilpwCoreTests` (not shared with `LilPasswordsKitTests`, a separate SwiftPM target)
-/// because only this target needs it, and `@testable import LilPasswordsKit`'s test-only
-/// `AgentClient(endpoint:connectionSecurity:)` initializer is what makes it possible without a real
-/// Mach service.
-///
-/// `LilpwMCPTests` needs the exact same harness and keeps its own copy at
-/// `Tests/LilpwMCPTests/Support/Harness.swift` rather than sharing this one — SwiftPM doesn't allow
-/// a single file to belong to two targets, and there's no non-test target this could move into
-/// without losing `@testable import`'s access to `AgentClient`'s test-only initializer. Keep the two
+/// `LilpassCoreTests` uses (see `Tests/LilpassCoreTests/Support/Harness.swift`), duplicated here rather
+/// than shared: SwiftPM doesn't allow a single file to belong to two test targets, and there's no
+/// non-test target this could move into without losing `@testable import`'s access to
+/// `AgentClient`'s test-only `AgentClient(endpoint:connectionSecurity:)` initializer. Keep the two
 /// copies in sync if either changes.
+///
+/// `LilpassMCPTests` uses this to drive `LilpassMCP.makeServer(client:)` against a real, launchd-free
+/// XPC round trip instead of a hand-rolled fake `AgentClient`, the same way `LilpassCoreTests` tests
+/// `LilpassCore`'s command logic.
 final class Harness {
   let server: AgentServer
   let listener: NSXPCListener
@@ -29,7 +25,8 @@ final class Harness {
   /// a real `KeychainVaultKeyStore` would already have it by the time a real app sends `.unlock`.
   /// Likewise, this in-process XPC connection's peer resolves to the *test binary's* own real
   /// code-signing identity (not `nil`), so `appCallerBundleIdentifier` is told to trust that
-  /// identity as "the app" the same way that harness does.
+  /// identity as "the app" the same way that harness does. Keep this in sync with
+  /// `LilpassCoreTests/Support/Harness.swift` if either changes.
   init(
     items: [PasswordItem] = [],
     accessPolicy: any AccessPolicyProviding = AlwaysAllowAccessPolicy(),

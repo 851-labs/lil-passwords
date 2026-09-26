@@ -1,6 +1,6 @@
 import Foundation
 import LilPasswordsKit
-import LilpwCore
+import LilpassCore
 import Testing
 
 @Suite struct ItemResolverTests {
@@ -13,7 +13,7 @@ import Testing
 
   @Test func unknownIdIsNotFoundEvenIfATitleHappensToCollide() {
     let item = makeTestItem()
-    #expect(throws: LilpwError.self) {
+    #expect(throws: LilpassError.self) {
       _ = try ItemResolver.resolve(UUID().uuidString, in: [item])
     }
   }
@@ -26,7 +26,7 @@ import Testing
 
   @Test func doesNotMatchATitleSubstring() {
     let item = makeTestItem(title: "GitHub Enterprise")
-    #expect(throws: LilpwError.self) {
+    #expect(throws: LilpassError.self) {
       _ = try ItemResolver.resolve("github", in: [item])
     }
   }
@@ -43,12 +43,12 @@ import Testing
     do {
       _ = try ItemResolver.resolve("github work", in: [a, b])
       Issue.record("expected .ambiguous")
-    } catch let error as LilpwError {
+    } catch let error as LilpassError {
       #expect(error.exitCode == .ambiguous)
       #expect(error.message.contains(a.id.uuidString))
       #expect(error.message.contains(b.id.uuidString))
     } catch {
-      Issue.record("expected LilpwError, got \(error)")
+      Issue.record("expected LilpassError, got \(error)")
     }
   }
 
@@ -56,10 +56,10 @@ import Testing
     do {
       _ = try ItemResolver.resolve("nonexistent", in: [makeTestItem()])
       Issue.record("expected .notFound")
-    } catch let error as LilpwError {
+    } catch let error as LilpassError {
       #expect(error.exitCode == .notFound)
     } catch {
-      Issue.record("expected LilpwError, got \(error)")
+      Issue.record("expected LilpassError, got \(error)")
     }
   }
 }

@@ -7,7 +7,7 @@
 
 `VaultRecord`/`RecordCodec` (851-2403) already define the sync-ready envelope and how to seal/open one against a vault key. `VaultCrypto` (851-2446) already defines the vault key, recovery key, and wrap/unwrap. Neither is persisted anywhere yet — that's this ticket. `docs/adr/0001-storage-and-process-model.md` already decided *where* the database file lives and *how* processes learn about each other's writes; this ADR is about what's built on top of those decisions: the actual table schema, the store's CRUD/lifecycle API, and how change observation is wired up in code.
 
-Per the project decisions, `LilPasswordsAgent` will be the process that actually owns a `VaultStore` instance and serves it to the app/`lilpw` over XPC — but that XPC layer is 851-2427, not this ticket. `VaultStore` itself must have zero knowledge of XPC, agents, or processes; it's a plain library type in `LilPasswordsKit` that could just as easily be embedded directly in a single-process test or a SwiftUI preview.
+Per the project decisions, `LilPasswordsAgent` will be the process that actually owns a `VaultStore` instance and serves it to the app/`lilpass` over XPC — but that XPC layer is 851-2427, not this ticket. `VaultStore` itself must have zero knowledge of XPC, agents, or processes; it's a plain library type in `LilPasswordsKit` that could just as easily be embedded directly in a single-process test or a SwiftUI preview.
 
 ## Decision
 

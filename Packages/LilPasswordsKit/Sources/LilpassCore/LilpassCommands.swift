@@ -1,20 +1,20 @@
 import Foundation
 import LilPasswordsKit
 
-/// The logic behind every `lilpw` subcommand except `run` (`LilpwRun`) and `inject`
-/// (`LilpwInject`), which get their own files.
+/// The logic behind every `lilpass` subcommand except `run` (`LilpassRun`) and `inject`
+/// (`LilpassInject`), which get their own files.
 ///
 /// Every function here takes an already-connected `AgentClient` and returns a plain `Codable`
-/// result (or throws `LilpwError`) — no printing, no `--json` formatting, no exit-code handling.
+/// result (or throws `LilpassError`) — no printing, no `--json` formatting, no exit-code handling.
 /// That's the CLI target's job (it decides text vs. JSON and calls `exit(_:)`), which is what
 /// makes this testable against an in-process `AgentServer` + `InMemoryVaultStore` the way
 /// `AgentXPCEndToEndTests` already tests `AgentServer` itself.
-public enum LilpwCommands {
+public enum LilpassCommands {
   public static func status(client: AgentClient) async throws -> AgentStatus {
     do {
       return try await client.status()
     } catch {
-      throw LilpwError.from(error)
+      throw LilpassError.from(error)
     }
   }
 
@@ -27,7 +27,7 @@ public enum LilpwCommands {
       let items = try await client.list()
       return filtered(items, byCategory: category).map(ItemSummary.init)
     } catch {
-      throw LilpwError.from(error)
+      throw LilpassError.from(error)
     }
   }
 
@@ -36,24 +36,24 @@ public enum LilpwCommands {
       let items = try await client.search(query)
       return items.map(ItemSummary.init)
     } catch {
-      throw LilpwError.from(error)
+      throw LilpassError.from(error)
     }
   }
 
-  /// `lilpw get <item>` with no `--field`: the full, secret-including record.
+  /// `lilpass get <item>` with no `--field`: the full, secret-including record.
   public static func getDetail(client: AgentClient, identifier: String) async throws -> ItemDetail {
     let item = try await resolveItem(identifier, client: client)
     return ItemDetail(item)
   }
 
-  /// `lilpw get <item> --field <field>`: just that one field's value.
+  /// `lilpass get <item> --field <field>`: just that one field's value.
   public static func getField(client: AgentClient, identifier: String, field: ItemField) async throws -> FieldValue {
     let item = try await resolveItem(identifier, client: client)
     let value = try await SecretResolver.value(for: field, in: item, client: client)
     return FieldValue(item: item.title, field: field, value: value)
   }
 
-  /// `lilpw read lilpw://<item>/<field>`.
+  /// `lilpass read lilpass://<item>/<field>`.
   public static func read(client: AgentClient, reference: SecretReference) async throws -> FieldValue {
     let item = try await resolveItem(reference.item, client: client)
     let value = try await SecretResolver.value(for: reference.field, in: item, client: client)
@@ -65,7 +65,7 @@ public enum LilpwCommands {
     do {
       return try await client.totpCode(.id(item.id))
     } catch {
-      throw LilpwError.from(error)
+      throw LilpassError.from(error)
     }
   }
 
@@ -85,19 +85,19 @@ public enum LilpwCommands {
     do {
       return try await client.generatePassword(format: format)
     } catch {
-      throw LilpwError.from(error)
+      throw LilpassError.from(error)
     }
   }
 
   /// Shared by every command that needs to resolve exactly one item: fetches the full list once
-  /// and resolves `identifier` against it with `ItemResolver`. `LilpwRun` and `LilpwInject` call
-  /// this directly for each `lilpw://` reference they need to resolve.
+  /// and resolves `identifier` against it with `ItemResolver`. `LilpassRun` and `LilpassInject` call
+  /// this directly for each `lilpass://` reference they need to resolve.
   public static func resolveItem(_ identifier: String, client: AgentClient) async throws -> PasswordItem {
     let items: [PasswordItem]
     do {
       items = try await client.list()
     } catch {
-      throw LilpwError.from(error)
+      throw LilpassError.from(error)
     }
     return try ItemResolver.resolve(identifier, in: items)
   }

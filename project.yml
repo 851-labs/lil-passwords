@@ -12,10 +12,10 @@ configFiles:
 packages:
   LilPasswordsKit:
     path: Packages/LilPasswordsKit
-  # Only the `lilpw` CLI target depends on this — kept out of
-  # Packages/LilPasswordsKit/Package.swift so LilpwCore (and the rest of
+  # Only the `lilpass` CLI target depends on this — kept out of
+  # Packages/LilPasswordsKit/Package.swift so LilpassCore (and the rest of
   # LilPasswordsKit) stays free of argument-parsing concerns; see
-  # LilpwCore's own doc comments for the split between "logic" (testable,
+  # LilpassCore's own doc comments for the split between "logic" (testable,
   # no ArgumentParser) and "argument parsing" (the CLI target only).
   ArgumentParser:
     url: https://github.com/apple/swift-argument-parser
@@ -58,7 +58,7 @@ targets:
         copy:
           destination: wrapper
           subpath: Contents/Helpers
-      - target: lilpw
+      - target: lilpass
         embed: true
         codeSign: true
         copy:
@@ -102,7 +102,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Config/Entitlements/Agent.entitlements
         # Embedded by LilPasswords; don't also install a standalone copy into archives.
         SKIP_INSTALL: YES
-  lilpw:
+  lilpass:
     type: tool
     platform: macOS
     sources:
@@ -111,17 +111,17 @@ targets:
     dependencies:
       - package: LilPasswordsKit
       - package: LilPasswordsKit
-        product: LilpwCore
-      # `lilpw mcp` (851-2431). Depends transitively on the swift-sdk `MCP` product declared in
+        product: LilpassCore
+      # `lilpass mcp` (851-2431). Depends transitively on the swift-sdk `MCP` product declared in
       # Packages/LilPasswordsKit/Package.swift — no separate top-level `packages:` entry needed
-      # here, SwiftPM resolves that through LilpwMCP's own dependency graph.
+      # here, SwiftPM resolves that through LilpassMCP's own dependency graph.
       - package: LilPasswordsKit
-        product: LilpwMCP
+        product: LilpassMCP
       - package: ArgumentParser
         product: ArgumentParser
     settings:
       base:
-        PRODUCT_NAME: lilpw
+        PRODUCT_NAME: lilpass
         PRODUCT_BUNDLE_IDENTIFIER: com.851labs.lilpasswords.cli
         CODE_SIGN_ENTITLEMENTS: Config/Entitlements/CLI.entitlements
         # Embedded by LilPasswords; don't also install a standalone copy into archives.
@@ -132,7 +132,7 @@ schemes:
       targets:
         LilPasswords: all
         LilPasswordsAgent: all
-        lilpw: all
+        lilpass: all
     run:
       config: Debug
     test:

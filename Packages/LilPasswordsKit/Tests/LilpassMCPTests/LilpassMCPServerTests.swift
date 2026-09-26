@@ -1,21 +1,21 @@
 import Foundation
 import LilPasswordsKit
-import LilpwCore
+import LilpassCore
 import MCP
 import Testing
 
-@testable import LilpwMCP
+@testable import LilpassMCP
 
-/// Drives `LilpwMCP.makeServer(client:)` over a real JSON-RPC round trip using the SDK's own
-/// `InMemoryTransport` and `Client` — the protocol-level equivalent of `LilpwCoreTests`' in-process
+/// Drives `LilpassMCP.makeServer(client:)` over a real JSON-RPC round trip using the SDK's own
+/// `InMemoryTransport` and `Client` — the protocol-level equivalent of `LilpassCoreTests`' in-process
 /// `AgentServer` harness. This exercises the exact wire path a real `claude mcp add`-configured
-/// client would use (`initialize`, `tools/list`, `tools/call`), just without spawning the `lilpw`
+/// client would use (`initialize`, `tools/list`, `tools/call`), just without spawning the `lilpass`
 /// binary or going over stdio.
-@Suite struct LilpwMCPServerTests {
-  /// Connects a fresh `Client` to a `LilpwMCP` server backed by `harness.client`, ready for
+@Suite struct LilpassMCPServerTests {
+  /// Connects a fresh `Client` to a `LilpassMCP` server backed by `harness.client`, ready for
   /// `listTools`/`callTool`.
   private func connectedClient(to harness: Harness) async throws -> Client {
-    let server = await LilpwMCP.makeServer(client: harness.client)
+    let server = await LilpassMCP.makeServer(client: harness.client)
     let (clientTransport, serverTransport) = await InMemoryTransport.createConnectedPair()
     try await server.start(transport: serverTransport)
 
@@ -125,7 +125,7 @@ import Testing
     #expect(password.count == 16)
   }
 
-  // MARK: - Error mapping (same messages as the CLI's `LilpwError`)
+  // MARK: - Error mapping (same messages as the CLI's `LilpassError`)
 
   @Test func getPasswordOnAnUnknownItemReturnsTheCLIsNotFoundMessage() async throws {
     let harness = try await Harness()
@@ -135,7 +135,7 @@ import Testing
     #expect(isError == true)
     let message = try #require(text(of: content))
     let expected = try await expectedCLIMessage {
-      _ = try await LilpwCommands.getDetail(client: harness.client, identifier: "nonexistent")
+      _ = try await LilpassCommands.getDetail(client: harness.client, identifier: "nonexistent")
     }
     #expect(message == expected)
   }
@@ -150,7 +150,7 @@ import Testing
     #expect(isError == true)
     let message = try #require(text(of: content))
     let expected = try await expectedCLIMessage {
-      _ = try await LilpwCommands.getDetail(client: harness.client, identifier: "GitHub Work")
+      _ = try await LilpassCommands.getDetail(client: harness.client, identifier: "GitHub Work")
     }
     #expect(message == expected)
   }
@@ -163,7 +163,7 @@ import Testing
     #expect(isError == true)
     let message = try #require(text(of: content))
     let expected = try await expectedCLIMessage {
-      _ = try await LilpwCommands.list(client: harness.client, category: nil)
+      _ = try await LilpassCommands.list(client: harness.client, category: nil)
     }
     #expect(message == expected)
   }
@@ -176,7 +176,7 @@ import Testing
     #expect(isError == true)
     let message = try #require(text(of: content))
     let expected = try await expectedCLIMessage {
-      _ = try await LilpwCommands.list(client: harness.client, category: nil)
+      _ = try await LilpassCommands.list(client: harness.client, category: nil)
     }
     #expect(message == expected)
   }
@@ -211,8 +211,8 @@ import Testing
     return try? JSONDecoder().decode(GeneratedPassword.self, from: data).password
   }
 
-  /// Runs `operation` (a direct `LilpwCommands` call expected to throw) and returns the exact
-  /// message `LilpwError.from(_:)` would produce — the same message the CLI prints to stderr for
+  /// Runs `operation` (a direct `LilpassCommands` call expected to throw) and returns the exact
+  /// message `LilpassError.from(_:)` would produce — the same message the CLI prints to stderr for
   /// the same failure, and what an MCP tool error's text should equal.
   private func expectedCLIMessage(_ operation: () async throws -> Void) async throws -> String {
     do {
@@ -220,7 +220,7 @@ import Testing
       Issue.record("expected operation to throw")
       return ""
     } catch {
-      return LilpwError.from(error).message
+      return LilpassError.from(error).message
     }
   }
 }

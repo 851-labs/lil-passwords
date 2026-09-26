@@ -35,7 +35,7 @@ standalone script you can also run on its own once earlier stages have run:
    identity; signing happens as its own step next.
 3. `sign.sh` — signs inside out with each target's entitlements: Sparkle's
    bundled helper tools first (`Autoupdate`, `Updater.app`, its two XPC
-   services), then the embedded `LilPasswordsAgent` and `lilpw`
+   services), then the embedded `LilPasswordsAgent` and `lilpass`
    (`Contents/Helpers`), then `lil passwords.app` itself last, since its seal
    has to cover everything already signed inside it. Uses whichever identity
    `scripts/release/lib.sh`'s `signing_identity()` resolves — ad hoc today, a

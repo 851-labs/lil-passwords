@@ -1,8 +1,8 @@
-/// Shared core for lil passwords: the app, the `LilPasswordsAgent` helper, and the `lilpw` CLI.
+/// Shared core for lil passwords: the app, the `LilPasswordsAgent` helper, and the `lilpass` CLI.
 public enum LilPasswordsKit {
   /// Display name used across the app, helper, and CLI.
   public static let productName = "lil passwords"
 
   /// Name of the command-line tool.
-  public static let cliName = "lilpw"
+  public static let cliName = "lilpass"
 }

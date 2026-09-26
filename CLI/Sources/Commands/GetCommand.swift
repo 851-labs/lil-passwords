@@ -1,6 +1,6 @@
 import ArgumentParser
 import LilPasswordsKit
-import LilpwCore
+import LilpassCore
 
 struct GetCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
@@ -23,10 +23,10 @@ struct GetCommand: AsyncParsableCommand {
   func run() async throws {
     let client = AgentClient()
     if let field {
-      let value = try await LilpwCommands.getField(client: client, identifier: item, field: field)
+      let value = try await LilpassCommands.getField(client: client, identifier: item, field: field)
       Output.print(value, asJSON: jsonOutput.json) { value in print(value.value) }
     } else {
-      let detail = try await LilpwCommands.getDetail(client: client, identifier: item)
+      let detail = try await LilpassCommands.getDetail(client: client, identifier: item)
       Output.print(detail, asJSON: jsonOutput.json) { detail in
         print("title: \(detail.title)")
         if let username = detail.usernames.first { print("username: \(username)") }
