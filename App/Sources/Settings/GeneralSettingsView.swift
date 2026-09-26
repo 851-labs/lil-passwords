@@ -63,9 +63,19 @@ struct GeneralSettingsView: View {
       } header: {
         Text("AutoFill")
       } footer: {
+        // A single string literal, not `+`-concatenated across lines (`\` inside a triple-quoted
+        // literal just suppresses the source newline, it isn't string concatenation): `Text(_:)`
+        // only auto-localizes via the String Catalog when it receives one `LocalizedStringKey`
+        // literal. `"a" + "b"` type-infers to a plain `String` instead, which silently opts this
+        // out of localization/extraction entirely — confirmed missing from
+        // App/Resources/Localizable.xcstrings for the pre-existing "Menu Bar" footer just below,
+        // which has the same `+`-split shape. Not fixing that pre-existing one here (out of scope
+        // for 851-2441), but not repeating its bug in this new section either.
         Text(
-          "To let Safari and other apps offer lil passwords when filling in a username and password, turn it on in "
-            + "System Settings → General → AutoFill & Passwords.")
+          """
+          To let Safari and other apps offer lil passwords when filling in a username and password, \
+          turn it on in System Settings → General → AutoFill & Passwords.
+          """)
       }
 
       // 851-2425. "Show in menu bar" is the actual visibility toggle for the `NSStatusItem`;

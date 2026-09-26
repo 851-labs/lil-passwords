@@ -26,7 +26,7 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
   private let listContainer = NSView()
   private let searchField = NSSearchField()
   private let scrollView = NSScrollView()
-  private let tableView = NSTableView()
+  private let tableView = CredentialTableView()
   private let statusField = NSTextField(wrappingLabelWithString: "")
 
   private var serviceIdentifiers: [ASCredentialServiceIdentifier] = []
@@ -38,9 +38,11 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
   // MARK: Locked UI — shared by the list flow and `prepareInterfaceToProvideCredential(for:)`
 
   private let lockedContainer = NSView()
-  private let lockedTitleField = NSTextField(labelWithString: "lil passwords is locked")
-  private let lockedSubtitleField = NSTextField(wrappingLabelWithString: "Unlock lil passwords to use AutoFill.")
-  private let unlockButton = NSButton(title: "Unlock…", target: nil, action: nil)
+  private let lockedTitleField = NSTextField(
+    labelWithString: String(localized: "\(LilPasswordsKit.productName) is locked"))
+  private let lockedSubtitleField = NSTextField(
+    wrappingLabelWithString: String(localized: "Unlock \(LilPasswordsKit.productName) to use AutoFill."))
+  private let unlockButton = NSButton(title: String(localized: "Unlock…"), target: nil, action: nil)
   private let unlockErrorField = NSTextField(wrappingLabelWithString: "")
 
   /// Set only by `prepareInterfaceToProvideCredential(for:)`, when the system is asking for one
@@ -103,7 +105,9 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
     } catch AgentClient.RequestError.remote(.locked) {
       showLocked()
     } catch {
-      showList(loading: false, statusMessage: "Couldn't reach lil passwords' background helper.")
+      showList(
+        loading: false,
+        statusMessage: String(localized: "Couldn't reach \(LilPasswordsKit.productName)' background helper."))
     }
   }
 
@@ -125,12 +129,13 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
     unlockButton.isEnabled = false
     Task {
       do {
-        try await authenticator.authenticate(reason: "Unlock lil passwords to use AutoFill")
+        try await authenticator.authenticate(
+          reason: String(localized: "Unlock \(LilPasswordsKit.productName) to use AutoFill"))
         try await agentClient.unlock()
         await retryAfterUnlock()
       } catch {
         unlockButton.isEnabled = true
-        unlockErrorField.stringValue = "Couldn't unlock lil passwords."
+        unlockErrorField.stringValue = String(localized: "Couldn't unlock \(LilPasswordsKit.productName).")
         unlockErrorField.isHidden = false
       }
     }
@@ -164,7 +169,14 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
   }
 
   @objc private func rowClicked() {
-    let row = tableView.clickedRow
+    activateRow(tableView.clickedRow)
+  }
+
+  /// `insertNewline(_:)` on ``CredentialTableView`` below (Return/Enter) reaches here too, via
+  /// `tableView.selectedRow` — mirrors `ItemTableView`'s "Return activates the selected row"
+  /// keyboard-navigation behavior in the main app's item list (docs/accessibility.md), which a
+  /// plain `NSTableView` doesn't provide on its own: only mouse clicks invoke `action` by default.
+  private func activateRow(_ row: Int) {
     guard row >= 0, row < filteredIdentities.count else { return }
     let identity = filteredIdentities[row]
     Task {
@@ -186,7 +198,7 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
     lockedContainer.isHidden = true
     listContainer.isHidden = false
     if loading {
-      statusField.stringValue = "Loading…"
+      statusField.stringValue = String(localized: "Loading…")
       statusField.isHidden = false
       scrollView.isHidden = true
     } else if let statusMessage {
@@ -219,7 +231,12 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
     ])
 
     searchField.translatesAutoresizingMaskIntoConstraints = false
-    searchField.placeholderString = "Search"
+    searchField.placeholderString = String(localized: "Search")
+    // The placeholder alone isn't reliably surfaced by VoiceOver as the field's accessible name
+    // (docs/accessibility.md's "icon-only controls" rule generalizes to any control whose visible
+    // label is decorative/placeholder text, not a real label) — an explicit label makes VoiceOver
+    // announce something more useful than "search text field" alone.
+    searchField.setAccessibilityLabel(String(localized: "Search credentials"))
     searchField.delegate = self
 
     tableView.headerView = nil
@@ -230,6 +247,10 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
     tableView.delegate = self
     tableView.target = self
     tableView.action = #selector(rowClicked)
+    tableView.onReturnKey = { [weak self] in
+      guard let self else { return }
+      self.activateRow(self.tableView.selectedRow)
+    }
     let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("credential"))
     column.width = 356
     tableView.addTableColumn(column)
@@ -334,5 +355,19 @@ extension CredentialProviderViewController: NSTableViewDataSource, NSTableViewDe
 extension CredentialProviderViewController: NSSearchFieldDelegate {
   func controlTextDidChange(_ obj: Notification) {
     filterIdentities()
+  }
+}
+
+/// A plain `NSTableView` that turns Return/Enter into a callback — mirrors `ItemTableView` in
+/// `App/Sources/MainWindow/ItemListViewController.swift` (851-2426's "Return activates the
+/// selected row" keyboard-navigation rule, docs/accessibility.md), which a stock `NSTableView`
+/// doesn't do on its own: only `target`/`action` on a mouse click fires without this override.
+private final class CredentialTableView: NSTableView {
+  var onReturnKey: (() -> Void)?
+
+  /// `insertNewline(_:)` is `NSResponder`'s standard action for Return/Enter
+  /// (`NSStandardKeyBindingResponding`), same mechanism `ItemTableView.insertNewline(_:)` uses.
+  override func insertNewline(_ sender: Any?) {
+    onReturnKey?()
   }
 }

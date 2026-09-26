@@ -259,6 +259,12 @@ targets:
     sources:
       - path: AutoFillExtension/Sources
         type: syncedFolder
+      # A separate bundle from `LilPasswords` (own Info.plist, own Contents/PlugIns location), so
+      # it can't share App/Resources/Localizable.xcstrings — needs its own String Catalog for the
+      # `String(localized:)` call sites CredentialProviderViewController.swift makes to actually be
+      # catalog-tracked/translatable rather than just falling back to their English literal.
+      - path: AutoFillExtension/Resources
+        buildPhase: resources
     dependencies:
       - package: LilPasswordsKit
     info:
@@ -280,6 +286,10 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.851labs.lilpasswords.autofill
         CODE_SIGN_ENTITLEMENTS: Config/Entitlements/AutoFillExtension.entitlements
         SKIP_INSTALL: YES
+        # Mirrors the LilPasswords app target's own SWIFT_EMIT_LOC_STRINGS comment: lets the build
+        # extract this target's own String(localized:) call sites into
+        # AutoFillExtension/Resources/Localizable.xcstrings.
+        SWIFT_EMIT_LOC_STRINGS: YES
         # 851-2441: Xcode's build system refuses to build ANY app extension target under
         # CODE_SIGN_STYLE = Manual (Config/Base.xcconfig, shared by every target) without an
         # embedded provisioning profile — "requires a provisioning profile. Enable development
