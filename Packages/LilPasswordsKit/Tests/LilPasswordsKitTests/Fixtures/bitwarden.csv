@@ -1,0 +1,4 @@
+folder,favorite,type,name,notes,fields,reprompt,login_uri,login_username,login_password,login_totp
+Social,1,login,Example Social,,,0,"https://example.com,https://m.example.com",erin@example.com,letmein123,otpauth://totp/Example:erin@example.com?secret=ABCDEFGHIJKLMNOP&issuer=Example
+,0,note,Wifi password,"SSID: home, password: hunter2",,0,,,,
+Work,0,login,Intranet,,,1,https://intranet.example.com,erin,workpass1,
