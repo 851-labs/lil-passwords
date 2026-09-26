@@ -26,9 +26,22 @@ final class SettingsTabViewController: NSTabViewController {
   // child's `preferredContentSize` on every switch — only the initially-selected tab's size
   // reliably takes effect. Without this, switching to a taller tab (Agents, with its access-log
   // table) leaves the window stuck at whichever tab loaded first and clips the extra content.
+  //
+  // `layoutSubtreeIfNeeded()` matters here, not just cosmetically: the newly-selected child's view
+  // has just been swapped into the tab view's content area, but AppKit doesn't necessarily run its
+  // layout pass (and, for an `NSHostingController` with `sizingOptions = [.intrinsicContentSize]`,
+  // recompute `preferredContentSize` from SwiftUI's actual content) until the next display cycle.
+  // Reading `preferredContentSize` before forcing that layout pass silently reads a stale value —
+  // in practice, whatever the *previously* selected (often taller) tab needed — which is exactly
+  // backwards from a General/Security tab that's shorter than Agents: the window stays oversized
+  // and the grouped-form content ends up vertically stranded in the middle of empty space instead
+  // of pinned under the toolbar.
   override func tabView(_ tabView: NSTabView, didSelect tabViewItem: NSTabViewItem?) {
     super.tabView(tabView, didSelect: tabViewItem)
-    if let size = tabViewItem?.viewController?.preferredContentSize, size != .zero {
+    guard let viewController = tabViewItem?.viewController else { return }
+    viewController.view.layoutSubtreeIfNeeded()
+    let size = viewController.preferredContentSize
+    if size != .zero {
       preferredContentSize = size
     }
   }
