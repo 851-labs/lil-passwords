@@ -34,6 +34,7 @@ struct Lilpw: AsyncParsableCommand {
       GenerateCommand.self,
       RunCommand.self,
       InjectCommand.self,
+      McpCommand.self,
     ]
   )
 
