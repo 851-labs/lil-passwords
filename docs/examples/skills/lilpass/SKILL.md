@@ -40,6 +40,19 @@ in the output file. If anything fails to resolve, nothing is written — you won
 half-filled-in file, so it's safe to just retry after fixing whatever was wrong (a typo'd item
 name, a locked vault) rather than needing to clean up a partial result first.
 
+**Setting a secret works the same way, in reverse** — `lilpass add`/`lilpass edit` never accept a
+password as a literal argument, only via `--password -` reading from stdin (or `--generate` to skip
+providing one at all):
+
+```sh
+echo -n hunter2 | lilpass add --title GitHub --username octocat --password -
+lilpass add --title "New Service" --generate --length 20
+```
+
+`add`/`edit`/`rm` all require agent access **and** a separate write-access setting the user has to
+turn on explicitly (Settings → Agents) — expect exit code `8` if it's off, same as any other
+gated operation here.
+
 ## `lilpass://item/field` reference syntax
 
 ```
@@ -74,8 +87,19 @@ than retrying blindly — turning agent access on, or unlocking the vault, is th
 ## If `lilpass` isn't available as a CLI
 
 It might instead be wired up as an MCP server (`lilpass mcp`, exposing `list_passwords`,
-`search_passwords`, `get_password`, `get_verification_code`, `generate_password`). Those tools
-follow the same "some things reveal secrets, some don't" split: `list_passwords`/
-`search_passwords` never include a password/notes/TOTP value; `get_password`/
+`search_passwords`, `get_password`, `get_verification_code`, `generate_password`, and — when write
+access is turned on — `create_password`, `update_password`, `delete_password`). Those tools follow
+the same "some things reveal secrets, some don't" split: `list_passwords`/`search_passwords`/the
+write tools never include a password/notes/TOTP value in their result; `get_password`/
 `get_verification_code` do. The same "don't reach for the revealing ones unless you actually need
 the raw value" guidance applies there too.
+
+## If a request unexpectedly fails
+
+`lilpass` (and every MCP tool above) can fail for reasons that have nothing to do with what you
+asked for and everything to do with settings a human controls: the vault might be locked, agent
+access or write access might be off, the item might be outside the access scope the user configured
+("Only Selected Passwords" hides everything else as a plain not-found, "Ask Every Time" requires a
+Touch ID approval you can't complete yourself). Report what's blocking you and let the user decide
+whether to unlock, enable, approve, or widen access — never retry the same request in a loop hoping
+it resolves itself.
