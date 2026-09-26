@@ -9,10 +9,18 @@ ENABLE_USER_SCRIPT_SANDBOXING = YES
 DEAD_CODE_STRIPPING = YES
 GENERATE_INFOPLIST_FILE = NO
 
-// Signing: unsigned/ad-hoc by default so anyone can build. The real team
-// (851-2400) goes in Config/Local.xcconfig, which is gitignored.
-CODE_SIGN_STYLE = Automatic
+// Signing (851-2400): lil passwords ships under Alexandru Turcanu's Apple
+// Developer team. The team ID isn't secret (it's embedded in every signed
+// binary), and the helper's XPC code-signing requirement is derived from it.
+//
+// The default identity is ad-hoc ("-") with manual signing, so CI and
+// contributors without the certificate can still build. To sign locally, set
+// CODE_SIGN_IDENTITY in the gitignored Config/Local.xcconfig:
+//   CODE_SIGN_IDENTITY = Apple Development              (day-to-day dev)
+//   CODE_SIGN_IDENTITY = Developer ID Application       (release; see docs/releasing.md)
+// Contributors on another team can also override DEVELOPMENT_TEAM there.
+DEVELOPMENT_TEAM = WH4QW9ND3J
+CODE_SIGN_STYLE = Manual
 CODE_SIGN_IDENTITY = -
-DEVELOPMENT_TEAM =
 
 #include? "Local.xcconfig"

@@ -29,12 +29,15 @@ make test      # run LilPasswordsKit tests
 make format    # swift-format
 ```
 
-Builds are unsigned by default. To sign with your team, create `Config/Local.xcconfig`, which is gitignored:
+Builds are ad-hoc signed by default, so anyone can build (CI does this too). lil passwords ships under Alexandru Turcanu's Apple Developer team (`WH4QW9ND3J`, set in `Config/Base.xcconfig`). To sign with a real certificate, create the gitignored `Config/Local.xcconfig`:
 
 ```
-DEVELOPMENT_TEAM = YOURTEAMID
 CODE_SIGN_IDENTITY = Apple Development
+// Contributors on another team can also override:
+// DEVELOPMENT_TEAM = YOURTEAMID
 ```
+
+Release signing (Developer ID) and notarization are covered in `docs/releasing.md`.
 
 ## License
 
