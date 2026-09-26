@@ -113,14 +113,17 @@ import Testing
       let key = try await store.currentKey()
       await store.lock()
 
+      // `.unlock` is payload-less: the helper reads the vault key back from `vaultKeyStore`
+      // itself (851-2411), so a test that wants a real `.unlock` to succeed has to seed the same
+      // key there first — matching `AgentServerTests.makeServer`'s own setup.
+      let keyStore = InMemoryVaultKeyStore()
+      try keyStore.store(key)
+
       let policy = AppSettingsAccessPolicy(settings: settings, isAppCaller: { _ in testCase.callerIsApp })
-      let server = AgentServer(vaultStore: store, accessPolicy: policy)
+      let server = AgentServer(vaultStore: store, vaultKeyStore: keyStore, accessPolicy: policy)
 
       if testCase.isUnlocked {
-        let unlockOutcome = await server.handle(
-          AgentRequestEnvelope(request: .unlock(UnlockPayload(sessionKey: key.rawData, keyId: key.id))),
-          caller: appCaller
-        ).outcome
+        let unlockOutcome = await server.handle(AgentRequestEnvelope(request: .unlock), caller: appCaller).outcome
         guard case .success = unlockOutcome else {
           Issue.record("failed to unlock for \(testCase): \(unlockOutcome)")
           continue
