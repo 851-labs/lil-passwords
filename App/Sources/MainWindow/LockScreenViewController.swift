@@ -8,6 +8,15 @@ import LilPasswordsKit
 @MainActor
 protocol LockScreenViewControllerDelegate: AnyObject {
   func lockScreenViewControllerDidRequestUnlock(_ controller: LockScreenViewController)
+  /// 851-2465: the user tapped "Try Again" after a helper-unreachable failure (see
+  /// `LockScreenViewController.FailurePresentation`). `MainWindowController` re-runs
+  /// `LockCoordinator.refresh()` — cheap, and re-checks connectivity without another `LAContext`
+  /// prompt, which wouldn't help if the helper itself can't be reached.
+  func lockScreenViewControllerDidRequestTryAgain(_ controller: LockScreenViewController)
+  /// 851-2465: the user tapped "Open Login Items…", shown only when the helper-unreachable
+  /// failure is because `LilPasswordsAgent` is registered but still awaiting approval in
+  /// System Settings → General → Login Items & Extensions.
+  func lockScreenViewControllerDidRequestOpenLoginItems(_ controller: LockScreenViewController)
 }
 
 /// The 851-2422 lock screen: matches Apple Passwords' own lock screen — centered app icon with a
@@ -17,9 +26,31 @@ protocol LockScreenViewControllerDelegate: AnyObject {
 /// the toolbar for the same duration — see that type.
 @MainActor
 final class LockScreenViewController: NSViewController {
+  /// A helper-unreachable (or other) unlock failure, already reduced to plain strings/bools by
+  /// `MainWindowController` — this type deliberately knows nothing about `LilPasswordsKit`,
+  /// `AgentClient`, or `HelperAgentRegistering` (see the type's own doc comment for why), so it
+  /// stays a plain, easy-to-screenshot view with nothing here a test would need to fake.
+  struct FailurePresentation {
+    /// Shown under the subtitle, in red — e.g. "Couldn't reach lil passwords' background helper."
+    let message: String
+    /// Whether to show "Try Again" in place of "Use Password…" — true for a helper-unreachable
+    /// failure, where retrying makes sense but authenticating again doesn't.
+    let showsTryAgain: Bool
+    /// An optional second line of smaller, secondary-colored guidance — the Login Items hint, or
+    /// (DEBUG ad-hoc builds only) a pointer to docs/tophat.md.
+    let hint: String?
+    /// Whether to show "Open Login Items…" below the hint — true only when the helper-unreachable
+    /// failure is because `LilPasswordsAgent` is registered but not yet approved.
+    let showsOpenLoginItems: Bool
+  }
+
   weak var delegate: LockScreenViewControllerDelegate?
 
   private let unlockFailureMessageField = NSTextField(wrappingLabelWithString: "")
+  private let helperHintField = NSTextField(wrappingLabelWithString: "")
+  private let passwordButton = NSButton(title: "Use Password…", target: nil, action: nil)
+  private let tryAgainButton = NSButton(title: "Try Again", target: nil, action: nil)
+  private let openLoginItemsButton = NSButton(title: "Open Login Items…", target: nil, action: nil)
 
   override func loadView() {
     view = NSView()
@@ -84,13 +115,45 @@ final class LockScreenViewController: NSViewController {
     unlockFailureMessageField.translatesAutoresizingMaskIntoConstraints = false
     unlockFailureMessageField.isHidden = true
 
-    let passwordButton = NSButton(title: "Use Password…", target: self, action: #selector(unlockTapped))
+    // 851-2465: a second, smaller/secondary-colored line for the Login Items hint or (DEBUG
+    // ad-hoc builds) the docs/tophat.md pointer — set by `applyFailurePresentation(_:)`, never
+    // shown alongside `unlockFailureMessageField` being hidden.
+    helperHintField.font = .systemFont(ofSize: 11)
+    helperHintField.textColor = .secondaryLabelColor
+    helperHintField.alignment = .center
+    helperHintField.maximumNumberOfLines = 3
+    helperHintField.translatesAutoresizingMaskIntoConstraints = false
+    helperHintField.isHidden = true
+
+    passwordButton.target = self
+    passwordButton.action = #selector(unlockTapped)
     passwordButton.bezelStyle = .rounded
     passwordButton.controlSize = .large
     passwordButton.translatesAutoresizingMaskIntoConstraints = false
 
+    // 851-2465: shown instead of `passwordButton` when the failure is helper-unreachable —
+    // authenticating again can't help if the helper itself can't be reached, but re-checking
+    // connectivity (via `LockCoordinator.refresh()`) can.
+    tryAgainButton.target = self
+    tryAgainButton.action = #selector(tryAgainTapped)
+    tryAgainButton.bezelStyle = .rounded
+    tryAgainButton.controlSize = .large
+    tryAgainButton.translatesAutoresizingMaskIntoConstraints = false
+    tryAgainButton.isHidden = true
+
+    // 851-2465: shown under the hint only when the helper-unreachable failure is specifically an
+    // unapproved Login Item — opens straight to System Settings → General → Login Items &
+    // Extensions, the same destination `AppDelegate`'s first-launch approval sheet uses.
+    openLoginItemsButton.target = self
+    openLoginItemsButton.action = #selector(openLoginItemsTapped)
+    openLoginItemsButton.bezelStyle = .rounded
+    openLoginItemsButton.controlSize = .regular
+    openLoginItemsButton.translatesAutoresizingMaskIntoConstraints = false
+    openLoginItemsButton.isHidden = true
+
     let stack = NSStackView(views: [
-      iconContainer, titleField, subtitleField, unlockFailureMessageField, passwordButton,
+      iconContainer, titleField, subtitleField, unlockFailureMessageField, helperHintField,
+      tryAgainButton, openLoginItemsButton, passwordButton,
     ])
     stack.orientation = .vertical
     stack.alignment = .centerX
@@ -119,6 +182,7 @@ final class LockScreenViewController: NSViewController {
       badgeImageView.centerYAnchor.constraint(equalTo: badgeBackground.centerYAnchor),
 
       passwordButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 140),
+      tryAgainButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 140),
 
       stack.centerXAnchor.constraint(equalTo: view.centerXAnchor),
       stack.centerYAnchor.constraint(equalTo: view.centerYAnchor),
@@ -126,16 +190,44 @@ final class LockScreenViewController: NSViewController {
     ])
   }
 
-  /// Shown under the subtitle when a prior `unlock()` attempt failed
-  /// (`LockState.unlockFailed(message:)`) — `MainWindowController` calls this after every state
-  /// change, clearing it (`message: nil`) once the state moves away from `.unlockFailed`.
-  func setUnlockFailureMessage(_ message: String?) {
-    unlockFailureMessageField.stringValue = message ?? ""
-    unlockFailureMessageField.isHidden = message == nil
+  /// Renders (or clears, passing `nil`) a prior unlock failure — `MainWindowController` calls
+  /// this after every `LockState` change, passing `nil` once the state moves away from
+  /// `.unlockFailed` (see `LockState.unlockFailed(_:)` and `UnlockFailure`, `LilPasswordsKit`).
+  func applyFailurePresentation(_ presentation: FailurePresentation?) {
+    guard let presentation else {
+      unlockFailureMessageField.isHidden = true
+      helperHintField.isHidden = true
+      tryAgainButton.isHidden = true
+      openLoginItemsButton.isHidden = true
+      passwordButton.isHidden = false
+      return
+    }
+
+    unlockFailureMessageField.stringValue = presentation.message
+    unlockFailureMessageField.isHidden = false
+
+    helperHintField.stringValue = presentation.hint ?? ""
+    helperHintField.isHidden = presentation.hint == nil
+
+    tryAgainButton.isHidden = !presentation.showsTryAgain
+    openLoginItemsButton.isHidden = !presentation.showsOpenLoginItems
+    // Authenticating again can't fix an unreachable helper — swap "Use Password…" out for "Try
+    // Again" rather than showing both.
+    passwordButton.isHidden = presentation.showsTryAgain
   }
 
   @objc
   private func unlockTapped() {
     delegate?.lockScreenViewControllerDidRequestUnlock(self)
+  }
+
+  @objc
+  private func tryAgainTapped() {
+    delegate?.lockScreenViewControllerDidRequestTryAgain(self)
+  }
+
+  @objc
+  private func openLoginItemsTapped() {
+    delegate?.lockScreenViewControllerDidRequestOpenLoginItems(self)
   }
 }

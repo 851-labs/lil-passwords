@@ -16,9 +16,9 @@ public enum LockState: Sendable, Equatable {
   case locked
   case unlocked
   /// A `unlock()` attempt failed — either the `LAContext` evaluation itself (Touch ID/password
-  /// cancelled or failed) or the subsequent XPC call to the helper. `message` is meant for direct
-  /// display under the lock screen's subtitle.
-  case unlockFailed(message: String)
+  /// cancelled or failed) or the subsequent XPC call to the helper. See `UnlockFailure` for how
+  /// this is meant to be rendered under the lock screen's subtitle.
+  case unlockFailed(UnlockFailure)
 }
 
 /// Drives the app-side lock/unlock state machine described by 851-2411 and 851-2422: asks
@@ -79,7 +79,7 @@ public actor LockCoordinator {
         setState(.unlocked)
       }
     } catch {
-      setState(.unlockFailed(message: "\(error)"))
+      setState(.unlockFailed(.describing(error)))
     }
   }
 
@@ -93,7 +93,7 @@ public actor LockCoordinator {
       setState(.unlocked)
       return recoveryKeyDisplayString
     } catch {
-      setState(.unlockFailed(message: "\(error)"))
+      setState(.unlockFailed(.describing(error)))
       throw error
     }
   }
@@ -107,7 +107,7 @@ public actor LockCoordinator {
       try await agent.unlock()
       setState(.unlocked)
     } catch {
-      setState(.unlockFailed(message: "\(error)"))
+      setState(.unlockFailed(.describing(error)))
     }
   }
 
@@ -118,7 +118,7 @@ public actor LockCoordinator {
       try await agent.lock()
       setState(.locked)
     } catch {
-      setState(.unlockFailed(message: "\(error)"))
+      setState(.unlockFailed(.describing(error)))
     }
   }
 

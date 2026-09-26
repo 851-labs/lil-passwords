@@ -109,9 +109,14 @@ final class MenuBarRootViewController: NSViewController {
       isUnlocked = false
       lockedViewController.setUnlockFailureMessage(nil)
       presentLocked()
-    case .unlockFailed(let message):
+    case .unlockFailed(let failure):
+      // 851-2465: `LockState.unlockFailed` carries a full `UnlockFailure` (friendly message +
+      // whether the helper itself is unreachable) rather than a raw string; the popover's locked
+      // view only has room for a single line of text, so it shows `.message` — already reduced to
+      // safe, friendly copy by `UnlockFailure.describing(_:)` — and leaves the richer "Try Again"/
+      // Login Items affordances to the main window's `LockScreenViewController`.
       isUnlocked = false
-      lockedViewController.setUnlockFailureMessage(message)
+      lockedViewController.setUnlockFailureMessage(failure.message)
       presentLocked()
     case .unlocked:
       isUnlocked = true

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	851-2465: `LilPasswordsAgent` is a bare `com.apple.product-type.tool` Mach-O — Xcode never
+	embeds a real Info.plist for that product type (confirmed: `GENERATE_INFOPLIST_FILE = YES`
+	produces no `__TEXT,__info_plist` section at all for `tool` targets). Without one, codesign has
+	no CFBundleIdentifier to read and falls back to the executable's own file name as its signing
+	identifier, AND — the more serious half of this — `SMAppService`'s registration (`smd`) has
+	nothing to derive a valid lightweight code requirement (LWCR) from, which silently produces an
+	LWCR with an empty allowed-cdhash set. launchd then kills every spawn attempt with
+	`OS_REASON_CODESIGNING` before the process's `main()` ever runs — surfacing only as a
+	perpetually "spawn scheduled"/"spawn failed" job and a hung or refused XPC connection, with
+	nothing logged by this process itself (it never started).
+	This file is linked directly into the binary's `__TEXT,__info_plist` section via this target's
+	`OTHER_LDFLAGS` (`-sectcreate __TEXT __info_plist`, see project.yml) — the same technique Apple's
+	own SMAppService/helper-tool sample code uses for non-bundle executables. That gives both
+	codesign and smd a real CFBundleIdentifier to work with, so `OTHER_CODE_SIGN_FLAGS -i` is no
+	longer strictly required for this target's own build, but is kept anyway as a defense-in-depth
+	safety net (and because it's still the only fix that reaches the copy Xcode re-signs when
+	embedding this target into `LilPasswords.app`; see `LilPasswords`'s `postBuildScripts`).
+	-->
+	<key>CFBundleIdentifier</key>
+	<string>com.851labs.lilpasswords.agent</string>
+	<key>CFBundleExecutable</key>
+	<string>LilPasswordsAgent</string>
+	<key>CFBundleName</key>
+	<string>LilPasswordsAgent</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+</dict>
+</plist>

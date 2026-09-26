@@ -22,11 +22,19 @@ public enum HelperAgentStatus: Sendable, Equatable {
   /// Registered, but the user hasn't approved it in System Settings → General → Login Items yet
   /// — until they do, launchd won't actually run it, so every `AgentClient` call would fail.
   case requiresApproval
-  /// `SMAppService` couldn't find this agent's plist in the app bundle at all. Shouldn't happen
-  /// in a correctly-built app (see `project.yml`'s embed of
-  /// `Agent/Support/com.851labs.lilpasswords.agent.plist` at `Contents/Library/LaunchAgents`) —
-  /// this exists so a broken build reports something diagnosable instead of a confusing XPC
-  /// connection failure three steps later.
+  /// `SMAppService.status` reported `.notFound` — nominally "couldn't find this agent's plist in
+  /// the app bundle at all" (see `project.yml`'s embed of
+  /// `Agent/Support/com.851labs.lilpasswords.agent.plist` at `Contents/Library/LaunchAgents`).
+  ///
+  /// 851-2465's real, signed-and-installed-to-`/Applications` smoke test found this reported for
+  /// a build whose plist was present, valid, and correctly sealed in the code signature — for a
+  /// service `servicemanagementd` has simply never recorded before, `status` on this OS can read
+  /// `.notFound` rather than `.notRegistered` even though calling `register()` anyway succeeds
+  /// immediately (verified with a standalone probe run from inside the installed app's own
+  /// bundle). So `HelperAgentRegistrar.registerIfNeeded(using:)` no longer treats this as
+  /// terminal — see that type. This case is kept (rather than folded into `.notRegistered`) for
+  /// the genuine failure mode: a build that's actually missing/broken its plist, which still
+  /// surfaces as `.notFound` *after* a `register()` attempt.
   case notFound
 }
 
@@ -115,22 +123,28 @@ public enum HelperAgentRegistrar {
     case .requiresApproval:
       return .requiresApproval
 
-    case .notFound:
-      return .notFound
-
-    case .notRegistered:
+    // 851-2465: a real, signed-and-installed-to-`/Applications` smoke test found `.notFound`
+    // reported for a service `servicemanagementd` had simply never recorded before — indistinguishable,
+    // from this app's perspective, from `.notRegistered` — even though the plist was present,
+    // valid, and correctly sealed in the code signature, and `register()` succeeded immediately
+    // when tried anyway. So treat the two identically: attempt `register()`, then re-check
+    // `status`. If it's genuinely a broken build (missing/invalid plist), `register()` will throw
+    // or `status` will still read `.notFound` afterward, and that's reported below instead of
+    // masking the real problem.
+    case .notRegistered, .notFound:
       do {
         try registrar.register()
       } catch {
         return .registrationFailed(message: "\(error)")
       }
-      // `register()` on a never-registered service can land as either `.enabled` or
-      // `.requiresApproval` depending on whether the user has approved this app's login items
-      // before — re-check rather than assume, since only `status` (not `register()`'s return
-      // value) tells the two apart.
+      // `register()` on a never-registered service can land as `.enabled`, `.requiresApproval`,
+      // or (genuine broken build) still `.notFound` — re-check rather than assume, since only
+      // `status` (not `register()`'s return value) tells these apart.
       switch registrar.status {
       case .requiresApproval:
         return .requiresApproval
+      case .notFound:
+        return .notFound
       default:
         return .registered
       }
