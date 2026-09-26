@@ -132,42 +132,64 @@ func drawBackground(in context: CGContext) {
   context.restoreGState()
 }
 
-/// A single rounded "lil" key: a thick ring bow with two round-tipped teeth, drawn in its own
-/// local coordinate space with the bow centered at the origin and the shaft running in +y, then
-/// tilted and placed over the background. Every corner is fully rounded — no sharp miters
-/// anywhere, which is what reads as "friendly"/"lil" rather than a literal hardware-store key.
-func addKeyPath(to path: CGMutablePath) {
-  // Bow (the part you'd loop a keyring through): a ring, drawn as two independent closed circle
-  // subpaths (outer, then inner) and left to the even-odd fill rule to punch the inner one out as
-  // a hole. Built with `CGPath(ellipseIn:)` rather than `addArc(startAngle:endAngle:)` — two
-  // consecutive `addArc` full-sweep calls on one `CGMutablePath` don't start a new subpath between
-  // them, so they get bridged into a single connected outline instead of staying two separate
-  // closed loops, and even-odd can't punch a hole out of that (found by rendering this and seeing
-  // a solid disc where the ring should be — see git history). `addPath` of a whole separate
-  // `CGPath` always starts a fresh subpath, avoiding the bridge entirely.
-  let bowRadius: CGFloat = 128
-  let bowThickness: CGFloat = 62
+// Bow (the ring part you'd loop a keyring through) dimensions — shared between `addBowPath` and
+// `addShaftAndTeethPath` since the shaft's overlap into the bow is measured relative to both.
+let bowRadius: CGFloat = 128
+let bowThickness: CGFloat = 62
+
+/// The bow: a ring, drawn as two independent closed circle subpaths (outer, then inner) and left
+/// to the even-odd fill rule to punch the inner one out as a hole. Built with `CGPath(ellipseIn:)`
+/// rather than `addArc(startAngle:endAngle:)` — two consecutive `addArc` full-sweep calls on one
+/// `CGMutablePath` don't start a new subpath between them, so they get bridged into a single
+/// connected outline instead of staying two separate closed loops, and even-odd can't punch a hole
+/// out of that (found by rendering this and seeing a solid disc where the ring should be — see git
+/// history). `addPath` of a whole separate `CGPath` always starts a fresh subpath, avoiding the
+/// bridge entirely.
+///
+/// Deliberately kept as its own path, filled in its own `fillPath`/`clip` call, rather than
+/// combined with `addShaftAndTeethPath`'s shapes into one path filled once — see that function's
+/// doc comment for why mixing them broke the even-odd hole punch (851-2426 review: a visible seam
+/// where the shaft met the ring).
+func addBowPath(to path: CGMutablePath) {
   let bowInnerRadius = bowRadius - bowThickness
   path.addPath(CGPath(ellipseIn: CGRect(x: -bowRadius, y: -bowRadius, width: bowRadius * 2, height: bowRadius * 2), transform: nil))
   path.addPath(
     CGPath(
       ellipseIn: CGRect(x: -bowInnerRadius, y: -bowInnerRadius, width: bowInnerRadius * 2, height: bowInnerRadius * 2),
       transform: nil))
+}
 
-  // Shaft: a rounded bar from the bottom of the bow straight down (+y in this local space, which
-  // is "down" once flipped/rotated into place below).
+/// The shaft and both teeth, drawn in the same local coordinate space as `addBowPath` (bow
+/// centered at the origin, shaft running in +y — "down" once flipped/rotated into place in
+/// `drawKey`). None of these three shapes has a hole, so — unlike the bow — there's no even-odd
+/// hazard filling this path on its own with any fill rule.
+///
+/// This used to be appended onto the *same* `CGMutablePath` as `addBowPath`'s two circles, filled
+/// in one combined even-odd `fillPath` call. That broke wherever the shaft's rect overlapped the
+/// bow's solid annulus (deliberate, by design — `shaftTop` starts inside the bow's radius so the
+/// two pieces read as one continuous shape): even-odd counts fill parity across *every* subpath in
+/// the call, so a point inside both the ring's filled annulus (parity 1) and the shaft (parity 2)
+/// came out even, i.e. unfilled — punching an unwanted second hole exactly at the join, which is
+/// the seam/gap the 851-2426 review caught. Splitting the bow and the shaft+teeth into two
+/// independent paths, each filled/clipped in its own call (see `drawKey`), fixes this: every pixel
+/// where they overlap just gets the same opaque color painted twice, which looks identical to one
+/// continuous shape.
+func addShaftAndTeethPath(to path: CGMutablePath) {
+  // Shaft: a rounded bar from the bottom of the bow straight down. Starts inside the bow's own
+  // radius on purpose, so the two pieces overlap and read as one shape.
   let shaftWidth: CGFloat = 74
-  let shaftTop: CGFloat = bowRadius - bowThickness * 0.35 // overlaps the bow slightly — no seam
+  let shaftTop: CGFloat = bowRadius - bowThickness * 0.35
   let shaftBottom: CGFloat = 300
   let shaftRect = CGRect(
     x: -shaftWidth / 2, y: shaftTop, width: shaftWidth, height: shaftBottom - shaftTop)
   path.addPath(CGPath(roundedRect: shaftRect, cornerWidth: shaftWidth / 2, cornerHeight: shaftWidth / 2, transform: nil))
 
-  // Two stubby, fully-rounded teeth near the tip — enough to read as "key" at a glance, simple
-  // enough to survive being rendered at 16px.
-  let toothWidth: CGFloat = 56
-  let toothHeight: CGFloat = 40
-  for toothTop in [CGFloat(196), CGFloat(252)] {
+  // Two stubby, fully-rounded teeth near the tip, sized to still read as "key" once scaled down to
+  // a 16–32px menu-bar icon — the original 56×40 teeth (851-2426 first pass) were too thin to
+  // register at that size, so these are noticeably bigger and reach further past the shaft's edge.
+  let toothWidth: CGFloat = 76
+  let toothHeight: CGFloat = 48
+  for toothTop in [CGFloat(190), CGFloat(252)] {
     let toothRect = CGRect(
       x: shaftWidth / 2 - 4, y: toothTop, width: toothWidth, height: toothHeight)
     path.addPath(
@@ -184,27 +206,36 @@ func drawKey(in context: CGContext) {
   context.translateBy(x: canvas / 2, y: canvas / 2 + 26)
   context.rotate(by: -28 * .pi / 180)
 
-  let keyPath = CGMutablePath()
-  addKeyPath(to: keyPath)
+  let bowPath = CGMutablePath()
+  addBowPath(to: bowPath)
+  let shaftPath = CGMutablePath()
+  addShaftAndTeethPath(to: shaftPath)
 
-  // Base fill + cast shadow in one pass: CoreGraphics derives the drop shadow from whatever this
-  // `fillPath` actually paints (including its even-odd hole, so the shadow has the same hole —
-  // nothing shows through the bow's ring onto its own shadow), then offsets and blurs it — no
-  // separate manually-offset shadow copy needed, and critically, no `clip()` in effect here that
-  // would otherwise crop the shadow's blur/offset to the shape's own silhouette.
+  // Base fill + cast shadow, both pieces painted inside one transparency layer: CoreGraphics
+  // derives the drop shadow from the layer's *flattened* alpha once it's closed, i.e. from the
+  // union of the bow and the shaft+teeth together, rather than from each `fillPath` call
+  // individually. That matters here — two separate opaque fills each with their own `setShadow`
+  // active would each cast their own shadow, and where the shaft overlaps the bow those two
+  // shadows would stack (same offset/blur, so same place) into a visibly darker smudge right at
+  // the join: the same seam problem this whole split was meant to fix, just moved into the
+  // shadow instead of the fill. One layer, one shadow, no double-up.
   context.saveGState()
   context.setShadow(offset: CGSize(width: 10, height: -16), blur: 20, color: Palette.keyShadow)
-  context.addPath(keyPath)
+  context.beginTransparencyLayer(auxiliaryInfo: nil)
   context.setFillColor(Palette.keyFillTop)
+  context.addPath(bowPath)
   context.fillPath(using: .evenOdd)
+  context.addPath(shaftPath)
+  context.fillPath(using: .winding)
+  context.endTransparencyLayer()
   context.restoreGState()
 
   // A subtle top-to-bottom gradient glaze over the same silhouette (bright white at the bow,
   // warming slightly toward the tip) so the key doesn't read as flat — same "quiet gradient fill"
   // language the background uses. Shadow is already baked in above, so no shadow state here.
-  context.saveGState()
-  context.addPath(keyPath)
-  context.clip(using: .evenOdd)
+  // Clipped and painted per-piece (not via one combined even-odd clip, for the same reason the
+  // fill above is split) — painting the same, fully opaque gradient twice into the overlap is
+  // visually identical to once, so this is safe.
   guard
     let keyGradient = CGGradient(
       colorsSpace: CGColorSpaceCreateDeviceRGB(),
@@ -212,13 +243,18 @@ func drawKey(in context: CGContext) {
       locations: [0, 1]
     )
   else { fatalError("Failed to build key gradient") }
-  context.drawLinearGradient(
-    keyGradient,
-    start: CGPoint(x: 0, y: -160),
-    end: CGPoint(x: 0, y: 300),
-    options: []
-  )
-  context.restoreGState()
+  for (piece, rule) in [(bowPath, CGPathFillRule.evenOdd), (shaftPath, CGPathFillRule.winding)] {
+    context.saveGState()
+    context.addPath(piece)
+    context.clip(using: rule)
+    context.drawLinearGradient(
+      keyGradient,
+      start: CGPoint(x: 0, y: -160),
+      end: CGPoint(x: 0, y: 300),
+      options: []
+    )
+    context.restoreGState()
+  }
 }
 
 func drawIcon(in context: CGContext, pixelSize: Int) {
