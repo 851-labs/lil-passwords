@@ -19,7 +19,35 @@ let sharedVaultStore = try VaultStore()
 // default, which exists only for tests that don't care about the toggle.
 // TODO(851-2428): replace this with the real, AppSettings-backed `AccessPolicyProviding` (the
 // Settings → Agents toggle) once it exists.
-let server = AgentServer(vaultStore: sharedVaultStore, accessPolicy: AlwaysDenyAccessPolicy())
+//
+// Until then, a DEBUG-only local override lets 851-2430/851-2431 tophat `lilpw`/`lilpw mcp`
+// against a real, launchd-managed helper without hand-building Settings UI first. See
+// docs/tophat.md for how to enable it. `#if DEBUG` guarantees this can never reach a Release
+// build: the override check (env var, launch argument) isn't merely unreachable at runtime in
+// Release, its code doesn't exist in the compiled binary at all, and the `#else` branch is a bare,
+// unconditional `AlwaysDenyAccessPolicy()` with no override path of any kind.
+#if DEBUG
+  /// - Returns: `true` if a developer has explicitly opted this helper process into agent access
+  ///   for local tophat testing, via either:
+  ///   - `launchctl setenv LILPW_TOPHAT_ALLOW_AGENT_ACCESS 1` (launchd reads its own managed
+  ///     environment when it activates the on-demand Mach service, so this must be set — and the
+  ///     helper stopped/relaunched if it was already running — before the next connection attempt
+  ///     triggers activation), or
+  ///   - passing `--allow-agent-access-debug` when launching this binary directly (e.g. running it
+  ///     from Xcode or a terminal rather than through launchd).
+  func debugAgentAccessOverrideEnabled() -> Bool {
+    if ProcessInfo.processInfo.environment["LILPW_TOPHAT_ALLOW_AGENT_ACCESS"] == "1" { return true }
+    if CommandLine.arguments.contains("--allow-agent-access-debug") { return true }
+    return false
+  }
+
+  let accessPolicy: any AccessPolicyProviding =
+    debugAgentAccessOverrideEnabled() ? AlwaysAllowAccessPolicy() : AlwaysDenyAccessPolicy()
+#else
+  let accessPolicy: any AccessPolicyProviding = AlwaysDenyAccessPolicy()
+#endif
+
+let server = AgentServer(vaultStore: sharedVaultStore, accessPolicy: accessPolicy)
 
 // TODO(851-2429): supply the real `AccessLogging` conformer once it exists; `AgentServer`'s default
 // (`NoOpAccessLog`) is used above until then.
