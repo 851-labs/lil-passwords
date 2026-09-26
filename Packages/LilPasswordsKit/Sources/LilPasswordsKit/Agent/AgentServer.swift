@@ -59,8 +59,9 @@ public actor AgentServer {
 
   /// Handles one already-decoded request and returns the reply envelope to send back.
   ///
-  /// `caller` is threaded through only as far as the access log (see `AccessLogging`'s docs for
-  /// why lock-lifecycle requests never reach it).
+  /// `caller` is threaded through to both the access policy (851-2428's app-connection exemption —
+  /// see `AccessPolicyProviding.isAccessAllowed(for:)`) and the access log (see `AccessLogging`'s
+  /// docs for why lock-lifecycle requests never reach the log).
   public func handle(_ envelope: AgentRequestEnvelope, caller: CallerIdentity) async -> AgentReplyEnvelope {
     guard envelope.version == AgentProtocolVersion.current else {
       return AgentReplyEnvelope(
@@ -169,7 +170,7 @@ public actor AgentServer {
   private func vaultOutcome(for request: AgentRequest, caller: CallerIdentity) async -> AgentOutcome {
     let outcome: AgentOutcome
     do {
-      outcome = .success(try await vaultResponse(for: request))
+      outcome = .success(try await vaultResponse(for: request, caller: caller))
     } catch let error as AgentError {
       outcome = .failure(error)
     } catch let error as VaultStoreError {
@@ -179,17 +180,20 @@ public actor AgentServer {
     }
 
     let succeeded: Bool
-    if case .success = outcome {
+    let response: AgentResponse?
+    if case .success(let value) = outcome {
       succeeded = true
+      response = value
     } else {
       succeeded = false
+      response = nil
     }
-    await accessLog.record(AccessEvent(caller: caller, request: request, succeeded: succeeded))
+    await accessLog.record(AccessEvent(caller: caller, request: request, response: response, succeeded: succeeded))
     return outcome
   }
 
-  private func vaultResponse(for request: AgentRequest) async throws -> AgentResponse {
-    guard await accessPolicy.isAgentAccessEnabled() else { throw AgentError.agentAccessDisabled }
+  private func vaultResponse(for request: AgentRequest, caller: CallerIdentity) async throws -> AgentResponse {
+    guard await accessPolicy.isAccessAllowed(for: caller) else { throw AgentError.agentAccessDisabled }
     guard await vaultStore.isUnlocked else { throw AgentError.locked }
 
     switch request {
