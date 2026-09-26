@@ -31,6 +31,10 @@ final class DetailIdentityView: NSView {
 
     iconView.translatesAutoresizingMaskIntoConstraints = false
     iconView.imageScaling = .scaleProportionallyUpOrDown
+    // Decorative (851-2426 tophat accessibility audit): `titleLabel`/`titleField` right below
+    // already say the item's name, so VoiceOver announcing this monogram too is a redundant
+    // second element with nothing of its own to add.
+    iconView.setAccessibilityElement(false)
 
     titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
     titleLabel.alignment = .center

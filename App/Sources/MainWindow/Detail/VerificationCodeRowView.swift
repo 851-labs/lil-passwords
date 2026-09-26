@@ -15,7 +15,9 @@ final class VerificationCodeRowView: NSView {
   private let codeField = NSTextField(labelWithString: "")
   private let codeStack = NSStackView()
   private let setUpButton = NSButton(title: "Set Up Verification Code…", target: nil, action: nil)
-  private let copyButton = NSButton(
+  // 851-2426 tophat accessibility audit: this Copy button used to be unreachable by
+  // keyboard/VoiceOver at rest — see `HoverRevealButton`'s doc comment.
+  private let copyButton = HoverRevealButton(
     image: NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: "Copy") ?? NSImage(),
     target: nil,
     action: nil
@@ -69,11 +71,13 @@ final class VerificationCodeRowView: NSView {
     copyButton.isBordered = false
     copyButton.bezelStyle = .inline
     copyButton.contentTintColor = .secondaryLabelColor
-    copyButton.isHidden = true
+    // No code set up yet — `configure(totp:)` below flips this once one exists.
+    copyButton.isEligible = false
     copyButton.toolTip = "Copy"
     copyButton.target = self
     copyButton.action = #selector(copyTapped)
     copyButton.translatesAutoresizingMaskIntoConstraints = false
+    copyButton.setAccessibilityLabel("Copy Verification Code")
 
     addSubview(label)
     addSubview(codeStack)
@@ -114,7 +118,7 @@ final class VerificationCodeRowView: NSView {
     self.totp = totp
     let hasCode = totp != nil
     codeStack.isHidden = !hasCode
-    copyButton.isHidden = true
+    copyButton.isEligible = hasCode
     setUpButton.isHidden = hasCode
 
     timer?.invalidate()
@@ -150,11 +154,11 @@ final class VerificationCodeRowView: NSView {
   }
 
   override func mouseEntered(with event: NSEvent) {
-    copyButton.isHidden = totp == nil
+    copyButton.isHovering = true
   }
 
   override func mouseExited(with event: NSEvent) {
-    copyButton.isHidden = true
+    copyButton.isHovering = false
   }
 
   @objc

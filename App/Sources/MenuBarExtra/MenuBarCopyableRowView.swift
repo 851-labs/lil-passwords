@@ -91,6 +91,16 @@ final class MenuBarCopyableRowView: NSView {
     labelField.stringValue = label
     valueField.stringValue = value
     ring.isHidden = !showRing
+
+    // This whole row is the click target for copying its secret (see the type doc comment above
+    // for why), but it's a plain `NSView` with only a click gesture recognizer — with nothing
+    // else set, VoiceOver would just read `labelField`/`valueField` as inert text and never learn
+    // the row is actionable (851-2426). Exposing it as its own accessibility button element fixes
+    // that; `value` is always something already safe to say aloud (masked dots or a live code),
+    // never a revealed secret at rest.
+    setAccessibilityElement(true)
+    setAccessibilityRole(.button)
+    setAccessibilityLabel("\(label): \(value)")
   }
 
   func updateRingFraction(_ fraction: Double) {

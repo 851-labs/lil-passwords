@@ -38,6 +38,7 @@ final class WebsiteRowView: NSView {
     openButton.target = self
     openButton.action = #selector(openTapped)
     openButton.translatesAutoresizingMaskIntoConstraints = false
+    openButton.setAccessibilityLabel("Open in Browser")
 
     addSubview(valueField)
     addSubview(openButton)

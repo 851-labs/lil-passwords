@@ -77,6 +77,7 @@ final class EditableListRowView: NSView {
     button.isEnabled = enabled
     button.toolTip = toolTip
     button.translatesAutoresizingMaskIntoConstraints = false
+    button.setAccessibilityLabel(toolTip)
     return button
   }
 

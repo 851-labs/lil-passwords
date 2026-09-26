@@ -107,6 +107,7 @@ final class CodesViewController: NSViewController {
     addButton.target = self
     addButton.action = #selector(addVerificationCode(_:))
     addButton.toolTip = "Add Verification Code"
+    addButton.setAccessibilityLabel("Add Verification Code")
 
     headerBar.addSubview(countLabel)
     headerBar.addSubview(addButton)

@@ -91,6 +91,10 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
       target: nil,
       action: nil
     )
+    // The image's own `accessibilityDescription` isn't reliably surfaced by VoiceOver as the
+    // button's label on its own (851-2426) — every icon-only control gets its label set directly.
+    sortButton.setAccessibilityLabel("Sort")
+    addButton.setAccessibilityLabel("New Item")
     listActionsView = CapsuleToolbarView(buttons: [sortButton, addButton])
     super.init()
     addButton.target = self

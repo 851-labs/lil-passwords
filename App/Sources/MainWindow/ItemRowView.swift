@@ -84,6 +84,20 @@ final class ItemRowCellView: NSTableCellView {
     subtitleField.stringValue = subtitle ?? ""
     subtitleField.isHidden = subtitle == nil
     separator.isHidden = hidesSeparator
+
+    // A meaningful VoiceOver description for the whole row (851-2426) — "Amazon, jordan@…, has
+    // verification code" is the exact shape the ticket calls out — rather than just the title a
+    // plain `NSTableCellView` would otherwise expose via its subviews individually.
+    setAccessibilityElement(true)
+    setAccessibilityLabel(
+      accessibilityLabel(title: item.title, subtitle: subtitle, hasVerificationCode: item.totpURI != nil))
+  }
+
+  private func accessibilityLabel(title: String, subtitle: String?, hasVerificationCode: Bool) -> String {
+    var parts = [title]
+    if let subtitle { parts.append(subtitle) }
+    if hasVerificationCode { parts.append("has verification code") }
+    return parts.joined(separator: ", ")
   }
 
   func setSeparatorHidden(_ hidden: Bool) {

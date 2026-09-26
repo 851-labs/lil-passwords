@@ -261,6 +261,15 @@ final class DetailViewController: NSViewController {
 
   // MARK: Edit mode
 
+  /// Enters edit mode for whichever item is currently shown, if any and not already editing —
+  /// the same effect as clicking the toolbar's Edit button. Used by `MainSplitViewController` to
+  /// implement "Return to edit" (851-2426): pressing Return on the list's selected row opens it
+  /// for editing here, without needing to click Edit.
+  func beginEditingCurrentItem() {
+    guard !isEditing else { return }
+    editTapped()
+  }
+
   @objc
   private func editTapped() {
     guard let item else { return }

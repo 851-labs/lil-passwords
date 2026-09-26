@@ -44,6 +44,7 @@ final class MenuBarItemDetailViewController: NSViewController {
     backButton.bezelStyle = .accessoryBarAction
     backButton.isBordered = false
     backButton.translatesAutoresizingMaskIntoConstraints = false
+    backButton.setAccessibilityLabel("Back")
 
     iconView.translatesAutoresizingMaskIntoConstraints = false
     iconView.imageScaling = .scaleProportionallyUpOrDown

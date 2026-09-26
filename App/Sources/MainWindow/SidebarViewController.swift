@@ -311,5 +311,10 @@ private final class SidebarRowView: NSTableCellView {
     iconView.image = icon
     titleField.stringValue = title
     countField.stringValue = count > 0 ? "\(count)" : ""
+
+    // A meaningful VoiceOver description for the whole row (851-2426), e.g. "All, 12 items" —
+    // otherwise VoiceOver would read the icon, title, and count as three separate elements.
+    setAccessibilityElement(true)
+    setAccessibilityLabel("\(title), \(count == 1 ? "1 item" : "\(count) items")")
   }
 }

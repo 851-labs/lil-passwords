@@ -113,6 +113,11 @@ final class CodeRowCellView: NSTableCellView {
     } else {
       codeField.stringValue = ""
     }
+
+    // A meaningful VoiceOver description for the whole row (851-2426), matching the pattern used
+    // for the other list-style rows in the app.
+    setAccessibilityElement(true)
+    setAccessibilityLabel("\(item.title), \(subtitleText(for: item))")
   }
 
   /// Refreshes only the code text and countdown ring, without touching the icon/title/subtitle —

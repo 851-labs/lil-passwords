@@ -7,6 +7,11 @@ protocol ItemListViewControllerDelegate: AnyObject {
   /// Called whenever the table's selection changes, with every currently-selected item (empty
   /// if nothing is selected). `MainSplitViewController` forwards this to the detail column.
   func itemListViewController(_ controller: ItemListViewController, didChangeSelection items: [PasswordItem])
+
+  /// Called when Return is pressed on a single selected row (851-2426: "Return to edit").
+  /// `MainSplitViewController` forwards this to the detail column, which is already showing that
+  /// same item (selection-change notifications above land first) — entering edit mode there.
+  func itemListViewControllerDidRequestEdit(_ controller: ItemListViewController)
 }
 
 /// The content column: a single, continuous list of items for the selected sidebar category — an
@@ -229,6 +234,21 @@ final class ItemListViewController: NSViewController {
     tableView.dataSource = self
     tableView.delegate = self
     tableView.onDeleteKey = { [weak self] in self?.deleteSelectedItems() }
+    // 851-2426: "⌘C on a row copies the password with a confirmation." `NSText.copy(_:)` is the
+    // Edit menu's Copy item selector (`MainMenu.swift`), nil-targeted so it flows through the
+    // responder chain to whichever first responder implements it — overriding it on this table
+    // view (see `ItemTableView` below) means both the menu bar's Copy item and the raw ⌘C key
+    // equivalent land here without any extra wiring.
+    tableView.onCopyKey = { [weak self] in self?.copyPasswordWithConfirmation() }
+    // 851-2426: "Return to edit" — pressing Return on a selected row opens it for editing in the
+    // detail pane. This controller doesn't own the detail pane itself, so it just asks the
+    // delegate (`MainSplitViewController`) to forward the request, the same way selection changes
+    // already flow outward below.
+    tableView.onReturnKey = { [weak self] in
+      guard let self else { return }
+      guard selectedItems().count == 1 else { return }
+      delegate?.itemListViewControllerDidRequestEdit(self)
+    }
 
     let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("ItemColumn"))
     column.resizingMask = .autoresizingMask
@@ -403,9 +423,19 @@ final class ItemListViewController: NSViewController {
   }
 
   @objc private func copyPassword(_ sender: Any?) {
+    copyPasswordWithConfirmation()
+  }
+
+  /// Copies the single selected row's password and shows a transient confirmation HUD anchored to
+  /// that row — both the context menu's "Copy Password" and ⌘C (851-2426: "⌘C on a row copies the
+  /// password with a confirmation") land here, so they behave identically. A no-op for zero, many,
+  /// or password-less selections, same guard `copyPassword(_:)` always had.
+  private func copyPasswordWithConfirmation() {
     let items = selectedItems()
-    guard items.count == 1, !items[0].password.isEmpty else { return }
+    let row = tableView.selectedRow
+    guard items.count == 1, !items[0].password.isEmpty, row >= 0 else { return }
     Pasteboard.copySecret(items[0].password)
+    CopyHUD.show(relativeTo: tableView.rect(ofRow: row), of: tableView, message: "Password Copied")
   }
 
   @objc private func copyVerificationCode(_ sender: Any?) {
@@ -564,6 +594,8 @@ private final class InsetTableRowView: NSTableRowView {
 /// elsewhere in the app.
 private final class ItemTableView: NSTableView {
   var onDeleteKey: (() -> Void)?
+  var onCopyKey: (() -> Void)?
+  var onReturnKey: (() -> Void)?
 
   override func deleteBackward(_ sender: Any?) {
     onDeleteKey?()
@@ -571,5 +603,20 @@ private final class ItemTableView: NSTableView {
 
   override func deleteForward(_ sender: Any?) {
     onDeleteKey?()
+  }
+
+  /// `insertNewline(_:)` is `NSResponder`'s standard action for Return/Enter (part of
+  /// `NSStandardKeyBindingResponding`, like `deleteBackward(_:)` above) — this is what lets a
+  /// selected row's Return key open it for editing (851-2426: "Return to edit").
+  override func insertNewline(_ sender: Any?) {
+    onReturnKey?()
+  }
+
+  /// `NSText.copy(_:)` — the Edit menu's Copy item and ⌘C both resolve to this selector via the
+  /// responder chain (851-2426). `NSResponder`/`NSTableView` don't declare this method themselves
+  /// (unlike `deleteBackward(_:)` above), so this can't use `override` — it's a plain action method
+  /// that satisfies the nil-targeted menu item's selector lookup by name alone.
+  @objc func copy(_ sender: Any?) {
+    onCopyKey?()
   }
 }
