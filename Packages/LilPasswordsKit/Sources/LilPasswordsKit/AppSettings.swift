@@ -12,7 +12,13 @@ public final class AppSettings: @unchecked Sendable {
   public static let shared = AppSettings()
 
   /// The `UserDefaults` suite name shared by the app, `LilPasswordsAgent`, and `lilpw`.
-  public static let suiteName = "com.851labs.lilpasswords"
+  ///
+  /// Deliberately distinct from the app's own bundle identifier (`com.851labs.lilpasswords`):
+  /// passing an app's own bundle ID as `UserDefaults(suiteName:)` is documented as nonsensical —
+  /// it logs a warning and behaves like `.standard` — because the app's own domain is already
+  /// its default search location. A dedicated suite name is what actually makes the domain
+  /// readable by the other two (differently-bundle-ID'd) processes.
+  public static let suiteName = "com.851labs.lilpasswords.shared"
 
   /// Posted on the default `NotificationCenter` (main queue not guaranteed) whenever any setting
   /// changes, so long-lived observers like the helper's policy checker can react without polling.
