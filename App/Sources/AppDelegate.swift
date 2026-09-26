@@ -61,6 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // to run in the same headless capture pass has to go before it, not after.
         ImportExportDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
         MenuBarExtraDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
+        NewPasswordDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
         RecoveryKitDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
       }
     #endif
