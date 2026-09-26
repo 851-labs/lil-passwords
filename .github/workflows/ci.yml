@@ -57,77 +57,20 @@ jobs:
       - name: Build app, helper, and CLI (unsigned)
         run: make build
 
-      - name: Diagnose launchd GUI domain before E2E tests
-        # This suite's helper process registers as an on-demand Mach service via `launchctl
-        # bootstrap gui/<uid>` (see Packages/LilpassE2E/Tests/LilpassE2ETests/Support/
-        # E2EHelperProcess.swift) — the same domain a real, GUI-logged-in user's LaunchAgents use.
-        # Two prior CI runs hung the E2E step for its full 30-minute timeout with zero test output
-        # right after the test binary linked, which is consistent with that domain (or the Mach
-        # service registered in it) never becoming reachable on this runner. This step doesn't fix
-        # anything — it just dumps the runner's session/domain state into the log unconditionally,
-        # so if the E2E step below still hangs or times out, the run's log has this evidence
-        # instead of nothing.
-        run: |
-          id
-          who
-          echo "--- launchctl print gui/$(id -u) ---"
-          launchctl print "gui/$(id -u)" || echo "launchctl print exited $?"
-          echo "--- launchctl print user/$(id -u) ---"
-          launchctl print "user/$(id -u)" || echo "launchctl print exited $?"
-
       - name: End-to-end tests (built lilpass binary + disposable in-memory helper)
-        # 10 minutes, not the job's full 30: every test in Packages/LilpassE2E now also carries its
-        # own `.timeLimit(.minutes(1))` (see each suite's doc comment), so a genuine hang should
-        # fail fast and name the offending test on its own — this is only a backstop in case
-        # something outside any individual test (e.g. the `swift build` step before tests start
-        # running) is what actually hangs.
+        # This step used to hang CI for a full 30-minute timeout with zero output. Root-caused via
+        # a background `make e2e` + periodic `sample` of the stuck process: it wasn't our
+        # helper/XPC/MCP code blocking on I/O at all — it was the Swift runtime spinning inside
+        # swift::MetadataCacheEntryBase::awaitSatisfyingState, a lock-free generic-metadata-cache
+        # "wait for another thread's in-flight instantiation of this same type" spin, reached from
+        # MCPStdioSessionTests' use of Client.connect(transport:) (see that suite's doc comment).
+        # Fixed at the source by adding `.serialized` to that suite, so its tests no longer race to
+        # instantiate the same generic metadata for the first time concurrently.
         #
-        # Two runs in a row have hung for this whole 10 minutes with zero output — not even the
-        # first test's own diagnostic print (see E2EDiagnostics.swift), which means whatever hangs
-        # does so before any of this suite's own code runs at all, most likely inside `xctest`'s
-        # process launch or swift-testing's discovery phase. Since we can't attach a debugger
-        # after the fact, `make e2e` runs in the background here and, if it's still running after
-        # 60s, this samples every process that looks related (xctest, the compiled test bundle,
-        # `swift-test` itself) every 30s for real stack traces — the actual evidence a silent hang
-        # can't otherwise produce. If `make e2e` finishes normally, the loop notices within at
-        # most one 30s tick and just falls through to `wait` for its real exit code.
-        #
-        # A first attempt at this (commit 33298f4, run 36234929125) confirmed the hang — one PID
-        # stayed stuck across 15 consecutive samples over 8 minutes — but piped `sample`'s output
-        # through `tail -150`, which threw away the actual call graph: `sample` prints "Call graph:"
-        # (the real stack traces) *first* and the "Binary Images:" list (hundreds of lines, entirely
-        # useless here) *last*, so `tail -150` kept only binary images and silently discarded every
-        # thread's backtrace. Fixed below by cutting the output right before "Binary Images:"
-        # instead of blindly tailing it, and by only sampling the first two checks (60s, 90s) since
-        # the process is already known to stay stuck for the whole window — repeating an identical
-        # sample every 30s for 8 minutes added log noise, not information.
+        # `timeout-minutes: 10` and every suite's own `.timeLimit(.minutes(1))` trait stay on as a
+        # backstop: a genuine future hang should fail fast and name the offending test, rather than
+        # silently burning the job's full 30-minute allowance again.
         timeout-minutes: 10
         env:
           E2E_EXTRA_ARGS: --verbose
-        run: |
-          set +e
-          make e2e &
-          make_pid=$!
-          echo "make e2e started, pid $make_pid"
-          for i in $(seq 1 16); do
-            sleep 30
-            if ! kill -0 "$make_pid" 2>/dev/null; then
-              echo "make e2e (pid $make_pid) finished after ~$((i * 30))s"
-              break
-            fi
-            echo "##[group]Still running after ~$((i * 30))s — sampling suspect processes"
-            ps -ax -o pid=,ppid=,etime=,command= | grep -iE "xctest|LilpassE2E|swift-test" | grep -v grep
-            if [ "$i" -le 2 ]; then
-              for pid in $(ps -ax -o pid=,command= | grep -iE "xctest|LilpassE2EPackageTests" | grep -v grep | awk '{print $1}'); do
-                echo "--- sample of pid $pid ---"
-                sample "$pid" 3 -mayDie 2>&1 | awk '/^Binary Images:/{exit} {print}'
-              done
-            else
-              echo "(skipping repeat sample — already captured at 60s/90s)"
-            fi
-            echo "##[endgroup]"
-          done
-          wait "$make_pid"
-          exit_code=$?
-          echo "make e2e exited with $exit_code"
-          exit "$exit_code"
+        run: make e2e

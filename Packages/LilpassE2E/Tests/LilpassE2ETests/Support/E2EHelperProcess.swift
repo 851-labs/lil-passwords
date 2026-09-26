@@ -8,16 +8,14 @@ import LilPasswordsKit
 /// `Agent/Support/com.851labs.lilpasswords.agent.plist`), just pointed at a throwaway plist in a
 /// temp directory instead of an installed app bundle's `LaunchAgents`.
 ///
-/// Every CI run of this suite so far has hung for the full 30-minute job timeout with zero test
-/// output, right after `swift test`'s build step finished — a `user/<uid>`-domain bootstrap was
-/// tried here as a fix (on the theory that `gui/<uid>`, which requires an active Aqua login
-/// session, might not reliably exist on a CI runner) but that regressed even locally
-/// (`launchctl bootstrap user/<uid> ...` fails immediately with "Bootstrap failed: 5: Input/output
-/// error" on a normal Mac too, so it isn't a viable substitute here). `gui/<uid>` is back, plus
-/// `runLaunchctl` below now captures stderr and bounds every `launchctl` call with a 10-second
-/// timeout instead of running under `try?`/discarding output: any future CI hang in this area
-/// should now surface as a fast, explicit `LaunchctlFailure` instead of another silent
-/// 30-minute freeze, which is what actually blocked diagnosing this the first two times.
+/// `gui/<uid>` (not `user/<uid>`) is required: it's the domain a real, GUI-logged-in user's
+/// LaunchAgents use, and it's confirmed active even on a CI runner (an unattended `macos-15`
+/// GitHub Actions runner still has an Aqua login session — `launchctl print gui/<uid>` there shows
+/// `session = Aqua`). `runLaunchctl` below captures stderr and bounds every `launchctl` call with a
+/// 10-second timeout instead of running under `try?`/discarding output, so a genuine `launchctl`
+/// failure surfaces as a fast, explicit `LaunchctlFailure` rather than an unexplained hang — this
+/// suite once hung CI for a full 30-minute job timeout with zero output, though the actual cause
+/// turned out to be unrelated to launchd entirely (see `MCPStdioSessionTests`'s doc comment).
 ///
 /// Every name this generates (the LaunchAgent label, the Mach service name, the temp work
 /// directory) includes a fresh UUID, and nothing here ever calls `launchctl setenv` (which is
@@ -103,9 +101,7 @@ final class E2EHelperProcess {
     let plistData = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
     try plistData.write(to: plistURL)
 
-    E2EDiagnostics.log("bootstrapping helper \(name)")
     try runLaunchctl(["bootstrap", "gui/\(uid)", plistURL.path], failureContext: "bootstrap \(name)")
-    E2EDiagnostics.log("bootstrapped helper \(name)")
 
     let helper = E2EHelperProcess(machServiceName: name, label: name, workDirectory: workDirectory)
     helper.isBootstrapped = true
@@ -136,9 +132,7 @@ final class E2EHelperProcess {
   }
 
   /// Runs `launchctl` with a bounded wall-clock timeout, capturing stderr so a failure explains
-  /// itself instead of surfacing as a silent, indefinite hang downstream (the failure mode that
-  /// originally made a `gui/<uid>`-domain bootstrap failure on CI look like a 30-minute-long test
-  /// freeze with zero diagnostic output — see this type's documentation). `launchctl` itself is
+  /// itself instead of surfacing as a silent, indefinite hang downstream. `launchctl` itself is
   /// normally near-instant either way; 10 seconds is generous headroom, not a tuned budget.
   @discardableResult
   private static func runLaunchctl(_ arguments: [String], failureContext: String) throws -> Int32 {
@@ -148,9 +142,7 @@ final class E2EHelperProcess {
     let stderrPipe = Pipe()
     process.standardOutput = FileHandle.nullDevice
     process.standardError = stderrPipe
-    E2EDiagnostics.log("about to call process.run() for launchctl \(arguments.joined(separator: " "))")
     try process.run()
-    E2EDiagnostics.log("process.run() returned for launchctl \(arguments.joined(separator: " "))")
 
     let deadline = DispatchTime.now() + .seconds(10)
     while process.isRunning, DispatchTime.now() < deadline {

@@ -59,9 +59,7 @@ struct MCPStdioSessionTests {
       output: FileDescriptor(rawValue: stdin.fileHandleForWriting.fileDescriptor)
     )
     let client = Client(name: "lilpass-e2e-test-client", version: "1.0.0")
-    E2EDiagnostics.log("about to call client.connect(transport:)")
     _ = try await client.connect(transport: transport)
-    E2EDiagnostics.log("client.connect(transport:) returned")
 
     return (helper, process, client)
   }
