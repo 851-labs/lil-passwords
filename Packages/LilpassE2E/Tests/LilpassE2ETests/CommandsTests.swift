@@ -12,8 +12,24 @@ import Testing
 /// this suite has twice hung a CI job for its full 30-minute timeout with zero output when one
 /// of those calls never returned — a per-test time limit turns that into a fast, attributable
 /// failure (naming exactly which test timed out) instead of another silent freeze.
-@Suite(.timeLimit(.minutes(1)))
+///
+/// `.serialized`: see `MCPStdioSessionTests`'s doc comment for the full root cause (a Swift
+/// runtime generic-metadata-cache livelock in `swift::MetadataCacheEntryBase::
+/// awaitSatisfyingState`, triggered by multiple tests racing to instantiate the same generic type
+/// for the first time in parallel). That suite was serialized as the fix the first time this was
+/// diagnosed; a later CI run hung again with *zero* test output at all — worse, and consistent
+/// with the same race now happening across this package's other, still-parallel suites instead
+/// (they all share the same `Process`/`Pipe`/`readToEndCompat` generic machinery in
+/// `LilpassBinary`/`E2EHelperProcess`). Serializing every suite in this package removes that cross-
+/// suite race outright, at the cost of this suite's tests no longer running concurrently with each
+/// other or with the rest of the package.
+@Suite(.timeLimit(.minutes(1)), .serialized)
 struct CommandsTests {
+  init() {
+    HangWatchdog.arm()
+    HangWatchdog.trace("CommandsTests.init()")
+  }
+
   @Test func statusReportsUnlockedAndEnabled() throws {
     let helper = try E2EHelperProcess.start(helperBinaryPath: LilpassBinary.helperPath)
     defer { helper.stop() }

@@ -101,7 +101,9 @@ final class E2EHelperProcess {
     let plistData = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
     try plistData.write(to: plistURL)
 
+    HangWatchdog.trace("E2EHelperProcess.start(\(name)): launchctl bootstrap")
     try runLaunchctl(["bootstrap", "gui/\(uid)", plistURL.path], failureContext: "bootstrap \(name)")
+    HangWatchdog.trace("E2EHelperProcess.start(\(name)): launchctl bootstrap returned")
 
     let helper = E2EHelperProcess(machServiceName: name, label: name, workDirectory: workDirectory)
     helper.isBootstrapped = true

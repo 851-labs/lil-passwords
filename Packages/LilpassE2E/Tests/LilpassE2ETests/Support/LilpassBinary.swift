@@ -73,6 +73,7 @@ enum LilpassBinary {
     process.standardOutput = stdoutPipe
     process.standardError = stderrPipe
 
+    HangWatchdog.trace("LilpassBinary.run(\(arguments.joined(separator: " "))): process.run()")
     try process.run()
 
     // Guards against a hung `lilpass` subprocess (e.g. blocked indefinitely establishing its XPC
@@ -93,8 +94,10 @@ enum LilpassBinary {
     // fill a pipe's kernel buffer before anyone reads it would otherwise deadlock against
     // `waitUntilExit()`. None of this suite's commands produce that much output, but reading
     // eagerly costs nothing and removes the failure mode entirely.
+    HangWatchdog.trace("LilpassBinary.run(\(arguments.joined(separator: " "))): reading stdout/stderr pipes")
     let stdoutData = try stdoutPipe.fileHandleForReading.readToEndCompat()
     let stderrData = try stderrPipe.fileHandleForReading.readToEndCompat()
+    HangWatchdog.trace("LilpassBinary.run(\(arguments.joined(separator: " "))): pipes drained, waitUntilExit()")
 
     process.waitUntilExit()
     watchdog.cancel()

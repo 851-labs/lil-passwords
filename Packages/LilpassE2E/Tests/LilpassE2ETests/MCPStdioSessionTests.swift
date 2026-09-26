@@ -38,6 +38,11 @@ import Testing
 /// bug worth reporting upstream.
 @Suite(.timeLimit(.minutes(1)), .serialized)
 struct MCPStdioSessionTests {
+  init() {
+    HangWatchdog.arm()
+    HangWatchdog.trace("MCPStdioSessionTests.init()")
+  }
+
   /// Starts a `LilpassE2EHelper` plus a `lilpass mcp` child process wired to it, connects an MCP
   /// `Client` over their shared stdio pipes, and returns everything the caller needs to talk to it
   /// and clean it up.
@@ -45,11 +50,13 @@ struct MCPStdioSessionTests {
     items: [PasswordItem] = [],
     locked: Bool = false
   ) async throws -> (helper: E2EHelperProcess, process: Process, client: Client) {
+    HangWatchdog.trace("startSession(): starting E2EHelperProcess")
     let helper = try E2EHelperProcess.start(
       helperBinaryPath: LilpassBinary.helperPath,
       items: items,
       locked: locked
     )
+    HangWatchdog.trace("startSession(): helper started, starting lilpass mcp subprocess")
     let (process, stdin, stdout) = try LilpassBinary.startMCPServer(extraEnvironment: [
       "LILPASS_E2E_MACH_SERVICE_NAME": helper.machServiceName
     ])
@@ -59,7 +66,9 @@ struct MCPStdioSessionTests {
       output: FileDescriptor(rawValue: stdin.fileHandleForWriting.fileDescriptor)
     )
     let client = Client(name: "lilpass-e2e-test-client", version: "1.0.0")
+    HangWatchdog.trace("startSession(): calling client.connect(transport:)")
     _ = try await client.connect(transport: transport)
+    HangWatchdog.trace("startSession(): client.connect(transport:) returned")
 
     return (helper, process, client)
   }

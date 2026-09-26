@@ -13,8 +13,18 @@ import Testing
 /// this suite has twice hung a CI job for its full 30-minute timeout with zero output when one
 /// of those calls never returned — a per-test time limit turns that into a fast, attributable
 /// failure (naming exactly which test timed out) instead of another silent freeze.
-@Suite(.timeLimit(.minutes(1)))
+///
+/// `.serialized`: see `MCPStdioSessionTests`'s doc comment and `CommandsTests`'s for the full
+/// rationale — a Swift runtime generic-metadata-cache livelock triggered by parallel first-time
+/// instantiation of the same generic type, now suspected to be racing across this package's suites
+/// rather than only within `MCPStdioSessionTests`.
+@Suite(.timeLimit(.minutes(1)), .serialized)
 struct InjectCommandTests {
+  init() {
+    HangWatchdog.arm()
+    HangWatchdog.trace("InjectCommandTests.init()")
+  }
+
   @Test func substitutesEveryPlaceholderAndWritesTheOutputFile() throws {
     let item = makeE2ETestItem(title: "GitHub", usernames: ["octocat"], password: "hunter2")
     let helper = try E2EHelperProcess.start(helperBinaryPath: LilpassBinary.helperPath, items: [item])
