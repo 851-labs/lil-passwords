@@ -48,9 +48,10 @@ final class LockScreenViewController: NSViewController {
 
   private let unlockFailureMessageField = NSTextField(wrappingLabelWithString: "")
   private let helperHintField = NSTextField(wrappingLabelWithString: "")
-  private let passwordButton = NSButton(title: "Use Password…", target: nil, action: nil)
-  private let tryAgainButton = NSButton(title: "Try Again", target: nil, action: nil)
-  private let openLoginItemsButton = NSButton(title: "Open Login Items…", target: nil, action: nil)
+  private let passwordButton = NSButton(title: String(localized: "Use Password…"), target: nil, action: nil)
+  private let tryAgainButton = NSButton(title: String(localized: "Try Again"), target: nil, action: nil)
+  private let openLoginItemsButton = NSButton(
+    title: String(localized: "Open Login Items…"), target: nil, action: nil)
 
   override func loadView() {
     view = NSView()
@@ -91,7 +92,7 @@ final class LockScreenViewController: NSViewController {
     let badgeImageView = NSImageView()
     badgeImageView.image = NSImage(
       systemSymbolName: "touchid",
-      accessibilityDescription: "Touch ID"
+      accessibilityDescription: String(localized: "Touch ID")
     )
     badgeImageView.symbolConfiguration = .init(pointSize: 30, weight: .regular)
     badgeImageView.contentTintColor = NSColor.black.withAlphaComponent(0.85)
@@ -103,12 +104,14 @@ final class LockScreenViewController: NSViewController {
     iconContainer.addSubview(badgeBackground)
     badgeBackground.addSubview(badgeImageView)
 
-    let titleField = NSTextField(labelWithString: "\(LilPasswordsKit.productName) is locked")
+    let titleField = NSTextField(
+      labelWithString: String(localized: "\(LilPasswordsKit.productName) is locked"))
     titleField.font = .systemFont(ofSize: 22, weight: .bold)
     titleField.alignment = .center
     titleField.translatesAutoresizingMaskIntoConstraints = false
 
-    let subtitleField = NSTextField(labelWithString: "Touch ID or enter your password to continue.")
+    let subtitleField = NSTextField(
+      labelWithString: String(localized: "Touch ID or enter your password to continue."))
     subtitleField.font = .systemFont(ofSize: 14)
     subtitleField.textColor = .secondaryLabelColor
     subtitleField.alignment = .center

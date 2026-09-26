@@ -41,8 +41,8 @@ final class DeletedDetailView: NSView {
     emptyStateView.translatesAutoresizingMaskIntoConstraints = false
     emptyStateView.configure(
       symbolName: "trash",
-      title: "No Item Selected",
-      message: "Select an item to recover it or delete it permanently."
+      title: String(localized: "No Item Selected"),
+      message: String(localized: "Select an item to recover it or delete it permanently.")
     )
 
     contentView.translatesAutoresizingMaskIntoConstraints = false
@@ -60,7 +60,7 @@ final class DeletedDetailView: NSView {
     subtitleField.textColor = .secondaryLabelColor
     subtitleField.translatesAutoresizingMaskIntoConstraints = false
 
-    recoverButton.title = "Recover"
+    recoverButton.title = String(localized: "Recover")
     recoverButton.bezelStyle = .rounded
     recoverButton.controlSize = .large
     // Recover is the safe, reversible action here, so it (not Delete Permanently) gets the
@@ -71,16 +71,16 @@ final class DeletedDetailView: NSView {
     recoverButton.bezelColor = .controlAccentColor
     recoverButton.target = self
     recoverButton.action = #selector(recoverTapped)
-    recoverButton.setAccessibilityLabel("Recover")
+    recoverButton.setAccessibilityLabel(String(localized: "Recover"))
     recoverButton.translatesAutoresizingMaskIntoConstraints = false
 
-    deleteButton.title = "Delete Permanently…"
+    deleteButton.title = String(localized: "Delete Permanently…")
     deleteButton.bezelStyle = .rounded
     deleteButton.controlSize = .large
     deleteButton.contentTintColor = .systemRed
     deleteButton.target = self
     deleteButton.action = #selector(deleteTapped)
-    deleteButton.setAccessibilityLabel("Delete Permanently")
+    deleteButton.setAccessibilityLabel(String(localized: "Delete Permanently"))
     deleteButton.translatesAutoresizingMaskIntoConstraints = false
 
     let buttonStack = NSStackView(views: [recoverButton, deleteButton])
@@ -145,14 +145,14 @@ final class DeletedDetailView: NSView {
     let days = item.daysRemaining(now: now) ?? 0
     let remaining =
       days <= 0
-      ? "Will be deleted permanently today"
+      ? String(localized: "Will be deleted permanently today")
       : days == 1
-        ? "1 day remaining before permanent deletion"
-        : "\(days) days remaining before permanent deletion"
+        ? String(localized: "1 day remaining before permanent deletion")
+        : String(localized: "\(days) days remaining before permanent deletion")
     subtitleField.stringValue = remaining
-    recoverButton.title = "Recover"
-    deleteButton.title = "Delete Permanently…"
-    setAccessibilityLabel("\(item.title), \(remaining)")
+    recoverButton.title = String(localized: "Recover")
+    deleteButton.title = String(localized: "Delete Permanently…")
+    setAccessibilityLabel(String(localized: "\(item.title), \(remaining)"))
   }
 
   /// A multi-item selection: just the count plus bulk actions over the whole selection.
@@ -160,11 +160,11 @@ final class DeletedDetailView: NSView {
     emptyStateView.isHidden = true
     contentView.isHidden = false
     iconView.image = NSImage(systemSymbolName: "trash", accessibilityDescription: nil)
-    titleField.stringValue = "\(count) Items Selected"
+    titleField.stringValue = String(localized: "\(count) Items Selected")
     subtitleField.isHidden = true
-    recoverButton.title = "Recover All"
-    deleteButton.title = "Delete Permanently…"
-    setAccessibilityLabel("\(count) items selected")
+    recoverButton.title = String(localized: "Recover All")
+    deleteButton.title = String(localized: "Delete Permanently…")
+    setAccessibilityLabel(String(localized: "\(count) items selected"))
   }
 
   @objc

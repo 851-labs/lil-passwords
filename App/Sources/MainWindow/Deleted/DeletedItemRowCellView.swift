@@ -71,12 +71,12 @@ final class DeletedItemRowCellView: NSTableCellView {
     iconView.image = MonogramIcon.icon(for: item.title)
     titleField.stringValue = item.title
     let days = item.daysRemaining(now: now) ?? 0
-    let remaining = days == 1 ? "1 day" : "\(days) days"
+    let remaining = days == 1 ? String(localized: "1 day") : String(localized: "\(days) days")
     subtitleField.stringValue = remaining
 
     // A meaningful VoiceOver description for the whole row (851-2426), not just its title —
     // matching the "Amazon, jordan@…, has verification code" shape the ticket calls out.
     setAccessibilityElement(true)
-    setAccessibilityLabel("\(item.title), \(remaining) remaining before permanent deletion")
+    setAccessibilityLabel(String(localized: "\(item.title), \(remaining) remaining before permanent deletion"))
   }
 }

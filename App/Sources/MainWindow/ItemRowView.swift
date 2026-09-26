@@ -96,7 +96,7 @@ final class ItemRowCellView: NSTableCellView {
   private func accessibilityLabel(title: String, subtitle: String?, hasVerificationCode: Bool) -> String {
     var parts = [title]
     if let subtitle { parts.append(subtitle) }
-    if hasVerificationCode { parts.append("has verification code") }
+    if hasVerificationCode { parts.append(String(localized: "has verification code")) }
     return parts.joined(separator: ", ")
   }
 

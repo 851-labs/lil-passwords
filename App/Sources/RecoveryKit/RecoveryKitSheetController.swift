@@ -21,7 +21,7 @@ final class RecoveryKitSheetController: NSWindowController {
     )
 
     let window = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
-    window.title = "\(appName) Recovery Kit"
+    window.title = String(localized: "\(appName) Recovery Kit")
     super.init(window: window)
     showReveal()
   }

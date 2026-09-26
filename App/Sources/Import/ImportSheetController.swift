@@ -24,7 +24,7 @@ final class ImportSheetController: NSWindowController {
     self.parentWindow = parentWindow
 
     let window = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
-    window.title = "Import Passwords"
+    window.title = String(localized: "Import Passwords")
     super.init(window: window)
   }
 
@@ -76,21 +76,31 @@ final class ImportSheetController: NSWindowController {
     do {
       text = try String(contentsOf: url, encoding: .utf8)
     } catch {
-      return .failure(ParseFailure(message: "That file couldn't be opened: \(error.localizedDescription)"))
+      return .failure(
+        ParseFailure(message: String(localized: "That file couldn't be opened: \(error.localizedDescription)"))
+      )
     }
 
     guard (try? CSVImporter.detectFormat(text)) != nil else {
-      return .failure(ParseFailure(message: "That file's format wasn't recognized as one this app can import."))
+      return .failure(
+        ParseFailure(
+          message: String(localized: "That file's format wasn't recognized as one this app can import.")
+        )
+      )
     }
 
     do {
       let result = try CSVImporter.importCSV(text)
       guard !result.credentials.isEmpty else {
-        return .failure(ParseFailure(message: "That file didn't contain any passwords to import."))
+        return .failure(
+          ParseFailure(message: String(localized: "That file didn't contain any passwords to import."))
+        )
       }
       return .success(result.credentials)
     } catch {
-      return .failure(ParseFailure(message: "That file couldn't be read as a CSV: \(error.localizedDescription)"))
+      return .failure(
+        ParseFailure(message: String(localized: "That file couldn't be read as a CSV: \(error.localizedDescription)"))
+      )
     }
   }
 

@@ -37,14 +37,14 @@ final class MenuBarItemDetailViewController: NSViewController {
     let view = NSView()
 
     let backButton = NSButton(
-      image: NSImage(systemSymbolName: "chevron.left", accessibilityDescription: "Back")!,
+      image: NSImage(systemSymbolName: "chevron.left", accessibilityDescription: String(localized: "Back"))!,
       target: self,
       action: #selector(backTapped)
     )
     backButton.bezelStyle = .accessoryBarAction
     backButton.isBordered = false
     backButton.translatesAutoresizingMaskIntoConstraints = false
-    backButton.setAccessibilityLabel("Back")
+    backButton.setAccessibilityLabel(String(localized: "Back"))
 
     iconView.translatesAutoresizingMaskIntoConstraints = false
     iconView.imageScaling = .scaleProportionallyUpOrDown
@@ -69,7 +69,7 @@ final class MenuBarItemDetailViewController: NSViewController {
     footerSeparator.boxType = .separator
     footerSeparator.translatesAutoresizingMaskIntoConstraints = false
 
-    footerButton.title = "Open \(LilPasswordsKit.productName)"
+    footerButton.title = String(localized: "Open \(LilPasswordsKit.productName)")
     footerButton.bezelStyle = .accessoryBarAction
     footerButton.controlSize = .small
     footerButton.target = self
@@ -126,14 +126,15 @@ final class MenuBarItemDetailViewController: NSViewController {
     subtitleField.stringValue = username ?? ""
     subtitleField.isHidden = username == nil
 
-    usernameRow.configure(label: "User Name", value: username ?? "", showRing: false)
+    usernameRow.configure(label: String(localized: "User Name"), value: username ?? "", showRing: false)
     usernameRow.onCopy = { [weak self] in
       guard let username = self?.item?.usernames.first(where: { !$0.isEmpty }) else { return }
       Pasteboard.copySecret(username)
     }
 
     passwordRow.configure(
-      label: "Password", value: String(repeating: "•", count: max(item.password.count, 8)), showRing: false)
+      label: String(localized: "Password"), value: String(repeating: "•", count: max(item.password.count, 8)),
+      showRing: false)
     passwordRow.onCopy = { [weak self] in
       guard let password = self?.item?.password else { return }
       Pasteboard.copySecret(password)
@@ -170,7 +171,7 @@ final class MenuBarItemDetailViewController: NSViewController {
   private func updateVerificationCodeRow() {
     guard let totp = item?.totp else { return }
     let now = Date()
-    codeRow.configure(label: "Verification Code", value: totp.code(at: now), showRing: true)
+    codeRow.configure(label: String(localized: "Verification Code"), value: totp.code(at: now), showRing: true)
     let elapsed = now.timeIntervalSince1970.truncatingRemainder(dividingBy: totp.period)
     codeRow.updateRingFraction(elapsed / totp.period)
   }

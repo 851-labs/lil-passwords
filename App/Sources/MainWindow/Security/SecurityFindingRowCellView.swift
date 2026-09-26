@@ -54,14 +54,14 @@ final class SecurityFindingRowCellView: NSTableCellView {
     reasonField.maximumNumberOfLines = 0
 
     changePasswordButton.translatesAutoresizingMaskIntoConstraints = false
-    changePasswordButton.title = "Change Password on Website"
+    changePasswordButton.title = String(localized: "Change Password on Website")
     changePasswordButton.bezelStyle = .rounded
     changePasswordButton.controlSize = .small
     changePasswordButton.target = self
     changePasswordButton.action = #selector(changePasswordTapped)
 
     hideWarningButton.translatesAutoresizingMaskIntoConstraints = false
-    hideWarningButton.title = "Hide Security Warning"
+    hideWarningButton.title = String(localized: "Hide Security Warning")
     hideWarningButton.bezelStyle = .rounded
     hideWarningButton.controlSize = .small
     hideWarningButton.target = self
@@ -105,7 +105,7 @@ final class SecurityFindingRowCellView: NSTableCellView {
 
     // A meaningful VoiceOver description for the whole row (851-2426), not just the title.
     setAccessibilityElement(true)
-    setAccessibilityLabel("\(item.title), \(kind.groupTitle.lowercased()): \(kind.reasonText)")
+    setAccessibilityLabel(String(localized: "\(item.title), \(kind.groupTitle.lowercased()): \(kind.reasonText)"))
   }
 
   @objc
@@ -124,7 +124,7 @@ final class SecurityFindingRowCellView: NSTableCellView {
   /// height in ``height(for:availableWidth:)`` below — `.small`/`.rounded` push buttons have a
   /// fixed height independent of their title, so one instance covers both real buttons.
   private static let sampleButton: NSButton = {
-    let button = NSButton(title: "Change Password on Website", target: nil, action: nil)
+    let button = NSButton(title: String(localized: "Change Password on Website"), target: nil, action: nil)
     button.bezelStyle = .rounded
     button.controlSize = .small
     return button

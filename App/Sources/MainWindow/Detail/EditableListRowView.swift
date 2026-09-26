@@ -33,15 +33,27 @@ final class EditableListRowView: NSView {
     textField.translatesAutoresizingMaskIntoConstraints = false
     textField.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-    let upButton = Self.makeGlyphButton(symbolName: "chevron.up", enabled: canMoveUp, toolTip: "Move Up")
+    let upButton = Self.makeGlyphButton(
+      symbolName: "chevron.up",
+      enabled: canMoveUp,
+      toolTip: String(localized: "Move Up")
+    )
     upButton.target = self
     upButton.action = #selector(moveUpTapped)
 
-    let downButton = Self.makeGlyphButton(symbolName: "chevron.down", enabled: canMoveDown, toolTip: "Move Down")
+    let downButton = Self.makeGlyphButton(
+      symbolName: "chevron.down",
+      enabled: canMoveDown,
+      toolTip: String(localized: "Move Down")
+    )
     downButton.target = self
     downButton.action = #selector(moveDownTapped)
 
-    let removeButton = Self.makeGlyphButton(symbolName: "minus.circle.fill", enabled: true, toolTip: "Remove")
+    let removeButton = Self.makeGlyphButton(
+      symbolName: "minus.circle.fill",
+      enabled: true,
+      toolTip: String(localized: "Remove")
+    )
     removeButton.contentTintColor = .systemRed
     removeButton.target = self
     removeButton.action = #selector(removeTapped)

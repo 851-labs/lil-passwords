@@ -100,7 +100,7 @@ final class MenuBarCopyableRowView: NSView {
     // never a revealed secret at rest.
     setAccessibilityElement(true)
     setAccessibilityRole(.button)
-    setAccessibilityLabel("\(label): \(value)")
+    setAccessibilityLabel(String(localized: "\(label): \(value)"))
   }
 
   func updateRingFraction(_ fraction: Double) {

@@ -10,6 +10,7 @@
 		0908BAD594DE4DA89139148E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 67B8972C5CBD3222176705D1 /* Assets.xcassets */; };
 		18DBFFAF699B21118F7DE3E8 /* lilpass in Embed Dependencies */ = {isa = PBXBuildFile; fileRef = C1EE44597B7D4A967C806C1E /* lilpass */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		1C49D3CFE10E6FD7DDC06E50 /* LilPasswordsAgent in Embed Dependencies */ = {isa = PBXBuildFile; fileRef = F2BF470827AD396CCE39BD0D /* LilPasswordsAgent */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		3FDE1453EFCCB1610818D52B /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = D04D57C140F0BF5DDE5329C7 /* Localizable.xcstrings */; };
 		78FFF7FF14F6A9EACB0E37E6 /* LilPasswordsKit in Frameworks */ = {isa = PBXBuildFile; productRef = B41A41E642B0A614A5A75DA7 /* LilPasswordsKit */; };
 		79287A7FC0FE66AC92E1BFC4 /* LilPasswordsKit in Frameworks */ = {isa = PBXBuildFile; productRef = 5EBA761A968E93EEADB84FEA /* LilPasswordsKit */; };
 		C68E97F864E0BE5A9CD3AAE3 /* LilPasswordsKit in Frameworks */ = {isa = PBXBuildFile; productRef = E539F5199FCE7076CD81B5FA /* LilPasswordsKit */; };
@@ -68,6 +69,7 @@
 		67B8972C5CBD3222176705D1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9752809980BB70168B33CB2C /* LilPasswordsKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LilPasswordsKit; path = Packages/LilPasswordsKit; sourceTree = SOURCE_ROOT; };
 		C1EE44597B7D4A967C806C1E /* lilpass */ = {isa = PBXFileReference; includeInIndex = 0; path = lilpass; sourceTree = BUILT_PRODUCTS_DIR; };
+		D04D57C140F0BF5DDE5329C7 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		E16AB1A3115C01ADF6D2E139 /* LilPasswords.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LilPasswords.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2BF470827AD396CCE39BD0D /* LilPasswordsAgent */ = {isa = PBXFileReference; includeInIndex = 0; path = LilPasswordsAgent; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -157,6 +159,7 @@
 			isa = PBXGroup;
 			children = (
 				67B8972C5CBD3222176705D1 /* Assets.xcassets */,
+				D04D57C140F0BF5DDE5329C7 /* Localizable.xcstrings */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -360,6 +363,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0908BAD594DE4DA89139148E /* Assets.xcassets in Resources */,
+				3FDE1453EFCCB1610818D52B /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -556,6 +560,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.851labs.lilpasswords;
 				PRODUCT_NAME = "lil passwords";
 				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
 			name = Release;
 		};
@@ -636,6 +641,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.851labs.lilpasswords;
 				PRODUCT_NAME = "lil passwords";
 				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
 			name = Debug;
 		};

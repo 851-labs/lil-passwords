@@ -35,14 +35,17 @@ final class ImportCompletionViewController: NSViewController {
     let itemWord = importedCount == 1 ? "Password" : "Passwords"
     emptyState.configure(
       symbolName: "checkmark.circle",
-      title: "Imported \(importedCount) \(itemWord)",
-      message:
-        "The file you imported from contains your passwords in plain text. "
-        + "For your security, delete it once you've confirmed the import."
+      title: String(localized: "Imported \(importedCount) \(itemWord)"),
+      message: String(
+        localized: """
+          The file you imported from contains your passwords in plain text. \
+          For your security, delete it once you've confirmed the import.
+          """
+      )
     )
 
     trashButton.translatesAutoresizingMaskIntoConstraints = false
-    trashButton.title = "Move CSV to Trash"
+    trashButton.title = String(localized: "Move CSV to Trash")
     trashButton.bezelStyle = .rounded
     trashButton.target = self
     trashButton.action = #selector(trashTapped)
@@ -53,7 +56,7 @@ final class ImportCompletionViewController: NSViewController {
     trashStatusField.textColor = .secondaryLabelColor
     trashStatusField.isHidden = true
 
-    let doneButton = NSButton(title: "Done", target: self, action: #selector(doneTapped))
+    let doneButton = NSButton(title: String(localized: "Done"), target: self, action: #selector(doneTapped))
     doneButton.translatesAutoresizingMaskIntoConstraints = false
     doneButton.bezelStyle = .rounded
     doneButton.keyEquivalent = "\r"
@@ -89,11 +92,13 @@ final class ImportCompletionViewController: NSViewController {
     guard let csvURL else { return }
     do {
       try FileManager.default.trashItem(at: csvURL, resultingItemURL: nil)
-      trashStatusField.stringValue = "Moved to Trash."
+      trashStatusField.stringValue = String(localized: "Moved to Trash.")
       trashStatusField.isHidden = false
       trashButton.isEnabled = false
     } catch {
-      trashStatusField.stringValue = "Couldn't move the file to the Trash: \(error.localizedDescription)"
+      trashStatusField.stringValue = String(
+        localized: "Couldn't move the file to the Trash: \(error.localizedDescription)"
+      )
       trashStatusField.isHidden = false
     }
   }

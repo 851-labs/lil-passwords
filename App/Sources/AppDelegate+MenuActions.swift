@@ -18,7 +18,7 @@ extension AppDelegate {
   }
 
   @objc func newPassword(_ sender: Any?) {
-    presentComingSoonAlert(title: "New Password", ticket: "851-2416")
+    presentComingSoonAlert(title: String(localized: "New Password"), ticket: "851-2416")
   }
 
   @objc func importPasswords(_ sender: Any?) {
@@ -32,19 +32,19 @@ extension AppDelegate {
   }
 
   @objc func find(_ sender: Any?) {
-    presentComingSoonAlert(title: "Find", ticket: "851-2417")
+    presentComingSoonAlert(title: String(localized: "Find"), ticket: "851-2417")
   }
 
   @objc func sortByName(_ sender: Any?) {
-    presentComingSoonAlert(title: "Sort By Name", ticket: "851-2414")
+    presentComingSoonAlert(title: String(localized: "Sort By Name"), ticket: "851-2414")
   }
 
   @objc func sortByDateModified(_ sender: Any?) {
-    presentComingSoonAlert(title: "Sort By Date Modified", ticket: "851-2414")
+    presentComingSoonAlert(title: String(localized: "Sort By Date Modified"), ticket: "851-2414")
   }
 
   @objc func sortByDateCreated(_ sender: Any?) {
-    presentComingSoonAlert(title: "Sort By Date Created", ticket: "851-2414")
+    presentComingSoonAlert(title: String(localized: "Sort By Date Created"), ticket: "851-2414")
   }
 
   /// The app's one document-style window, if it's still around. Menu actions that need to
@@ -57,8 +57,8 @@ extension AppDelegate {
   private func presentComingSoonAlert(title: String, ticket: String) {
     let alert = NSAlert()
     alert.alertStyle = .informational
-    alert.messageText = "\(title) Isn't Available Yet"
-    alert.informativeText = "This will work once \(ticket) is done."
+    alert.messageText = String(localized: "\(title) Isn't Available Yet")
+    alert.informativeText = String(localized: "This will work once \(ticket) is done.")
     if let window = mainWindow {
       alert.beginSheetModal(for: window)
     } else {

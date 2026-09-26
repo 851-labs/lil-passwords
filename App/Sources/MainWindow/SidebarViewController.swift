@@ -88,7 +88,7 @@ final class SidebarViewController: NSViewController {
     outlineView.backgroundColor = .clear
 
     let column = NSTableColumn(identifier: Column.identifier)
-    column.title = "Sidebar"
+    column.title = String(localized: "Sidebar")
     outlineView.addTableColumn(column)
     outlineView.outlineTableColumn = column
   }
@@ -195,7 +195,7 @@ extension SidebarViewController: NSOutlineViewDelegate {
 
     switch node {
     case .sharedGroupsHeader:
-      return makeGroupRowView(title: "Shared Groups")
+      return makeGroupRowView(title: String(localized: "Shared Groups"))
     case .category(let category):
       return makeCategoryRowView(category: category)
     case .sharedGroup(let group):
@@ -315,6 +315,7 @@ private final class SidebarRowView: NSTableCellView {
     // A meaningful VoiceOver description for the whole row (851-2426), e.g. "All, 12 items" —
     // otherwise VoiceOver would read the icon, title, and count as three separate elements.
     setAccessibilityElement(true)
-    setAccessibilityLabel("\(title), \(count == 1 ? "1 item" : "\(count) items")")
+    setAccessibilityLabel(
+      String(localized: "\(title), \(count == 1 ? String(localized: "1 item") : String(localized: "\(count) items"))"))
   }
 }

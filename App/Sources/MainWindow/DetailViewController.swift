@@ -129,7 +129,7 @@ final class DetailViewController: NSViewController {
 
     emptyStateView.configure(
       symbolName: category.symbolName,
-      title: "No \(singularNoun(for: category)) Selected",
+      title: String(localized: "No \(singularNoun(for: category)) Selected"),
       message: nil
     )
     emptyStateView.isHidden = false
@@ -158,7 +158,8 @@ final class DetailViewController: NSViewController {
     websiteDrafts = []
     isEditing = false
 
-    emptyStateView.configure(symbolName: "checkmark.circle.fill", title: "\(count) Items Selected", message: nil)
+    emptyStateView.configure(
+      symbolName: "checkmark.circle.fill", title: String(localized: "\(count) Items Selected"), message: nil)
     emptyStateView.isHidden = false
     contentContainer.isHidden = true
     updateEditControlState()
@@ -176,12 +177,12 @@ final class DetailViewController: NSViewController {
 
   private func singularNoun(for category: SidebarCategory) -> String {
     switch category {
-    case .all: "Password"
-    case .passkeys: "Passkey"
-    case .codes: "Code"
-    case .wifi: "Network"
-    case .security: "Item"
-    case .deleted: "Item"
+    case .all: String(localized: "Password")
+    case .passkeys: String(localized: "Passkey")
+    case .codes: String(localized: "Code")
+    case .wifi: String(localized: "Network")
+    case .security: String(localized: "Item")
+    case .deleted: String(localized: "Item")
     }
   }
 
@@ -293,7 +294,7 @@ final class DetailViewController: NSViewController {
 
     finalItem.title = {
       let trimmed = finalItem.title.trimmingCharacters(in: .whitespacesAndNewlines)
-      return trimmed.isEmpty ? "Untitled" : trimmed
+      return trimmed.isEmpty ? String(localized: "Untitled") : trimmed
     }()
     finalItem.usernames = finalItem.usernames
       .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -371,8 +372,8 @@ final class DetailViewController: NSViewController {
     if isEditing {
       usernameListEditor = EditableListEditor(
         values: displayItem.usernames,
-        placeholder: "Username or Email",
-        addButtonTitle: "Add Username",
+        placeholder: String(localized: "Username or Email"),
+        addButtonTitle: String(localized: "Add Username"),
         onChange: { [weak self] newValues in
           self?.draft?.usernames = newValues
         },
@@ -385,7 +386,7 @@ final class DetailViewController: NSViewController {
       usernameListEditor = nil
       // Apple Passwords labels only the first row when there's more than one username (using
       // the plural "User Names"), leaving the rest unlabeled rather than repeating the label.
-      let label = displayItem.usernames.count > 1 ? "User Names" : "User Name"
+      let label = displayItem.usernames.count > 1 ? String(localized: "User Names") : String(localized: "User Name")
       usernameRows = displayItem.usernames.enumerated().map { index, username in
         let row = DetailValueRowView()
         row.configure(label: index == 0 ? label : "", value: username)
@@ -413,11 +414,16 @@ final class DetailViewController: NSViewController {
   private func configureVerificationRows(_ displayItem: PasswordItem) {
     if isEditing {
       var rows: [NSView] = [
-        makeInfoRow(displayItem.totpURI != nil ? "Verification code is set up." : "No verification code.")
+        makeInfoRow(
+          displayItem.totpURI != nil
+            ? String(localized: "Verification code is set up.") : String(localized: "No verification code."))
       ]
       if displayItem.totpURI != nil {
         rows.append(
-          AddRowView(title: "Remove Verification Code", symbolName: "minus.circle.fill", tintColor: .systemRed) {
+          AddRowView(
+            title: String(localized: "Remove Verification Code"), symbolName: "minus.circle.fill",
+            tintColor: .systemRed
+          ) {
             [weak self] in
             self?.draft?.totpURI = nil
             self?.reloadContent()
@@ -438,8 +444,8 @@ final class DetailViewController: NSViewController {
     if isEditing {
       websiteListEditor = EditableListEditor(
         values: websiteDrafts,
-        placeholder: "Website",
-        addButtonTitle: "Add Website",
+        placeholder: String(localized: "Website"),
+        addButtonTitle: String(localized: "Add Website"),
         onChange: { [weak self] newValues in
           self?.websiteDrafts = newValues
         },
@@ -467,7 +473,7 @@ final class DetailViewController: NSViewController {
     valueField.textColor = .secondaryLabelColor
     valueField.alignment = .right
     valueField.lineBreakMode = .byTruncatingMiddle
-    return KeyValueRow(label: "Created", value: valueField)
+    return KeyValueRow(label: String(localized: "Created"), value: valueField)
   }
 
   private func configureNotesCard(_ displayItem: PasswordItem) {
@@ -503,13 +509,13 @@ final class DetailViewController: NSViewController {
     guard let item, let window = view.window else { return }
 
     let alert = NSAlert()
-    alert.messageText = "Set Up Verification Code"
-    alert.informativeText = "Paste the otpauth:// setup URI from your two-factor provider."
-    alert.addButton(withTitle: "Add")
-    alert.addButton(withTitle: "Cancel")
+    alert.messageText = String(localized: "Set Up Verification Code")
+    alert.informativeText = String(localized: "Paste the otpauth:// setup URI from your two-factor provider.")
+    alert.addButton(withTitle: String(localized: "Add"))
+    alert.addButton(withTitle: String(localized: "Cancel"))
 
     let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
-    input.placeholderString = "otpauth://totp/..."
+    input.placeholderString = String(localized: "otpauth://totp/...")
     alert.accessoryView = input
 
     alert.beginSheetModal(for: window) { [weak self] response in
@@ -529,9 +535,9 @@ final class DetailViewController: NSViewController {
     guard let window = view.window else { return }
     let alert = NSAlert()
     alert.alertStyle = .warning
-    alert.messageText = "Invalid Verification Code URI"
-    alert.informativeText = "That doesn't look like a valid otpauth:// setup URI."
-    alert.addButton(withTitle: "OK")
+    alert.messageText = String(localized: "Invalid Verification Code URI")
+    alert.informativeText = String(localized: "That doesn't look like a valid otpauth:// setup URI.")
+    alert.addButton(withTitle: String(localized: "OK"))
     alert.beginSheetModal(for: window)
   }
 }

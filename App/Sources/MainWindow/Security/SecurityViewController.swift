@@ -143,7 +143,7 @@ final class SecurityViewController: NSViewController {
     tableView.reloadData()
 
     let count = findings.uniqueItemIDs.count
-    countLabel.stringValue = count == 1 ? "1 Item" : "\(count) Items"
+    countLabel.stringValue = count == 1 ? String(localized: "1 Item") : String(localized: "\(count) Items")
 
     let hasFindings = !newRows.isEmpty
     scrollView.isHidden = !hasFindings

@@ -34,8 +34,12 @@ final class DeletedViewController: NSViewController {
   private let detailView = DeletedDetailView()
 
   private let contextMenu = NSMenu()
-  private let recoverMenuItem = NSMenuItem(title: "Recover", action: nil, keyEquivalent: "")
-  private let deleteMenuItem = NSMenuItem(title: "Delete Permanently", action: nil, keyEquivalent: "")
+  private let recoverMenuItem = NSMenuItem(title: String(localized: "Recover"), action: nil, keyEquivalent: "")
+  private let deleteMenuItem = NSMenuItem(
+    title: String(localized: "Delete Permanently"),
+    action: nil,
+    keyEquivalent: ""
+  )
 
   init(dataSource: VaultViewModel) {
     self.dataSource = dataSource
@@ -114,14 +118,14 @@ final class DeletedViewController: NSViewController {
     countLabel.textColor = .secondaryLabelColor
 
     recoverAllButton.translatesAutoresizingMaskIntoConstraints = false
-    recoverAllButton.title = "Recover All"
+    recoverAllButton.title = String(localized: "Recover All")
     recoverAllButton.bezelStyle = .rounded
     recoverAllButton.controlSize = .small
     recoverAllButton.target = self
     recoverAllButton.action = #selector(recoverAllTapped)
 
     deleteAllButton.translatesAutoresizingMaskIntoConstraints = false
-    deleteAllButton.title = "Delete All"
+    deleteAllButton.title = String(localized: "Delete All")
     deleteAllButton.bezelStyle = .rounded
     deleteAllButton.controlSize = .small
     deleteAllButton.contentTintColor = .systemRed
@@ -199,7 +203,7 @@ final class DeletedViewController: NSViewController {
       tableView.selectRowIndexes(indices, byExtendingSelection: false)
     }
 
-    countLabel.stringValue = items.count == 1 ? "1 Item" : "\(items.count) Items"
+    countLabel.stringValue = items.count == 1 ? String(localized: "1 Item") : String(localized: "\(items.count) Items")
     recoverAllButton.isEnabled = !items.isEmpty
     deleteAllButton.isEnabled = !items.isEmpty
 
@@ -243,10 +247,12 @@ final class DeletedViewController: NSViewController {
     let alert = NSAlert()
     alert.alertStyle = .critical
     alert.messageText =
-      items.count == 1 ? "Delete “\(items[0].title)” Permanently?" : "Delete \(items.count) Items Permanently?"
-    alert.informativeText = "This can't be undone."
-    alert.addButton(withTitle: "Delete Permanently")
-    alert.addButton(withTitle: "Cancel")
+      items.count == 1
+      ? String(localized: "Delete “\(items[0].title)” Permanently?")
+      : String(localized: "Delete \(items.count) Items Permanently?")
+    alert.informativeText = String(localized: "This can't be undone.")
+    alert.addButton(withTitle: String(localized: "Delete Permanently"))
+    alert.addButton(withTitle: String(localized: "Cancel"))
     alert.beginSheetModal(for: window) { [weak self] response in
       guard response == .alertFirstButtonReturn else { return }
       for item in items {

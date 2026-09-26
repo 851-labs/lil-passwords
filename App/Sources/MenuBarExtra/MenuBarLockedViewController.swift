@@ -34,12 +34,13 @@ final class MenuBarLockedViewController: NSViewController {
     iconView.contentTintColor = .secondaryLabelColor
     iconView.translatesAutoresizingMaskIntoConstraints = false
 
-    let titleField = NSTextField(labelWithString: "\(LilPasswordsKit.productName) is locked")
+    let titleField = NSTextField(labelWithString: String(localized: "\(LilPasswordsKit.productName) is locked"))
     titleField.font = .systemFont(ofSize: 15, weight: .semibold)
     titleField.alignment = .center
     titleField.translatesAutoresizingMaskIntoConstraints = false
 
-    let subtitleField = NSTextField(labelWithString: "Touch ID or enter your password to continue.")
+    let subtitleField = NSTextField(
+      labelWithString: String(localized: "Touch ID or enter your password to continue."))
     subtitleField.font = .systemFont(ofSize: 11)
     subtitleField.textColor = .secondaryLabelColor
     subtitleField.alignment = .center
@@ -52,7 +53,7 @@ final class MenuBarLockedViewController: NSViewController {
     unlockFailureMessageField.translatesAutoresizingMaskIntoConstraints = false
     unlockFailureMessageField.isHidden = true
 
-    let unlockButton = NSButton(title: "Unlock…", target: self, action: #selector(unlockTapped))
+    let unlockButton = NSButton(title: String(localized: "Unlock…"), target: self, action: #selector(unlockTapped))
     unlockButton.bezelStyle = .rounded
     unlockButton.controlSize = .regular
     unlockButton.translatesAutoresizingMaskIntoConstraints = false

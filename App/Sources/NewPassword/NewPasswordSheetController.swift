@@ -33,7 +33,7 @@ final class NewPasswordSheetController: NSWindowController {
     self.vaultViewModel = vaultViewModel
     let window = NSWindow(
       contentRect: .zero, styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
-    window.title = "New Password"
+    window.title = String(localized: "New Password")
     // Apple Passwords' own New Password sheet has no visible title bar at all — the card sits
     // flush with the sheet's own rounded corners. `.fullSizeContentView` plus hiding the title
     // (rather than dropping `.titled` entirely) keeps the window's title bar *metadata* (visible
@@ -83,7 +83,7 @@ final class NewPasswordSheetController: NSWindowController {
     iconView = icon
 
     let title = NSTextField()
-    title.placeholderString = "Title"
+    title.placeholderString = String(localized: "Title")
     title.font = .boldSystemFont(ofSize: 26)
     title.alignment = .center
     title.isBordered = false
@@ -102,12 +102,15 @@ final class NewPasswordSheetController: NSWindowController {
       title.widthAnchor.constraint(lessThanOrEqualToConstant: 320),
     ])
 
-    let username = valueField(placeholder: "user")
+    let username = valueField(placeholder: String(localized: "user"))
     usernameField = username
-    let usernameRow = KeyValueRow(label: "User Name", value: username)
+    let usernameRow = KeyValueRow(label: String(localized: "User Name"), value: username)
 
     let regenerateButton = NSButton(
-      image: NSImage(systemSymbolName: "arrow.clockwise.circle", accessibilityDescription: "Password Options")
+      image: NSImage(
+        systemSymbolName: "arrow.clockwise.circle",
+        accessibilityDescription: String(localized: "Password Options")
+      )
         ?? NSImage(),
       target: self,
       action: #selector(showPasswordMenu(_:))
@@ -115,18 +118,18 @@ final class NewPasswordSheetController: NSWindowController {
     regenerateButton.isBordered = false
     regenerateButton.imagePosition = .imageOnly
     regenerateButton.contentTintColor = .secondaryLabelColor
-    regenerateButton.setAccessibilityLabel("Password Options")
+    regenerateButton.setAccessibilityLabel(String(localized: "Password Options"))
     // `accessory` here, not `KeyValueRow`'s own accessory slot: see `PasswordCardValueView`'s
     // documentation for why (851-2416 review — that slot was silently shrinking the value column,
     // pulling the dots' right edge in from where every other row's value lines up).
     let passwordValue = PasswordCardValueView(value: "", accessory: regenerateButton)
     passwordValueView = passwordValue
-    let passwordRow = KeyValueRow(label: "Password", value: passwordValue)
+    let passwordRow = KeyValueRow(label: String(localized: "Password"), value: passwordValue)
 
-    let website = valueField(placeholder: "example.com")
+    let website = valueField(placeholder: String(localized: "example.com"))
     websiteField = website
     website.delegate = self
-    let websiteRow = KeyValueRow(label: "Website", value: website)
+    let websiteRow = KeyValueRow(label: String(localized: "Website"), value: website)
 
     let notesView = NSTextView()
     notesView.font = .systemFont(ofSize: 13)
@@ -141,7 +144,7 @@ final class NewPasswordSheetController: NSWindowController {
     notesScrollView.hasVerticalScroller = true
     notesScrollView.translatesAutoresizingMaskIntoConstraints = false
     notesScrollView.heightAnchor.constraint(equalToConstant: 54).isActive = true
-    let notesRow = KeyValueRow(label: "Notes", value: notesScrollView, stacked: true)
+    let notesRow = KeyValueRow(label: String(localized: "Notes"), value: notesScrollView, stacked: true)
 
     let card = CardView()
     card.setContent(header: header, rows: [usernameRow, passwordRow, websiteRow, notesRow])
@@ -149,10 +152,10 @@ final class NewPasswordSheetController: NSWindowController {
     let footerDivider = NSBox()
     footerDivider.boxType = .separator
 
-    let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelTapped))
+    let cancelButton = NSButton(title: String(localized: "Cancel"), target: self, action: #selector(cancelTapped))
     cancelButton.bezelStyle = .rounded
     cancelButton.keyEquivalent = "\u{1b}"
-    let save = NSButton(title: "Save", target: self, action: #selector(saveTapped))
+    let save = NSButton(title: String(localized: "Save"), target: self, action: #selector(saveTapped))
     save.bezelStyle = .rounded
     save.keyEquivalent = "\r"
     // Same fix as `ImportPreviewViewController.importButton` (851-2426 tophat visual audit):
@@ -249,10 +252,15 @@ final class NewPasswordSheetController: NSWindowController {
   @objc
   private func showPasswordMenu(_ sender: NSButton) {
     let menu = NSMenu()
-    menu.addItem(withTitle: "Regenerate Password", action: #selector(regenerateTapped), keyEquivalent: "")
+    menu.addItem(
+      withTitle: String(localized: "Regenerate Password"), action: #selector(regenerateTapped), keyEquivalent: ""
+    )
 
     let noSymbols = menu.addItem(
-      withTitle: "No Special Characters", action: #selector(toggleNoSpecialCharacters), keyEquivalent: "")
+      withTitle: String(localized: "No Special Characters"),
+      action: #selector(toggleNoSpecialCharacters),
+      keyEquivalent: ""
+    )
     noSymbols.state = isNoSpecialCharacters ? .on : .off
 
     for item in menu.items {

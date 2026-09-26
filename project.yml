@@ -132,6 +132,12 @@ targets:
         # produces them, declaring this script as also producing them created a dependency cycle).
         # Scoped to this target only — LilPasswordsAgent/lilpass have no script phases of their own.
         ENABLE_USER_SCRIPT_SANDBOXING: NO
+        # 851-2426 localization pass: lets the build extract `String(localized:)` call sites into
+        # .stringsdata, so Xcode's String Catalog editor (and `xcodebuild -exportLocalizations`)
+        # can merge them into App/Resources/Localizable.xcstrings. Off by default for new targets
+        # in some Xcode versions; without it, only SwiftUI's own auto-localized Text()/Button()
+        # literals (which don't need this flag) were being picked up.
+        SWIFT_EMIT_LOC_STRINGS: YES
   LilPasswordsAgent:
     type: tool
     platform: macOS

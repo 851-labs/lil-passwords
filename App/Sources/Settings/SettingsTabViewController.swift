@@ -19,9 +19,9 @@ final class SettingsTabViewController: NSTabViewController {
     tabStyle = .toolbar
     canPropagateSelectedChildViewControllerTitle = false
 
-    addTab(GeneralSettingsViewController(), title: "General", symbolName: "gearshape")
-    addTab(SecuritySettingsViewController(), title: "Security", symbolName: "lock.shield")
-    addTab(AgentsSettingsViewController(), title: "Agents", symbolName: "sparkles")
+    addTab(GeneralSettingsViewController(), title: String(localized: "General"), symbolName: "gearshape")
+    addTab(SecuritySettingsViewController(), title: String(localized: "Security"), symbolName: "lock.shield")
+    addTab(AgentsSettingsViewController(), title: String(localized: "Agents"), symbolName: "sparkles")
 
     // `addTabViewItem` above auto-selects index 0 (General), but that selection happens without
     // going through `tabView(_:didSelect:)` below, so nothing has sized the window for it yet.

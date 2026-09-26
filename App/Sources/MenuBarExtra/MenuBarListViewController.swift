@@ -32,7 +32,7 @@ final class MenuBarListViewController: NSViewController {
   private let searchField = NSSearchField()
   private let scrollView = NSScrollView()
   private let tableView = NSTableView()
-  private let emptyStateField = NSTextField(labelWithString: "No Passwords")
+  private let emptyStateField = NSTextField(labelWithString: String(localized: "No Passwords"))
   private let footerButton = NSButton()
 
   init(vaultViewModel: VaultViewModel) {
@@ -118,7 +118,7 @@ final class MenuBarListViewController: NSViewController {
   }
 
   private func configureSearchField() {
-    searchField.placeholderString = "Search Passwords"
+    searchField.placeholderString = String(localized: "Search Passwords")
     searchField.delegate = self
     searchField.sendsWholeSearchString = false
     searchField.sendsSearchStringImmediately = true
@@ -156,7 +156,7 @@ final class MenuBarListViewController: NSViewController {
   }
 
   private func configureFooter() {
-    footerButton.title = "Open \(LilPasswordsKit.productName)"
+    footerButton.title = String(localized: "Open \(LilPasswordsKit.productName)")
     footerButton.bezelStyle = .accessoryBarAction
     footerButton.controlSize = .small
     footerButton.target = self
@@ -171,27 +171,29 @@ final class MenuBarListViewController: NSViewController {
     let hasItems = rows.contains { if case .item = $0 { return true } else { return false } }
     emptyStateField.isHidden = hasItems
     scrollView.isHidden = !hasItems
-    emptyStateField.stringValue = searchQuery.isEmpty ? "No Passwords" : "No Results"
+    emptyStateField.stringValue =
+      searchQuery.isEmpty ? String(localized: "No Passwords") : String(localized: "No Results")
   }
 
   private func computeRows() -> [Row] {
     let allItems = vaultViewModel.items.filter { $0.deletedAt == nil }
 
     guard searchQuery.isEmpty else {
-      return [Row.section("Results")] + rankedRows(from: allItems, query: searchQuery)
+      return [Row.section(String(localized: "Results"))] + rankedRows(from: allItems, query: searchQuery)
     }
 
     var rows: [Row] = []
     let suggestions = suggestedItems(from: allItems)
     if !suggestions.isEmpty {
-      rows.append(.section("Suggested"))
+      rows.append(.section(String(localized: "Suggested")))
       rows.append(contentsOf: suggestions.map(Row.item))
     }
 
     let remaining = allItems.filter { item in !suggestions.contains { $0.id == item.id } }
       .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
     if !remaining.isEmpty {
-      rows.append(.section(suggestions.isEmpty ? "All Passwords" : "Other Passwords"))
+      rows.append(
+        .section(suggestions.isEmpty ? String(localized: "All Passwords") : String(localized: "Other Passwords")))
       rows.append(contentsOf: remaining.map(Row.item))
     }
     return rows

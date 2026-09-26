@@ -25,12 +25,15 @@ enum RegenerateRecoveryKeyFlow {
   static func makeConfirmationAlert() -> NSAlert {
     let alert = NSAlert()
     alert.alertStyle = .warning
-    alert.messageText = "Generate a New Recovery Key?"
-    alert.informativeText =
-      "Your current recovery key will stop working immediately. Make sure you save the new one "
-      + "somewhere safe — there's no way to see it again later."
-    alert.addButton(withTitle: "Generate New Key")
-    alert.addButton(withTitle: "Cancel")
+    alert.messageText = String(localized: "Generate a New Recovery Key?")
+    alert.informativeText = String(
+      localized: """
+        Your current recovery key will stop working immediately. Make sure you save the new one \
+        somewhere safe — there's no way to see it again later.
+        """
+    )
+    alert.addButton(withTitle: String(localized: "Generate New Key"))
+    alert.addButton(withTitle: String(localized: "Cancel"))
     return alert
   }
 
@@ -43,11 +46,11 @@ enum RegenerateRecoveryKeyFlow {
     Task {
       do {
         try await deviceAuthenticator.authenticate(
-          reason: "authenticate to generate a new recovery key"
+          reason: String(localized: "authenticate to generate a new recovery key")
         )
       } catch {
         presentFailureAlert(
-          message: "Authentication failed, so no new recovery key was generated.",
+          message: String(localized: "Authentication failed, so no new recovery key was generated."),
           over: window
         )
         return
@@ -73,12 +76,14 @@ enum RegenerateRecoveryKeyFlow {
         // round trip `MainWindowController.presentRecoveryKit` does after `.createVault`.
         guard let recoveryKey = VaultCrypto.RecoveryKey(displayString: recoveryKeyDisplayString) else {
           assertionFailure("helper returned a recovery key display string that doesn't round-trip")
-          presentFailureAlert(message: "Something went wrong generating the new key.", over: window)
+          presentFailureAlert(message: String(localized: "Something went wrong generating the new key."), over: window)
           return
         }
         RecoveryKitFlow.presentAfterVaultCreation(recoveryKey: recoveryKey, over: window)
       } catch {
-        presentFailureAlert(message: "The new recovery key couldn't be generated: \(error)", over: window)
+        presentFailureAlert(
+          message: String(localized: "The new recovery key couldn't be generated: \(error)"), over: window
+        )
       }
     }
   }
@@ -86,7 +91,7 @@ enum RegenerateRecoveryKeyFlow {
   private static func presentFailureAlert(message: String, over window: NSWindow) {
     let alert = NSAlert()
     alert.alertStyle = .critical
-    alert.messageText = "Couldn't Generate a New Recovery Key"
+    alert.messageText = String(localized: "Couldn't Generate a New Recovery Key")
     alert.informativeText = message
     alert.beginSheetModal(for: window)
   }

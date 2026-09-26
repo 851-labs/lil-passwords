@@ -66,7 +66,7 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
   /// `ItemListViewController` before the toolbar is even attached to the window.
   private lazy var searchToolbarItem: NSSearchToolbarItem = {
     let item = NSSearchToolbarItem(itemIdentifier: ItemIdentifier.search)
-    item.searchField.placeholderString = "Search"
+    item.searchField.placeholderString = String(localized: "Search")
     // The search field now spans the *detail* column (851-2463, reversing 851-2461's list-column
     // placement): only one tracking separator precedes it, so its width stretches from there to
     // the toolbar's trailing edge. This is a fallback minimum in case that stretch doesn't kick in
@@ -82,19 +82,21 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
 
   override init() {
     let sortButton = NSButton(
-      image: NSImage(systemSymbolName: "arrow.up.arrow.down", accessibilityDescription: "Sort") ?? NSImage(),
+      image: NSImage(systemSymbolName: "arrow.up.arrow.down", accessibilityDescription: String(localized: "Sort"))
+        ?? NSImage(),
       target: nil,
       action: nil
     )
     let addButton = NSButton(
-      image: NSImage(systemSymbolName: "plus", accessibilityDescription: "New Item") ?? NSImage(),
+      image: NSImage(systemSymbolName: "plus", accessibilityDescription: String(localized: "New Item"))
+        ?? NSImage(),
       target: nil,
       action: nil
     )
     // The image's own `accessibilityDescription` isn't reliably surfaced by VoiceOver as the
     // button's label on its own (851-2426) — every icon-only control gets its label set directly.
-    sortButton.setAccessibilityLabel("Sort")
-    addButton.setAccessibilityLabel("New Item")
+    sortButton.setAccessibilityLabel(String(localized: "Sort"))
+    addButton.setAccessibilityLabel(String(localized: "New Item"))
     listActionsView = CapsuleToolbarView(buttons: [sortButton, addButton])
     super.init()
     addButton.target = self
@@ -184,7 +186,7 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     case ItemIdentifier.listTitle:
       let item = NSToolbarItem(itemIdentifier: itemIdentifier)
       item.view = listTitleView
-      item.label = "Category"
+      item.label = String(localized: "Category")
       item.visibilityPriority = .high
       // Since macOS 26 ("Tahoe"), NSToolbar puts a Liquid Glass "platter" behind every item by
       // default — appropriate for interactive controls (buttons, the search field), but Apple's
@@ -198,7 +200,7 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     case ItemIdentifier.listActions:
       let item = NSToolbarItem(itemIdentifier: itemIdentifier)
       item.view = listActionsView
-      item.label = "List Actions"
+      item.label = String(localized: "List Actions")
       return item
 
     case ItemIdentifier.listDetailTrackingSeparator:
@@ -208,7 +210,7 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     case ItemIdentifier.edit:
       let item = NSToolbarItem(itemIdentifier: itemIdentifier)
       item.view = editControl
-      item.label = "Edit"
+      item.label = String(localized: "Edit")
       return item
 
     case ItemIdentifier.search:
@@ -225,11 +227,13 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     // `nil`-targeted, same as `MainMenu.swift`'s File → New Password: resolved dynamically via
     // the responder chain, currently `MainSplitViewController.newPassword(_:)` (851-2416).
     menu.addItem(
-      withTitle: "New Password…", action: #selector(MainSplitViewController.newPassword(_:)), keyEquivalent: "")
-    menu.addItem(withTitle: "New Passkey…", action: nil, keyEquivalent: "")
-    menu.addItem(withTitle: "New Wi-Fi Password…", action: nil, keyEquivalent: "")
+      withTitle: String(localized: "New Password…"),
+      action: #selector(MainSplitViewController.newPassword(_:)),
+      keyEquivalent: "")
+    menu.addItem(withTitle: String(localized: "New Passkey…"), action: nil, keyEquivalent: "")
+    menu.addItem(withTitle: String(localized: "New Wi-Fi Password…"), action: nil, keyEquivalent: "")
     menu.addItem(.separator())
-    menu.addItem(withTitle: "New Secure Note…", action: nil, keyEquivalent: "")
+    menu.addItem(withTitle: String(localized: "New Secure Note…"), action: nil, keyEquivalent: "")
     // The rest still have no real destination; only "New Password…" above should be enabled.
     for item in menu.items where item.action == nil {
       item.isEnabled = false

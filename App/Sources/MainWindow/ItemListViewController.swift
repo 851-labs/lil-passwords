@@ -68,11 +68,13 @@ final class ItemListViewController: NSViewController {
   private let emptyStateView = EmptyStateView()
 
   private let contextMenu = NSMenu()
-  private let copyUsernameMenuItem = NSMenuItem(title: "Copy Username", action: nil, keyEquivalent: "")
-  private let copyPasswordMenuItem = NSMenuItem(title: "Copy Password", action: nil, keyEquivalent: "")
+  private let copyUsernameMenuItem = NSMenuItem(
+    title: String(localized: "Copy Username"), action: nil, keyEquivalent: "")
+  private let copyPasswordMenuItem = NSMenuItem(
+    title: String(localized: "Copy Password"), action: nil, keyEquivalent: "")
   private let copyVerificationCodeMenuItem = NSMenuItem(
-    title: "Copy Verification Code", action: nil, keyEquivalent: "")
-  private let deleteMenuItem = NSMenuItem(title: "Delete", action: nil, keyEquivalent: "")
+    title: String(localized: "Copy Verification Code"), action: nil, keyEquivalent: "")
+  private let deleteMenuItem = NSMenuItem(title: String(localized: "Delete"), action: nil, keyEquivalent: "")
 
   /// Two sections (851-2463, matching Apple Passwords' own sort menu): which field to sort by,
   /// then a separator, then which direction — each with its own checkmark, kept in sync by
@@ -284,10 +286,10 @@ final class ItemListViewController: NSViewController {
 
   private func sortMenuTitle(for field: PasswordItemSortField) -> String {
     switch field {
-    case .title: return "Title"
-    case .createdAt: return "Date Created"
-    case .modifiedAt: return "Date Edited"
-    case .website: return "Website"
+    case .title: return String(localized: "Title")
+    case .createdAt: return String(localized: "Date Created")
+    case .modifiedAt: return String(localized: "Date Edited")
+    case .website: return String(localized: "Website")
     }
   }
 
@@ -302,8 +304,8 @@ final class ItemListViewController: NSViewController {
 
   private func sortMenuTitle(for direction: SortDirection) -> String {
     switch direction {
-    case .ascending: return "Ascending"
-    case .descending: return "Descending"
+    case .ascending: return String(localized: "Ascending")
+    case .descending: return String(localized: "Descending")
     }
   }
 
@@ -366,8 +368,8 @@ final class ItemListViewController: NSViewController {
     if !searchQuery.isEmpty {
       emptyStateView.configure(
         symbolName: "magnifyingglass",
-        title: "No Results",
-        message: "Try a different search."
+        title: String(localized: "No Results"),
+        message: String(localized: "Try a different search.")
       )
     } else {
       emptyStateView.configure(
@@ -379,7 +381,8 @@ final class ItemListViewController: NSViewController {
   }
 
   private func updateListTitle() {
-    let subtitle = rows.count == 1 ? "1 Item" : "\(rows.count) Items"
+    let subtitle =
+      rows.count == 1 ? String(localized: "1 Item") : String(localized: "\(rows.count) Items")
     listTitleView?.configure(title: currentCategory.title, subtitle: subtitle)
   }
 
@@ -435,7 +438,8 @@ final class ItemListViewController: NSViewController {
     let row = tableView.selectedRow
     guard items.count == 1, !items[0].password.isEmpty, row >= 0 else { return }
     Pasteboard.copySecret(items[0].password)
-    CopyHUD.show(relativeTo: tableView.rect(ofRow: row), of: tableView, message: "Password Copied")
+    CopyHUD.show(
+      relativeTo: tableView.rect(ofRow: row), of: tableView, message: String(localized: "Password Copied"))
   }
 
   @objc private func copyVerificationCode(_ sender: Any?) {
