@@ -103,7 +103,9 @@ final class E2EHelperProcess {
     let plistData = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
     try plistData.write(to: plistURL)
 
+    E2EDiagnostics.log("bootstrapping helper \(name)")
     try runLaunchctl(["bootstrap", "gui/\(uid)", plistURL.path], failureContext: "bootstrap \(name)")
+    E2EDiagnostics.log("bootstrapped helper \(name)")
 
     let helper = E2EHelperProcess(machServiceName: name, label: name, workDirectory: workDirectory)
     helper.isBootstrapped = true
@@ -146,7 +148,9 @@ final class E2EHelperProcess {
     let stderrPipe = Pipe()
     process.standardOutput = FileHandle.nullDevice
     process.standardError = stderrPipe
+    E2EDiagnostics.log("about to call process.run() for launchctl \(arguments.joined(separator: " "))")
     try process.run()
+    E2EDiagnostics.log("process.run() returned for launchctl \(arguments.joined(separator: " "))")
 
     let deadline = DispatchTime.now() + .seconds(10)
     while process.isRunning, DispatchTime.now() < deadline {

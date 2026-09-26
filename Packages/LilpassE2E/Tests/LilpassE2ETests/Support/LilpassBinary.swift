@@ -73,7 +73,9 @@ enum LilpassBinary {
     process.standardOutput = stdoutPipe
     process.standardError = stderrPipe
 
+    E2EDiagnostics.log("about to call process.run() for lilpass \(arguments.joined(separator: " "))")
     try process.run()
+    E2EDiagnostics.log("process.run() returned for lilpass \(arguments.joined(separator: " "))")
 
     // Guards against a hung `lilpass` subprocess (e.g. blocked indefinitely establishing its XPC
     // connection to the helper) silently eating the whole CI job's timeout with zero diagnostic
@@ -94,11 +96,14 @@ enum LilpassBinary {
     // fill a pipe's kernel buffer before anyone reads it would otherwise deadlock against
     // `waitUntilExit()`. None of this suite's commands produce that much output, but reading
     // eagerly costs nothing and removes the failure mode entirely.
+    E2EDiagnostics.log("draining pipes for lilpass \(arguments.joined(separator: " "))")
     let stdoutData = try stdoutPipe.fileHandleForReading.readToEndCompat()
     let stderrData = try stderrPipe.fileHandleForReading.readToEndCompat()
+    E2EDiagnostics.log("pipes drained for lilpass \(arguments.joined(separator: " ")), waiting for exit")
 
     process.waitUntilExit()
     watchdog.cancel()
+    E2EDiagnostics.log("lilpass \(arguments.joined(separator: " ")) exited \(process.terminationStatus)")
 
     if timeoutState.hasTimedOut {
       throw TimedOut(description: "lilpass \(arguments.joined(separator: " ")) timed out after 15s and was killed")
@@ -159,7 +164,9 @@ enum LilpassBinary {
     // risks the same fill-the-buffer deadlock `run(_:)` avoids above.
     process.standardError = FileHandle.standardError
 
+    E2EDiagnostics.log("about to call process.run() for lilpass mcp")
     try process.run()
+    E2EDiagnostics.log("process.run() returned for lilpass mcp")
     return (process, stdin, stdout)
   }
 }
