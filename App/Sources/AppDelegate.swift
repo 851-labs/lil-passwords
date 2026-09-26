@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationDidFinishLaunching(_ notification: Notification) {
     #if DEBUG
       applyForcedAppearanceOverrideIfNeeded()
+      applyResetOnboardingOverrideIfNeeded()
     #endif
     NSApp.mainMenu = MainMenu.make()
     let controller = MainWindowController(agentClient: agentClient, helperAgentRegistrar: helperAgentRegistrar)
@@ -68,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MenuBarExtraDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
         NewPasswordDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
         RegenerateRecoveryKeyDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
+        OnboardingDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
         RecoveryKitDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
       }
     #endif
@@ -179,6 +181,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let tab = SettingsTabViewController.Tab(rawValue: raw)
       else { return }
       SettingsWindowController.shared.show(tab: tab)
+    }
+
+    /// `-ResetOnboarding YES` forces `AppSettings.hasCompletedOnboarding` back to `false` before
+    /// `MainWindowController` is built, DEBUG-only — so the first-run walkthrough (851-2439) can be
+    /// re-run against an already-set-up vault for manual QA/tophat, without deleting that vault
+    /// (which `-SeedSampleData`/`-ForceAppearance`-style launch args also deliberately avoid
+    /// touching). Must run before `MainWindowController(agentClient:)`'s own `LockCoordinator`
+    /// starts observing state, since that's what reads this flag to decide between the onboarding
+    /// window and the old direct vault-setup path — see `MainWindowController.startFirstRunVaultSetupIfNeeded`.
+    private func applyResetOnboardingOverrideIfNeeded() {
+      guard UserDefaults.standard.string(forKey: "ResetOnboarding") == "YES" else { return }
+      AppSettings.shared.hasCompletedOnboarding = false
     }
   #endif
 }

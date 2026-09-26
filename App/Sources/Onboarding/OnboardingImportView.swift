@@ -1,0 +1,49 @@
+import LilPasswordsKit
+import SwiftUI
+
+/// Onboarding step 4 (851-2439): walks through exporting a CSV from Apple's Passwords app, then
+/// hands off to the existing "File → Import Passwords…" flow (``ImportFlow``) — this step never
+/// parses a CSV itself. Skippable: there's nothing here a user is required to do.
+struct OnboardingImportView: View {
+  var onImportCSV: () -> Void
+  var onSkip: () -> Void
+
+  var body: some View {
+    OnboardingPageView(
+      icon: .symbol(name: "square.and.arrow.down.on.square.fill", tint: .indigo),
+      title: "Import from Apple Passwords",
+      subtitle: "Bring over what you've already saved in Passwords:",
+      content: {
+        VStack(alignment: .leading, spacing: 6) {
+          OnboardingStepRow(number: 1, text: "Open the Passwords app")
+          OnboardingStepRow(number: 2, text: "Choose File → Export All Passwords…")
+          OnboardingStepRow(number: 3, text: "Authenticate, then save the CSV file")
+          OnboardingStepRow(number: 4, text: "Import that file below")
+        }
+      },
+      primaryTitle: "Import CSV…",
+      primaryAction: onImportCSV,
+      secondaryTitle: "Skip",
+      secondaryAction: onSkip
+    )
+  }
+}
+
+/// One numbered line of the export walkthrough — plain text is enough here; this is guidance for
+/// a different app's UI, not something this app needs to illustrate.
+private struct OnboardingStepRow: View {
+  let number: Int
+  let text: String
+
+  var body: some View {
+    HStack(alignment: .top, spacing: 8) {
+      Text("\(number).")
+        .font(.system(size: 12, weight: .semibold))
+        .foregroundStyle(.secondary)
+        .frame(width: 16, alignment: .trailing)
+      Text(text)
+        .font(.system(size: 12))
+      Spacer(minLength: 0)
+    }
+  }
+}

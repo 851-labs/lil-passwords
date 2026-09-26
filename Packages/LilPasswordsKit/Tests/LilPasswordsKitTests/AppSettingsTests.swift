@@ -26,6 +26,7 @@ struct AppSettingsTests {
     #expect(settings.menuBarBrowserSuggestionsEnabled == false)
     #expect(settings.itemListSortField == .title)
     #expect(settings.itemListSortDirection == .ascending)
+    #expect(settings.hasCompletedOnboarding == false)
   }
 
   @Test("round-trips every setting")
@@ -58,6 +59,9 @@ struct AppSettingsTests {
 
     settings.itemListSortDirection = .descending
     #expect(settings.itemListSortDirection == .descending)
+
+    settings.hasCompletedOnboarding = true
+    #expect(settings.hasCompletedOnboarding == true)
   }
 
   @Test("clamps password length to the supported range")
