@@ -106,19 +106,21 @@ final class NewPasswordSheetController: NSWindowController {
     usernameField = username
     let usernameRow = KeyValueRow(label: "User Name", value: username)
 
-    let passwordValue = PasswordCardValueView(value: "")
-    passwordValueView = passwordValue
     let regenerateButton = NSButton(
       image: NSImage(systemSymbolName: "arrow.clockwise.circle", accessibilityDescription: "Password Options")
         ?? NSImage(),
       target: self,
       action: #selector(showPasswordMenu(_:))
     )
-    regenerateButton.bezelStyle = .texturedRounded
     regenerateButton.isBordered = false
     regenerateButton.imagePosition = .imageOnly
     regenerateButton.contentTintColor = .secondaryLabelColor
-    let passwordRow = KeyValueRow(label: "Password", value: passwordValue, accessory: regenerateButton)
+    // `accessory` here, not `KeyValueRow`'s own accessory slot: see `PasswordCardValueView`'s
+    // documentation for why (851-2416 review — that slot was silently shrinking the value column,
+    // pulling the dots' right edge in from where every other row's value lines up).
+    let passwordValue = PasswordCardValueView(value: "", accessory: regenerateButton)
+    passwordValueView = passwordValue
+    let passwordRow = KeyValueRow(label: "Password", value: passwordValue)
 
     let website = valueField(placeholder: "example.com")
     websiteField = website
