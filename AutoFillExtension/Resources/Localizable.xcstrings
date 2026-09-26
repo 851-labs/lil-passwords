@@ -1,7 +1,36 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@ is locked" : {
 
+    },
+    "Couldn't reach %@' background helper." : {
+
+    },
+    "Couldn't unlock %@." : {
+
+    },
+    "Loading…" : {
+
+    },
+    "Search" : {
+
+    },
+    "Search credentials" : {
+
+    },
+    "Unlock %@ to use AutoFill" : {
+
+    },
+    "Unlock %@ to use AutoFill." : {
+
+    },
+    "Unlock…" : {
+
+    },
+    "has verification code" : {
+
+    }
   },
   "version" : "1.0"
 }

@@ -10,29 +10,29 @@ struct OnboardingWelcomeView: View {
   var body: some View {
     OnboardingPageView(
       icon: .appIcon,
-      title: "Welcome to \(LilPasswordsKit.productName)",
-      subtitle: "Let's get you set up.",
+      title: String(localized: "Welcome to \(LilPasswordsKit.productName)"),
+      subtitle: String(localized: "Let's get you set up."),
       content: {
         VStack(alignment: .leading, spacing: 14) {
           OnboardingFeatureBullet(
             symbolName: "lock.shield.fill",
             tint: .blue,
-            title: "A local, encrypted vault"
+            title: String(localized: "A local, encrypted vault")
           )
           OnboardingFeatureBullet(
             symbolName: "qrcode",
             tint: .purple,
-            title: "Verification codes, right alongside your passwords"
+            title: String(localized: "Verification codes, right alongside your passwords")
           )
           OnboardingFeatureBullet(
             symbolName: "terminal.fill",
             tint: .orange,
-            title: "A CLI and MCP server for your agents"
+            title: String(localized: "A CLI and MCP server for your agents")
           )
         }
         .padding(.top, 4)
       },
-      primaryTitle: "Continue",
+      primaryTitle: String(localized: "Continue"),
       primaryAction: onContinue
     )
   }

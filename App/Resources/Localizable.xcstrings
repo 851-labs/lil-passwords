@@ -1,20 +1,7 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "%@ · %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · %2$@"
-          }
-        }
-      }
-    },
     "%@ Command Installed" : {
-
-    },
-    "%@ couldn't capture the screen. Check that it has Screen Recording " : {
 
     },
     "%@ Export.csv" : {
@@ -23,13 +10,31 @@
     "%@ Help" : {
 
     },
-    "%@ is locked" : {
-
-    },
     "%@ Isn't Available Yet" : {
 
     },
+    "%@ Recovery Kit" : {
+
+    },
+    "%@ Recovery Kit.pdf" : {
+
+    },
+    "%@ couldn't capture the screen. Check that it has Screen Recording " : {
+
+    },
+    "%@ is locked" : {
+
+    },
+    "%@ is unlocked, and every access is logged." : {
+
+    },
+    "%@ is unlocked. Turning this off, or locking the vault, blocks access." : {
+
+    },
     "%@ locks and requires Touch ID or your password again after this much inactivity." : {
+
+    },
+    "%@ locks itself after a period of inactivity, and unlocks again " : {
 
     },
     "%@ needs its helper turned on in Login Items to lock and unlock your vault. Open System Settings and enable it, then reopen %@." : {
@@ -42,11 +47,15 @@
         }
       }
     },
-    "%@ Recovery Kit" : {
-
-    },
-    "%@ Recovery Kit.pdf" : {
-
+    "%@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
     },
     "%@, %@" : {
       "localizations" : {
@@ -64,6 +73,16 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@, %2$@ remaining before permanent deletion"
+          }
+        }
+      }
+    },
+    "%@, %@, current network" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@, current network"
           }
         }
       }
@@ -91,6 +110,15 @@
     "%lld Codes" : {
 
     },
+    "%lld Items" : {
+
+    },
+    "%lld Items Selected" : {
+
+    },
+    "%lld Networks" : {
+
+    },
     "%lld days" : {
 
     },
@@ -100,13 +128,7 @@
     "%lld items" : {
 
     },
-    "%lld Items" : {
-
-    },
     "%lld items selected" : {
-
-    },
-    "%lld Items Selected" : {
 
     },
     "%lld new · %lld duplicate (skipped) · %lld conflict%@" : {
@@ -125,6 +147,12 @@
     "1 Code" : {
 
     },
+    "1 Item" : {
+
+    },
+    "1 Network" : {
+
+    },
     "1 day" : {
 
     },
@@ -134,10 +162,10 @@
     "1 item" : {
 
     },
-    "1 Item" : {
+    "1. Open the Passwords app.\n2. Choose File → Export All Passwords…\n3. Authenticate, then choose where to save the CSV file.\n4. Select that file here to import it." : {
 
     },
-    "1. Open the Passwords app.\n2. Choose File → Export All Passwords…\n3. Authenticate, then choose where to save the CSV file.\n4. Select that file here to import it." : {
+    "A CLI and MCP server for your agents" : {
 
     },
     "A different program is at %@ (%@)" : {
@@ -149,6 +177,9 @@
           }
         }
       }
+    },
+    "A local, encrypted vault" : {
+
     },
     "About %@" : {
 
@@ -195,6 +226,9 @@
     "Allow agents to create, edit, and delete passwords" : {
 
     },
+    "Any local process that can run %@ can read everything while " : {
+
+    },
     "Anyone with access to the exported file can read every password and two-factor code in it, unprotected. Store it somewhere safe, and delete it as soon as you're done with it." : {
 
     },
@@ -204,10 +238,10 @@
     "Ascending" : {
 
     },
-    "authenticate to export all your passwords as a plaintext file" : {
+    "Authenticate, then save the CSV file" : {
 
     },
-    "authenticate to generate a new recovery key" : {
+    "Authenticating…" : {
 
     },
     "Authentication failed, so no new recovery key was generated." : {
@@ -219,10 +253,19 @@
     "Auto-Lock" : {
 
     },
+    "AutoFill" : {
+
+    },
+    "Automation permission the first time." : {
+
+    },
     "Back" : {
 
     },
     "Bring All to Front" : {
+
+    },
+    "Bring over what you've already saved in Passwords:" : {
 
     },
     "Cancel" : {
@@ -237,16 +280,19 @@
     "Check for Updates…" : {
 
     },
-    "Checks each password against known data leaks by sending only the first 5 characters of its hash — never the password itself — to Have I Been Pwned." : {
+    "Checks each password against known data leaks by sending only the first 5 characters of its hash — " : {
+
+    },
+    "Choose File → Export All Passwords…" : {
+
+    },
+    "Choose QR Image File…" : {
 
     },
     "Choose a Different File…" : {
 
     },
     "Choose an image containing this item's verification code QR code." : {
-
-    },
-    "Choose QR Image File…" : {
 
     },
     "Choose which item this verification code belongs to." : {
@@ -315,13 +361,16 @@
     "Copy Verification Code" : {
 
     },
-    "Couldn't create your vault: %@" : {
-
-    },
     "Couldn't Export Passwords" : {
 
     },
     "Couldn't Generate a New Recovery Key" : {
+
+    },
+    "Couldn't Read That File" : {
+
+    },
+    "Couldn't create your vault: %@" : {
 
     },
     "Couldn't install the %@ command: %@" : {
@@ -337,9 +386,6 @@
     "Couldn't move the file to the Trash: %@" : {
 
     },
-    "Couldn't Read That File" : {
-
-    },
     "Couldn't remove the %@ command: %@" : {
       "localizations" : {
         "en" : {
@@ -350,10 +396,25 @@
         }
       }
     },
+    "Couldn't reveal this network's password." : {
+
+    },
+    "Couldn't reveal this network's password. You may need to enter an administrator password." : {
+
+    },
     "Couldn't set up %@ automatically. Try Copy Setup instead." : {
 
     },
+    "Create Vault" : {
+
+    },
+    "Create Your Vault" : {
+
+    },
     "Created" : {
+
+    },
+    "Current" : {
 
     },
     "Cut" : {
@@ -371,9 +432,6 @@
     "Delete" : {
 
     },
-    "Delete “%@” Permanently?" : {
-
-    },
     "Delete %lld Items Permanently?" : {
 
     },
@@ -386,6 +444,9 @@
     "Delete Permanently…" : {
 
     },
+    "Delete “%@” Permanently?" : {
+
+    },
     "Descending" : {
 
     },
@@ -393,6 +454,9 @@
 
     },
     "Detect compromised passwords" : {
+
+    },
+    "Do this if you ever suspect someone else has seen your existing key." : {
 
     },
     "Done" : {
@@ -410,7 +474,10 @@
     "Enter your recovery key." : {
 
     },
-    "example.com" : {
+    "Entries older than 30 days are removed automatically." : {
+
+    },
+    "Every agent request is recorded here — time, agent, item, and fields accessed, never secret values. " : {
 
     },
     "Export" : {
@@ -450,16 +517,13 @@
     "General" : {
 
     },
-    "Generate a New Recovery Key?" : {
-
-    },
     "Generate New Key" : {
 
     },
     "Generate New Recovery Key…" : {
 
     },
-    "has verification code" : {
+    "Generate a New Recovery Key?" : {
 
     },
     "Help" : {
@@ -483,13 +547,22 @@
     "Import" : {
 
     },
-    "Import a QR code from an image" : {
+    "Import CSV…" : {
 
     },
     "Import Passwords" : {
 
     },
     "Import Passwords…" : {
+
+    },
+    "Import a QR code from an image" : {
+
+    },
+    "Import from Apple Passwords" : {
+
+    },
+    "Import that file below" : {
 
     },
     "Imported %lld %@" : {
@@ -538,6 +611,9 @@
     "Last group" : {
 
     },
+    "Let's get you set up." : {
+
+    },
     "List Actions" : {
 
     },
@@ -574,13 +650,10 @@
     "New Password" : {
 
     },
-    "New password length: %lld characters" : {
+    "New Passwords" : {
 
     },
     "New Password…" : {
-
-    },
-    "New Passwords" : {
 
     },
     "New Secure Note…" : {
@@ -589,19 +662,16 @@
     "New Wi-Fi Password…" : {
 
     },
+    "New password length: %lld characters" : {
+
+    },
     "No %@ Selected" : {
-
-    },
-    "No agent activity yet." : {
-
-    },
-    "No display was available to capture." : {
 
     },
     "No Item Selected" : {
 
     },
-    "No notes." : {
+    "No Network Selected" : {
 
     },
     "No Passwords" : {
@@ -613,10 +683,19 @@
     "No Special Characters" : {
 
     },
-    "No vault was found to restore." : {
+    "No Verification Code Found" : {
 
     },
-    "No Verification Code Found" : {
+    "No agent activity yet." : {
+
+    },
+    "No display was available to capture." : {
+
+    },
+    "No notes." : {
+
+    },
+    "No vault was found to restore." : {
 
     },
     "No verification code QR code was found on screen. Make sure it's visible, then try again." : {
@@ -625,13 +704,13 @@
     "No verification code." : {
 
     },
+    "Not Now" : {
+
+    },
     "Not connected" : {
 
     },
     "Not installed" : {
-
-    },
-    "Not Now" : {
 
     },
     "Notes" : {
@@ -646,7 +725,7 @@
     "Open %@" : {
 
     },
-    "Open in Browser" : {
+    "Open AutoFill & Passwords Settings…" : {
 
     },
     "Open Login Items…" : {
@@ -658,13 +737,16 @@
     "Open System Settings" : {
 
     },
+    "Open in Browser" : {
+
+    },
+    "Open the Passwords app" : {
+
+    },
     "Other Passwords" : {
 
     },
     "Otherwise, agent access follows %@' own auto-lock." : {
-
-    },
-    "otpauth://totp/..." : {
 
     },
     "Passkey" : {
@@ -685,10 +767,10 @@
     "Paste the otpauth:// setup URI from your two-factor provider." : {
 
     },
-    "permission in System Settings > Privacy & Security, then try again." : {
+    "Print…" : {
 
     },
-    "Print…" : {
+    "QR code to join “%@”" : {
 
     },
     "Quit %@" : {
@@ -742,6 +824,12 @@
     "Scan Screen for QR Code" : {
 
     },
+    "Scan this code with the Camera app on another Apple device to join this Wi-Fi network." : {
+
+    },
+    "Scan to Join “%@”" : {
+
+    },
     "Search" : {
 
     },
@@ -757,6 +845,9 @@
     "Select All" : {
 
     },
+    "Select a Wi-Fi network to see its details." : {
+
+    },
     "Select an item to recover it or delete it permanently." : {
 
     },
@@ -768,6 +859,16 @@
     },
     "Set Up Verification Code…" : {
 
+    },
+    "Sets up %@'s MCP server so the agent can use %@ " : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sets up %1$@'s MCP server so the agent can use %2$@ "
+          }
+        }
+      }
     },
     "Settings" : {
 
@@ -784,16 +885,22 @@
     "Show All" : {
 
     },
-    "Show in menu bar" : {
+    "Show Network QR Code" : {
 
     },
     "Show Sidebar" : {
+
+    },
+    "Show in menu bar" : {
 
     },
     "Show website icons" : {
 
     },
     "Sidebar" : {
+
+    },
+    "Skip" : {
 
     },
     "So agents (and you) can use %@ from a terminal." : {
@@ -830,10 +937,16 @@
     "Sort By Name" : {
 
     },
+    "Start saving, generating, and autofilling your passwords." : {
+
+    },
     "Suggest passwords for the current website" : {
 
     },
     "Suggested" : {
+
+    },
+    "Suggestions ask Safari, Chrome, Arc, or Brave for the site in the frontmost tab, and may prompt for " : {
 
     },
     "That doesn't look like a full recovery key — check that you typed every group." : {
@@ -863,16 +976,22 @@
     "That setup key doesn't look valid. Double-check it and try again." : {
 
     },
+    "The %@ CLI and MCP server can read every password with no prompts while " : {
+
+    },
+    "The %@ CLI and MCP server let your coding agents read your vault. " : {
+
+    },
     "The file couldn't be written: %@" : {
 
     },
     "The file you imported from contains your passwords in plain text. For your security, delete it once you've confirmed the import." : {
 
     },
-    "This can't be undone." : {
+    "This File Will Contain Your Passwords in Plain Text" : {
 
     },
-    "This File Will Contain Your Passwords in Plain Text" : {
+    "This can't be undone." : {
 
     },
     "This key is the only way to restore your %@ vault on a new Mac, or if this Mac's Keychain is ever lost. It's shown once, right now — save the PDF, print it, or copy the key below before you continue." : {
@@ -893,6 +1012,9 @@
     "To export your passwords from Apple Passwords:" : {
 
     },
+    "To let Safari and other apps offer lil passwords when filling in a username and password, turn it on in System Settings → General → AutoFill & Passwords." : {
+
+    },
     "To make sure you saved your %@ recovery key correctly, type its last group of characters below." : {
 
     },
@@ -902,10 +1024,10 @@
     "Touch ID or enter your password to continue." : {
 
     },
-    "Try a different search." : {
+    "Try Again" : {
 
     },
-    "Try Again" : {
+    "Try a different search." : {
 
     },
     "Type in a code manually" : {
@@ -917,6 +1039,15 @@
     "Uninstall" : {
 
     },
+    "Unknown" : {
+
+    },
+    "Unknown Security" : {
+
+    },
+    "Unlock with Touch ID" : {
+
+    },
     "Unlock…" : {
 
     },
@@ -924,9 +1055,6 @@
 
     },
     "Use Password…" : {
-
-    },
-    "user" : {
 
     },
     "User Name" : {
@@ -944,6 +1072,9 @@
     "Verification code is set up." : {
 
     },
+    "Verification codes, right alongside your passwords" : {
+
+    },
     "View" : {
 
     },
@@ -956,19 +1087,76 @@
     "Website Icons" : {
 
     },
+    "Welcome to %@" : {
+
+    },
+    "Wi-Fi QR Code" : {
+
+    },
     "Will be deleted permanently today" : {
 
     },
     "Window" : {
 
     },
+    "Write access is separate from read access and off by default — turn it on only if you want agents " : {
+
+    },
     "XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" : {
+
+    },
+    "You're All Set" : {
+
+    },
+    "Your current recovery key will stop working immediately, and you'll be shown a new one to save. " : {
 
     },
     "Your current recovery key will stop working immediately. Make sure you save the new one somewhere safe — there's no way to see it again later." : {
 
     },
+    "Your passwords are encrypted and stored only on this Mac, unlocked with Touch ID or your " : {
+
+    },
     "Zoom" : {
+
+    },
+    "authenticate to export all your passwords as a plaintext file" : {
+
+    },
+    "authenticate to generate a new recovery key" : {
+
+    },
+    "directly, subject to the access setting above." : {
+
+    },
+    "example.com" : {
+
+    },
+    "has verification code" : {
+
+    },
+    "lil passwords couldn't find a saved password for this network." : {
+
+    },
+    "never the password itself — to Have I Been Pwned." : {
+
+    },
+    "otpauth://totp/..." : {
+
+    },
+    "password. Next, we'll show you a one-time recovery key — keep it somewhere safe." : {
+
+    },
+    "permission in System Settings > Privacy & Security, then try again." : {
+
+    },
+    "to be able to add, change, or delete passwords, not just read them." : {
+
+    },
+    "user" : {
+
+    },
+    "with Touch ID or your Mac password — no separate master password to remember." : {
 
     }
   },
