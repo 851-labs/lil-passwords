@@ -1,6 +1,6 @@
 import Foundation
 import LilPasswordsKit
-import LilpwCore
+import LilpassCore
 import MCP
 import Testing
 
@@ -10,14 +10,14 @@ import Testing
   @preconcurrency import SystemPackage
 #endif
 
-/// Drives a real `lilpw mcp` subprocess over real stdio pipes with the MCP Swift SDK's own
+/// Drives a real `lilpass mcp` subprocess over real stdio pipes with the MCP Swift SDK's own
 /// `Client`/`StdioTransport` — the actual wire path an MCP-capable agent (Claude Code, Codex,
 /// Cursor) uses, per 851-2434 ("an MCP stdio session (initialize, tools/list, tools/call)"). This
-/// is the stdio-transport analog of `LilpwMCPServerTests` in `LilpwMCPTests`, which exercises the
-/// same tool logic in-process over `InMemoryTransport` — here nothing is in-process: `lilpw mcp` is
-/// a genuine child process, backed by a disposable `LilpwE2EHelper` over real XPC.
+/// is the stdio-transport analog of `LilpassMCPServerTests` in `LilpassMCPTests`, which exercises the
+/// same tool logic in-process over `InMemoryTransport` — here nothing is in-process: `lilpass mcp` is
+/// a genuine child process, backed by a disposable `LilpassE2EHelper` over real XPC.
 @Suite struct MCPStdioSessionTests {
-  /// Starts a `LilpwE2EHelper` plus a `lilpw mcp` child process wired to it, connects an MCP
+  /// Starts a `LilpassE2EHelper` plus a `lilpass mcp` child process wired to it, connects an MCP
   /// `Client` over their shared stdio pipes, and returns everything the caller needs to talk to it
   /// and clean it up.
   private func startSession(
@@ -25,19 +25,19 @@ import Testing
     locked: Bool = false
   ) async throws -> (helper: E2EHelperProcess, process: Process, client: Client) {
     let helper = try E2EHelperProcess.start(
-      helperBinaryPath: LilpwBinary.helperPath,
+      helperBinaryPath: LilpassBinary.helperPath,
       items: items,
       locked: locked
     )
-    let (process, stdin, stdout) = try LilpwBinary.startMCPServer(extraEnvironment: [
-      "LILPW_E2E_MACH_SERVICE_NAME": helper.machServiceName
+    let (process, stdin, stdout) = try LilpassBinary.startMCPServer(extraEnvironment: [
+      "LILPASS_E2E_MACH_SERVICE_NAME": helper.machServiceName
     ])
 
     let transport = StdioTransport(
       input: FileDescriptor(rawValue: stdout.fileHandleForReading.fileDescriptor),
       output: FileDescriptor(rawValue: stdin.fileHandleForWriting.fileDescriptor)
     )
-    let client = Client(name: "lilpw-e2e-test-client", version: "1.0.0")
+    let client = Client(name: "lilpass-e2e-test-client", version: "1.0.0")
     _ = try await client.connect(transport: transport)
 
     return (helper, process, client)
@@ -102,7 +102,7 @@ import Testing
     let (content, isError) = try await session.client.callTool(name: "list_passwords")
     #expect(isError == true)
     let message = try #require(text(of: content))
-    // Same message `AgentError.locked.description` produces, per LilpwMCP's dispatch (`LilpwError.from`)
+    // Same message `AgentError.locked.description` produces, per LilpassMCP's dispatch (`LilpassError.from`)
     // — the same text the CLI itself would print to stderr for a locked vault.
     #expect(message == "lil passwords is locked — unlock the app")
   }

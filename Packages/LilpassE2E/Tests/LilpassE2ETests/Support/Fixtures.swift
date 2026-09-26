@@ -1,10 +1,10 @@
 import Foundation
 import LilPasswordsKit
 
-/// Builds a `PasswordItem` with whole-second timestamps, matching `LilpwCoreTests`/
-/// `LilpwMCPTests`'s own `makeTestItem` helper: `AgentWireCoding`'s `.iso8601` date strategy drops
+/// Builds a `PasswordItem` with whole-second timestamps, matching `LilpassCoreTests`/
+/// `LilpassMCPTests`'s own `makeTestItem` helper: `AgentWireCoding`'s `.iso8601` date strategy drops
 /// sub-second precision, and these items also cross an actual base64-in-an-environment-variable
-/// round trip (`E2EHelperProcess` → `LilpwE2EHelper`) before `LilpwE2EHelper` ever seeds them, so
+/// round trip (`E2EHelperProcess` → `LilpassE2EHelper`) before `LilpassE2EHelper` ever seeds them, so
 /// keeping timestamps second-granular avoids any risk of a test comparing against a value that
 /// silently lost precision somewhere along the way.
 func makeE2ETestItem(

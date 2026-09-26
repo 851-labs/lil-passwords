@@ -43,7 +43,7 @@ jobs:
         with:
           path: |
             Packages/LilPasswordsKit/.build
-            Packages/LilpwE2E/.build
+            Packages/LilpassE2E/.build
             build/SourcePackages
           key: spm-${{ runner.os }}-${{ hashFiles('**/Package.resolved', '**/Package.swift') }}
           restore-keys: spm-${{ runner.os }}-
@@ -57,5 +57,5 @@ jobs:
       - name: Build app, helper, and CLI (unsigned)
         run: make build
 
-      - name: End-to-end tests (built lilpw binary + disposable in-memory helper)
+      - name: End-to-end tests (built lilpass binary + disposable in-memory helper)
         run: make e2e

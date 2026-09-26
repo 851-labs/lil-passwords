@@ -1,7 +1,7 @@
 import Foundation
 import LilPasswordsKit
 
-/// Manages one disposable `LilpwE2EHelper` process for exactly one test, registered with launchd
+/// Manages one disposable `LilpassE2EHelper` process for exactly one test, registered with launchd
 /// under a unique, per-test Mach service name via `launchctl bootstrap`/`bootout` — the same
 /// on-demand Mach-service activation mechanism the real `LilPasswordsAgent` uses in production
 /// (see docs/adr/0001-storage-and-process-model.md and
@@ -12,12 +12,12 @@ import LilPasswordsKit
 /// directory) includes a fresh UUID, and nothing here ever calls `launchctl setenv` (which is
 /// session-wide) — both are required per this ticket's "use temp dirs and unique service names;
 /// several agents build this app concurrently on this Mac" constraint. Combined with
-/// `LilpwE2EHelper`'s exclusive use of `InMemoryVaultStore`, nothing this type or the process it
+/// `LilpassE2EHelper`'s exclusive use of `InMemoryVaultStore`, nothing this type or the process it
 /// launches does can ever touch `~/Library/Application Support/Lil Passwords` or the real
 /// Keychain item, or collide with another concurrent test/agent run on the same Mac.
 final class E2EHelperProcess {
-  /// Where `AgentEndpoint.makeClient()` (via `LILPW_E2E_MACH_SERVICE_NAME`) should point a
-  /// `lilpw`/`lilpw mcp` subprocess to reach this specific helper instance.
+  /// Where `AgentEndpoint.makeClient()` (via `LILPASS_E2E_MACH_SERVICE_NAME`) should point a
+  /// `lilpass`/`lilpass mcp` subprocess to reach this specific helper instance.
   let machServiceName: String
 
   /// Per-instance scratch space: the generated plist, and the helper's own stdout/stderr
@@ -36,14 +36,14 @@ final class E2EHelperProcess {
     self.workDirectory = workDirectory
   }
 
-  /// Writes a throwaway LaunchAgent plist for `LilpwE2EHelper` into a fresh temp directory and
+  /// Writes a throwaway LaunchAgent plist for `LilpassE2EHelper` into a fresh temp directory and
   /// `launchctl bootstrap`s it, so the very next `NSXPCConnection(machServiceName:)` naming this
   /// instance's ``machServiceName`` activates a freshly seeded helper on demand.
   ///
   /// - Parameters:
-  ///   - helperBinaryPath: Absolute path to the built `LilpwE2EHelper` executable. `make e2e`
+  ///   - helperBinaryPath: Absolute path to the built `LilpassE2EHelper` executable. `make e2e`
   ///     builds this explicitly (see the Makefile) and passes it down via
-  ///     `LILPW_E2E_HELPER_BINARY_PATH`, which every test reads via ``LilpwBinary``.
+  ///     `LILPASS_E2E_HELPER_BINARY_PATH`, which every test reads via ``LilpassBinary``.
   ///   - items: Fixture items to seed into the helper's `InMemoryVaultStore` before it serves any
   ///     connection.
   ///   - locked: If `true`, the helper locks the vault immediately after seeding.
@@ -59,24 +59,24 @@ final class E2EHelperProcess {
     // Used as both the LaunchAgent `Label` and the `MachServices` key/`AgentClient` target name —
     // one unique string is simpler than two, and nothing validates any relationship between them
     // (unlike production's real bundle-identifier-based code-signing check, which this test
-    // double deliberately opts out of via `.developmentFallback`; see `LilpwE2EHelper/main.swift`).
+    // double deliberately opts out of via `.developmentFallback`; see `LilpassE2EHelper/main.swift`).
     let name = "com.851labs.lilpasswords.e2e.\(id)"
     let workDirectory = FileManager.default.temporaryDirectory
-      .appendingPathComponent("lilpw-e2e-\(id)", isDirectory: true)
+      .appendingPathComponent("lilpass-e2e-\(id)", isDirectory: true)
     try FileManager.default.createDirectory(at: workDirectory, withIntermediateDirectories: true)
 
     var environmentVariables: [String: String] = [
-      "LILPW_E2E_MACH_SERVICE_NAME": name
+      "LILPASS_E2E_MACH_SERVICE_NAME": name
     ]
     if !items.isEmpty {
       let data = try AgentWireCoding.encoder.encode(items)
-      environmentVariables["LILPW_E2E_FIXTURE_ITEMS_B64"] = data.base64EncodedString()
+      environmentVariables["LILPASS_E2E_FIXTURE_ITEMS_B64"] = data.base64EncodedString()
     }
     if locked {
-      environmentVariables["LILPW_E2E_LOCKED"] = "1"
+      environmentVariables["LILPASS_E2E_LOCKED"] = "1"
     }
     if accessDisabled {
-      environmentVariables["LILPW_E2E_ACCESS_DISABLED"] = "1"
+      environmentVariables["LILPASS_E2E_ACCESS_DISABLED"] = "1"
     }
 
     let plist: [String: Any] = [

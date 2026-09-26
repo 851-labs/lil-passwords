@@ -20,15 +20,15 @@ build:
 test:
 	swift test --package-path Packages/LilPasswordsKit
 
-# 851-2434: end-to-end tests that run the *built* lilpw binary as a subprocess against a
-# disposable, in-memory-vault-backed helper (LilpwE2EHelper) over a real, uniquely-named XPC Mach
-# service — never the real "Lil Passwords" app, its real vault store, or the real keychain item.
-# Depends on `build` so `LILPW_E2E_BINARY_PATH` always points at a freshly built lilpw.
+# 851-2434: end-to-end tests that run the *built* lilpass binary as a subprocess against a
+# disposable, in-memory-vault-backed helper (LilpassE2EHelper) over a real, uniquely-named XPC Mach
+# service — never the real "lil passwords" app, its real vault store, or the real keychain item.
+# Depends on `build` so `LILPASS_E2E_BINARY_PATH` always points at a freshly built lilpass.
 e2e: build
-	swift build --package-path Packages/LilpwE2E --product LilpwE2EHelper
-	LILPW_E2E_BINARY_PATH="$(CURDIR)/build/Build/Products/Debug/Lil Passwords.app/Contents/Helpers/lilpw" \
-	LILPW_E2E_HELPER_BINARY_PATH="$$(swift build --package-path Packages/LilpwE2E --product LilpwE2EHelper --show-bin-path)/LilpwE2EHelper" \
-	swift test --package-path Packages/LilpwE2E
+	swift build --package-path Packages/LilpassE2E --product LilpassE2EHelper
+	LILPASS_E2E_BINARY_PATH="$(CURDIR)/build/Build/Products/Debug/lil passwords.app/Contents/Helpers/lilpass" \
+	LILPASS_E2E_HELPER_BINARY_PATH="$$(swift build --package-path Packages/LilpassE2E --product LilpassE2EHelper --show-bin-path)/LilpassE2EHelper" \
+	swift test --package-path Packages/LilpassE2E
 
 format:
 	xcrun swift-format format --in-place --recursive App Agent CLI AutoFillExtension Packages
