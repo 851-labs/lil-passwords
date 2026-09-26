@@ -1,0 +1,191 @@
+import Foundation
+
+/// Persisted app settings, backed by a shared `UserDefaults` suite rather than `.standard`.
+///
+/// The app isn't sandboxed (see `docs/adr/0001-storage-and-process-model.md`), so any process
+/// that knows the suite name can read the same domain: `LilPasswordsAgent` reads
+/// ``autoLockInterval``, ``clipboardClearInterval``, and the agent-access toggles to enforce them
+/// (851-2411, 851-2423, 851-2428), and `lilpw` can do the same. The app is the only writer today
+/// — everything here is edited from the Settings window (851-2424).
+public final class AppSettings: @unchecked Sendable {
+  /// The default, shared instance every process should use unless a test needs isolation.
+  public static let shared = AppSettings()
+
+  /// The `UserDefaults` suite name shared by the app, `LilPasswordsAgent`, and `lilpw`.
+  ///
+  /// Deliberately distinct from the app's own bundle identifier (`com.851labs.lilpasswords`):
+  /// passing an app's own bundle ID as `UserDefaults(suiteName:)` is documented as nonsensical —
+  /// it logs a warning and behaves like `.standard` — because the app's own domain is already
+  /// its default search location. A dedicated suite name is what actually makes the domain
+  /// readable by the other two (differently-bundle-ID'd) processes.
+  public static let suiteName = "com.851labs.lilpasswords.shared"
+
+  /// Posted on the default `NotificationCenter` (main queue not guaranteed) whenever any setting
+  /// changes, so long-lived observers like the helper's policy checker can react without polling.
+  public static let didChangeNotification = Notification.Name("com.851labs.lilpasswords.AppSettingsDidChange")
+
+  /// How long the app may sit idle before it locks itself. Enforcement lands in 851-2411.
+  public enum AutoLockInterval: String, CaseIterable, Identifiable, Sendable {
+    case immediately
+    case oneMinute
+    case fiveMinutes
+    case fifteenMinutes
+    case oneHour
+    case never
+
+    public var id: String { rawValue }
+
+    /// Label shown in the Security settings popup.
+    public var displayName: String {
+      switch self {
+      case .immediately: "Immediately"
+      case .oneMinute: "After 1 Minute"
+      case .fiveMinutes: "After 5 Minutes"
+      case .fifteenMinutes: "After 15 Minutes"
+      case .oneHour: "After 1 Hour"
+      case .never: "Never"
+      }
+    }
+
+    /// Idle time before auto-lock, or `nil` for `.never`.
+    public var timeInterval: TimeInterval? {
+      switch self {
+      case .immediately: 0
+      case .oneMinute: 60
+      case .fiveMinutes: 5 * 60
+      case .fifteenMinutes: 15 * 60
+      case .oneHour: 60 * 60
+      case .never: nil
+      }
+    }
+  }
+
+  /// How long a password stays on the clipboard after being copied. Enforcement lands in
+  /// 851-2423.
+  public enum ClipboardClearInterval: String, CaseIterable, Identifiable, Sendable {
+    case never
+    case tenSeconds
+    case thirtySeconds
+    case oneMinute
+    case twoMinutes
+
+    public var id: String { rawValue }
+
+    /// Label shown in the Security settings popup.
+    public var displayName: String {
+      switch self {
+      case .never: "Never"
+      case .tenSeconds: "After 10 Seconds"
+      case .thirtySeconds: "After 30 Seconds"
+      case .oneMinute: "After 1 Minute"
+      case .twoMinutes: "After 2 Minutes"
+      }
+    }
+
+    /// Delay before the clipboard is cleared, or `nil` for `.never`.
+    public var timeInterval: TimeInterval? {
+      switch self {
+      case .never: nil
+      case .tenSeconds: 10
+      case .thirtySeconds: 30
+      case .oneMinute: 60
+      case .twoMinutes: 120
+      }
+    }
+  }
+
+  private enum Key {
+    static let autoLockInterval = "AppSettings.autoLockInterval"
+    static let clipboardClearInterval = "AppSettings.clipboardClearInterval"
+    static let defaultPasswordLength = "AppSettings.defaultPasswordLength"
+    static let includeSymbolsInGeneratedPasswords = "AppSettings.includeSymbolsInGeneratedPasswords"
+    static let warnAboutCompromisedPasswords = "AppSettings.warnAboutCompromisedPasswords"
+    static let agentAccessEnabled = "AppSettings.agentAccessEnabled"
+    static let keepAgentAccessAvailableWhileMacUnlocked = "AppSettings.keepAgentAccessAvailableWhileMacUnlocked"
+  }
+
+  /// Smallest and largest custom password length offered in Settings → General.
+  public static let passwordLengthRange = 8...64
+
+  private let defaults: UserDefaults
+
+  /// Creates settings backed by `defaults`. Pass an explicit `UserDefaults` (e.g. one scoped to
+  /// a throwaway suite name) in tests to avoid polluting — or being polluted by — real app
+  /// preferences; production code should use ``shared``.
+  public init(defaults: UserDefaults = UserDefaults(suiteName: AppSettings.suiteName) ?? .standard) {
+    self.defaults = defaults
+    // A literal, built fresh per call rather than a shared static, so it's not flagged as
+    // non-`Sendable` global mutable state under strict concurrency.
+    defaults.register(defaults: [
+      Key.autoLockInterval: AutoLockInterval.fiveMinutes.rawValue,
+      Key.clipboardClearInterval: ClipboardClearInterval.thirtySeconds.rawValue,
+      Key.defaultPasswordLength: 20,
+      Key.includeSymbolsInGeneratedPasswords: true,
+      Key.warnAboutCompromisedPasswords: true,
+      Key.agentAccessEnabled: false,
+      Key.keepAgentAccessAvailableWhileMacUnlocked: false,
+    ])
+  }
+
+  /// How long the app may sit idle before it locks itself.
+  public var autoLockInterval: AutoLockInterval {
+    get { AutoLockInterval(rawValue: defaults.string(forKey: Key.autoLockInterval) ?? "") ?? .fiveMinutes }
+    set { set(newValue.rawValue, forKey: Key.autoLockInterval) }
+  }
+
+  /// How long a copied password stays on the clipboard before it's cleared.
+  public var clipboardClearInterval: ClipboardClearInterval {
+    get {
+      ClipboardClearInterval(rawValue: defaults.string(forKey: Key.clipboardClearInterval) ?? "") ?? .thirtySeconds
+    }
+    set { set(newValue.rawValue, forKey: Key.clipboardClearInterval) }
+  }
+
+  /// Length used for new generated passwords when the "no symbols"/custom format is requested,
+  /// clamped to ``passwordLengthRange``.
+  public var defaultPasswordLength: Int {
+    get {
+      let stored = defaults.integer(forKey: Key.defaultPasswordLength)
+      let value = stored == 0 ? 20 : stored
+      return Self.passwordLengthRange.clamp(value)
+    }
+    set { set(Self.passwordLengthRange.clamp(newValue), forKey: Key.defaultPasswordLength) }
+  }
+
+  /// Whether generated passwords may include symbol characters.
+  public var includeSymbolsInGeneratedPasswords: Bool {
+    get { defaults.bool(forKey: Key.includeSymbolsInGeneratedPasswords) }
+    set { set(newValue, forKey: Key.includeSymbolsInGeneratedPasswords) }
+  }
+
+  /// Whether the Security sidebar category should surface weak/reused password warnings.
+  public var warnAboutCompromisedPasswords: Bool {
+    get { defaults.bool(forKey: Key.warnAboutCompromisedPasswords) }
+    set { set(newValue, forKey: Key.warnAboutCompromisedPasswords) }
+  }
+
+  /// Settings → Agents → "Allow agents to access passwords". `LilPasswordsAgent` is the actual
+  /// enforcement point (851-2428); this is just the stored preference.
+  public var agentAccessEnabled: Bool {
+    get { defaults.bool(forKey: Key.agentAccessEnabled) }
+    set { set(newValue, forKey: Key.agentAccessEnabled) }
+  }
+
+  /// Settings → Agents → "Keep agent access available while the Mac is unlocked", a policy
+  /// nuance separate from the app's own auto-lock (851-2428).
+  public var keepAgentAccessAvailableWhileMacUnlocked: Bool {
+    get { defaults.bool(forKey: Key.keepAgentAccessAvailableWhileMacUnlocked) }
+    set { set(newValue, forKey: Key.keepAgentAccessAvailableWhileMacUnlocked) }
+  }
+
+  private func set(_ value: some Any, forKey key: String) {
+    defaults.set(value, forKey: key)
+    NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+  }
+}
+
+extension ClosedRange where Bound == Int {
+  fileprivate func clamp(_ value: Int) -> Int {
+    Swift.min(Swift.max(value, lowerBound), upperBound)
+  }
+}
