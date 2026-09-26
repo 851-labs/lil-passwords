@@ -76,6 +76,25 @@ final class ItemListViewController: NSViewController {
     title: String(localized: "Copy Verification Code"), action: nil, keyEquivalent: "")
   private let deleteMenuItem = NSMenuItem(title: String(localized: "Delete"), action: nil, keyEquivalent: "")
 
+  /// 851-2445: the per-item allowlist toggle for `AgentAccessScope.selected`. Only shown/enabled
+  /// when the person has picked "Only Selected Passwords" in Settings → Agents; hidden (not just
+  /// disabled) the rest of the time so the context menu doesn't grow a permanently-irrelevant row.
+  private let toggleAgentAccessMenuItem = NSMenuItem(
+    title: String(localized: "Allow Agents to Access This Password"), action: nil, keyEquivalent: "")
+
+  /// A short-lived, ad-hoc `AgentClient` — matching the existing convention that each screen that
+  /// touches `AgentSettings` constructs its own (`SecuritySettingsViewController`,
+  /// `AgentsSettingsViewController`) rather than one being threaded through as a shared dependency.
+  private let agentClient = AgentClient()
+
+  /// Cached copy of the two `AgentSettings` fields this menu item cares about, refreshed whenever
+  /// the context menu is about to open (`menuNeedsUpdate(_:)`) and whenever the toggle itself is
+  /// flipped. Not observed live otherwise — this is a context-menu affordance, not a persistent
+  /// display, so briefly-stale state between menu opens is an acceptable tradeoff for not holding an
+  /// open XPC subscription just for this one row.
+  private var agentAccessScope: AgentAccessScope = .allPasswords
+  private var agentAllowedItemIDs: Set<UUID> = []
+
   /// Two sections (851-2463, matching Apple Passwords' own sort menu): which field to sort by,
   /// then a separator, then which direction — each with its own checkmark, kept in sync by
   /// `updateSortMenuCheckmarks()`.
@@ -264,11 +283,15 @@ final class ItemListViewController: NSViewController {
     copyVerificationCodeMenuItem.action = #selector(copyVerificationCode(_:))
     deleteMenuItem.target = self
     deleteMenuItem.action = #selector(deleteMenuAction(_:))
+    toggleAgentAccessMenuItem.target = self
+    toggleAgentAccessMenuItem.action = #selector(toggleAgentAccessMenuAction(_:))
 
     contextMenu.delegate = self
     contextMenu.addItem(copyUsernameMenuItem)
     contextMenu.addItem(copyPasswordMenuItem)
     contextMenu.addItem(copyVerificationCodeMenuItem)
+    contextMenu.addItem(.separator())
+    contextMenu.addItem(toggleAgentAccessMenuItem)
     contextMenu.addItem(.separator())
     contextMenu.addItem(deleteMenuItem)
     tableView.menu = contextMenu
@@ -461,6 +484,63 @@ final class ItemListViewController: NSViewController {
       dataSource.delete(item)
     }
   }
+
+  /// 851-2445: flips the clicked item's membership in `AgentSettings.allowedItemIDs` — a plain
+  /// read-modify-write over `agentClient`, matching the ADR's per-item toggle design. Only ever
+  /// touches `allowedItemIDs`, never `allowedGroups`: this menu item represents "this one password,"
+  /// group-based access is managed from Settings → Agents instead.
+  @objc private func toggleAgentAccessMenuAction(_ sender: Any?) {
+    let items = selectedItems()
+    guard items.count == 1 else { return }
+    let item = items[0]
+    Task { [weak self] in
+      guard let self else { return }
+      guard var settings = try? await self.agentClient.agentSettings() else { return }
+      if settings.allowedItemIDs.contains(item.id) {
+        settings.allowedItemIDs.remove(item.id)
+      } else {
+        settings.allowedItemIDs.insert(item.id)
+      }
+      let updated = (try? await self.agentClient.setAgentSettings(settings)) ?? settings
+      self.agentAccessScope = updated.accessScope
+      self.agentAllowedItemIDs = updated.allowedItemIDs
+      self.applyAgentAccessMenuItemState(for: self.selectedItems().count == 1 ? self.selectedItems()[0] : nil)
+    }
+  }
+
+  /// Shown/enabled only under `AgentAccessScope.selected`, and only for a single-item selection —
+  /// this toggle is "this one password," not a bulk action. Its checkmark reflects
+  /// `allowedItemIDs` membership only, not group-based allowance (see the toggle action's doc
+  /// comment), from the most recently fetched `AgentSettings` snapshot.
+  private func applyAgentAccessMenuItemState(for item: PasswordItem?) {
+    toggleAgentAccessMenuItem.isHidden = agentAccessScope != .selected
+    guard let item else {
+      toggleAgentAccessMenuItem.isEnabled = false
+      toggleAgentAccessMenuItem.state = .off
+      return
+    }
+    toggleAgentAccessMenuItem.isEnabled = true
+    toggleAgentAccessMenuItem.state = agentAllowedItemIDs.contains(item.id) ? .on : .off
+  }
+
+  /// Re-fetches `AgentSettings` from the helper and re-applies the toggle's visibility/checkmark —
+  /// called right before the context menu opens (`menuNeedsUpdate(_:)`), so a scope change made
+  /// moments ago in Settings → Agents (or a toggle flipped from another window) is reflected the
+  /// next time this menu is shown, not just after this view controller happens to relaunch.
+  private func refreshAgentAccessMenuItem(for item: PasswordItem?) {
+    Task { [weak self] in
+      guard let self else { return }
+      guard let settings = try? await self.agentClient.agentSettings() else { return }
+      self.agentAccessScope = settings.accessScope
+      self.agentAllowedItemIDs = settings.allowedItemIDs
+      // The menu's tracking loop may still be running when this returns (a same-machine XPC round
+      // trip is fast); re-derive against the *current* selection rather than trusting the
+      // now-possibly-stale `item` capture, so a selection change in the interim doesn't apply the
+      // wrong item's state to the visible menu item.
+      let current = self.selectedItems().count == 1 ? self.selectedItems()[0] : nil
+      self.applyAgentAccessMenuItemState(for: current)
+    }
+  }
 }
 
 extension ItemListViewController: NSTableViewDataSource {
@@ -524,6 +604,7 @@ extension ItemListViewController: NSMenuDelegate {
     let clickedRow = tableView.clickedRow
     guard clickedRow >= 0, rows.indices.contains(clickedRow) else {
       setContextMenuEnabled(false, false, false, false)
+      applyAgentAccessMenuItemState(for: nil)
       return
     }
 
@@ -539,6 +620,8 @@ extension ItemListViewController: NSMenuDelegate {
       single?.totp != nil,
       !items.isEmpty
     )
+    applyAgentAccessMenuItemState(for: single)
+    refreshAgentAccessMenuItem(for: single)
   }
 
   private func setContextMenuEnabled(_ username: Bool, _ password: Bool, _ verificationCode: Bool, _ delete: Bool) {

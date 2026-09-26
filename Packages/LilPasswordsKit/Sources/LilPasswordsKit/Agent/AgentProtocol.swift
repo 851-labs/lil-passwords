@@ -184,6 +184,20 @@ public enum AgentAccessScope: String, Sendable, Codable, Equatable, CaseIterable
   /// ``PendingApprovalSummary``, and docs/adr/0005-scoped-agent-access.md's "Approval flow"
   /// section.
   case askEveryTime
+
+  /// Plain-English label, for non-UI call sites (the access log's future use, debug/tophat
+  /// descriptions) that just need a readable name and aren't rendered through SwiftUI. This package
+  /// has no String Catalog of its own — the same reason `AppSettings.AutoLockInterval.displayName`
+  /// returns unlocalized text — so it's deliberately *not* used by `AgentsSettingsView`'s picker;
+  /// that view builds its own `Text("literal")` per case instead, so each option is a
+  /// `LocalizedStringKey` the App target's `Localizable.xcstrings` actually extracts and localizes.
+  public var displayName: String {
+    switch self {
+    case .allPasswords: "All Passwords"
+    case .selected: "Only Selected Passwords"
+    case .askEveryTime: "Ask Every Time"
+    }
+  }
 }
 
 /// A person's answer to one 851-2445 approval prompt, sent back via

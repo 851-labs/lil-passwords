@@ -24,6 +24,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private(set) var mainWindowController: MainWindowController?
   private var menuBarExtraController: MenuBarExtraController?
 
+  /// 851-2445: shows the Touch ID-gated Allow/Allow-for-15-Minutes/Deny dialog for
+  /// `AgentAccessScope.askEveryTime`. Owned here (like `agentClient`, `mainWindowController`) rather
+  /// than by `MainWindowController` — approvals can arrive, and need to be answerable, even before
+  /// the main window has finished unlocking, since `.askEveryTime` gates the request itself, not
+  /// whether the vault happens to already be visible.
+  private var agentApprovalController: AgentApprovalController?
+
   // The real `SMAppService`-backed conformer in every build — `HelperAgentRegistering` exists as
   // a seam for `HelperAgentRegistrarTests` (in `LilPasswordsKit`), not for anything this app
   // target itself substitutes at runtime.
@@ -59,6 +66,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // knows about `LilPasswordsAgent` at all. See `HelperAgentRegistrar`'s documentation.
     registerHelperAgentAndHandleOutcome()
 
+    // 851-2445: starts observing for `AgentAccessScope.askEveryTime` approval requests right away,
+    // not lazily on first Settings → Agents visit — a request can arrive (and the helper can launch
+    // this app because of one, via `ApprovalAppLaunching`) at any time `agentAccessEnabled` is on,
+    // independent of whether Settings has ever been opened.
+    let approvalController = AgentApprovalController(
+      agentClient: agentClient,
+      authenticator: MainWindowController.makeAuthenticator(),
+      presentingWindow: { [weak self] in self?.mainWindowController?.window }
+    )
+    approvalController.startObserving()
+    agentApprovalController = approvalController
+
     #if DEBUG
       RecoveryKitDebugMenu.install { [weak self] in self?.mainWindowController?.window }
       applyOpenSettingsTabOverrideIfNeeded()
@@ -70,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NewPasswordDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
         RegenerateRecoveryKeyDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
         OnboardingDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
+        AgentTophatDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
         RecoveryKitDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
       }
     #endif

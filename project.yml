@@ -49,6 +49,16 @@ targets:
             subpath: Contents/Library/LaunchAgents
     dependencies:
       - package: LilPasswordsKit
+      # 851-2445: `AgentTophatDebugMenu` (DEBUG-only, App/Sources/AgentTophatDebugMenu.swift) calls `LilpassCommands`
+      # directly — the same argument-parser-free logic `lilpass get` itself calls (CLI/Sources/
+      # Commands/GetCommand.swift) — against an in-process, in-memory `AgentServer`, to produce a
+      # real "denied request"/"allowlist filtering" transcript without needing a genuinely separate
+      # `lilpass` process (which can't reach an in-memory helper: macOS requires a launchd plist to
+      # reserve a *named* Mach service before any process can host one, confirmed empirically while
+      # designing this capture). `LilpassCore` has no ArgumentParser dependency of its own — see its
+      # own doc comments — so this doesn't pull argument-parsing machinery into the shipped app.
+      - package: LilPasswordsKit
+        product: LilpassCore
       - package: Sparkle
       # Both the agent and the CLI are secondary tools, not the app's own
       # executable, so both embed under Contents/Helpers rather than

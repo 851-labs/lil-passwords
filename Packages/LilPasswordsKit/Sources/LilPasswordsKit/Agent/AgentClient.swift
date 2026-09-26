@@ -55,11 +55,23 @@ public actor AgentClient {
     self.connectionSecurity = AgentConnectionSecurity.requirement(acceptingPeers: [.agent])
   }
 
-  /// Connects to a specific listener endpoint (e.g. from `NSXPCListener.anonymous()`), for
-  /// in-process end-to-end tests. An in-process peer is the test binary itself, which can't
-  /// satisfy a real team+identifier check, so callers must supply `connectionSecurity` explicitly
-  /// rather than getting one derived from the running process's own signature.
-  init(endpoint: NSXPCListenerEndpoint, connectionSecurity: AgentConnectionSecurity.Requirement) {
+  /// Connects to a specific listener endpoint (e.g. from `NSXPCListener.anonymous()`), rather than
+  /// a launchd-activated Mach service. An in-process peer is whatever process created the
+  /// listener, which can't satisfy a real team+identifier check, so callers must supply
+  /// `connectionSecurity` explicitly rather than getting one derived from the running process's
+  /// own signature.
+  ///
+  /// Originally test-only (`AgentXPCEndToEndTests`/`LilpassCoreTests`/`LilpassMCPTests`'s
+  /// `Harness` types, all reached via `@testable import`); made `public` for 851-2445's
+  /// `AgentTophatDebugMenu` (app target), which needs a real client wired to a real, in-process,
+  /// throwaway `AgentServer` for tophat screenshots/transcripts without touching the real,
+  /// on-disk, launchd-activated helper every concurrent worktree on this machine otherwise shares
+  /// — see docs/tophat.md's "shared machine hazard". A named Mach service can't be self-hosted by
+  /// an ordinary process without a launchd plist reserving that name first (confirmed empirically:
+  /// `bootstrap_check_in` for an unreserved name fails), so an anonymous listener's endpoint,
+  /// handed directly to this initializer, is the only way to reach an in-memory helper from
+  /// outside `Agent/Sources/main.swift`'s own real, `AgentXPC.machServiceName`-bound listener.
+  public init(endpoint: NSXPCListenerEndpoint, connectionSecurity: AgentConnectionSecurity.Requirement) {
     self.target = .endpoint(endpoint)
     self.connectionSecurity = connectionSecurity
   }

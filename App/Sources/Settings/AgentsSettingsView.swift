@@ -13,8 +13,12 @@ struct AgentsSettingsView: View {
   @StateObject private var cliInstall = CLIInstallViewModel()
   @StateObject private var connections = AgentConnectionsViewModel()
 
-  init(client: AgentClient) {
-    _agentSettings = StateObject(wrappedValue: AgentSettingsViewModel(client: client))
+  /// - Parameter initialSettings: See `AgentSettingsViewModel.init(client:initialSettings:)` — a
+  ///   tophat-only seam, `nil` at every production call site.
+  init(client: AgentClient, initialSettings: AgentSettings? = nil) {
+    _agentSettings = StateObject(
+      wrappedValue: AgentSettingsViewModel(client: client, initialSettings: initialSettings)
+    )
   }
 
   var body: some View {
@@ -34,6 +38,21 @@ struct AgentsSettingsView: View {
         )
         .toggleStyle(.switch)
         .disabled(!agentSettings.agentAccessEnabled)
+
+        // The three 851-2445 access modes — mutually exclusive, hence a single `Picker` rather than
+        // another `Toggle`. Each option is a `Text("literal")`, not a computed `displayName` string,
+        // so it's a `LocalizedStringKey` the App target's String Catalog actually extracts — see
+        // `AgentAccessScope.displayName`'s doc comment for why that property isn't used here.
+        Picker(selection: $agentSettings.accessScope) {
+          Text("All Passwords").tag(AgentAccessScope.allPasswords)
+          Text("Only Selected Passwords").tag(AgentAccessScope.selected)
+          Text("Ask Every Time").tag(AgentAccessScope.askEveryTime)
+        } label: {
+          Text("Access")
+        }
+        .pickerStyle(.menu)
+        .disabled(!agentSettings.agentAccessEnabled)
+        .accessibilityHint(Text(accessScopeAccessibilityHint))
       } footer: {
         VStack(alignment: .leading, spacing: 6) {
           // Plain `"a" + "b"` type-infers to a `String`, not `LocalizedStringKey` — `Text(_:)` only
@@ -57,6 +76,23 @@ struct AgentsSettingsView: View {
                 "Write access is separate from read access and off by default — turn it on only if you want agents "
             )
               + String(localized: "to be able to add, change, or delete passwords, not just read them.")
+          )
+          Text(
+            "\"Only Selected Passwords\" limits agents to items allowed individually (from the item list's "
+              + "context menu) or by group, below. \"Ask Every Time\" requires Touch ID approval for every request."
+          )
+        }
+      }
+
+      if agentSettings.accessScope == .selected {
+        Section {
+          AllowlistSectionBody(agentSettings: agentSettings)
+        } header: {
+          Text("Allowed Passwords")
+        } footer: {
+          Text(
+            "Allow an individual password from its context menu in the main list. A group allowed here covers "
+              + "every password in it, now and in the future."
           )
         }
       }
@@ -141,6 +177,94 @@ struct AgentsSettingsView: View {
       return String(
         localized: "Something else is already at \(path) (pointing to \(target)). Installing will replace it.")
     }
+  }
+
+  /// VoiceOver hint for the access-mode `Picker` (docs/accessibility.md's keyboard/VoiceOver
+  /// checklist) — a `Picker` already announces its label and current selection on its own, but the
+  /// consequence of "Only Selected Passwords"/"Ask Every Time" isn't otherwise discoverable without
+  /// sight, so the hint spells it out. Interpolated, so `String(localized:)`, not a `Text` literal.
+  private var accessScopeAccessibilityHint: String {
+    switch agentSettings.accessScope {
+    case .allPasswords:
+      return String(localized: "Agents can read and, if enabled, edit every password.")
+    case .selected:
+      return String(localized: "Agents can only access passwords allowed individually or by group.")
+    case .askEveryTime:
+      return String(localized: "Every agent request requires Touch ID approval.")
+    }
+  }
+}
+
+/// The `.selected` allowlist manager shown under "Allowed Passwords" when the access-mode `Picker`
+/// above is set to "Only Selected Passwords" — individually-allowed item count (with a bulk "Clear",
+/// since items themselves are toggled one at a time from the item list's context menu, not here) plus
+/// full add/remove management of the group allowlist, which has no per-row surface of its own.
+private struct AllowlistSectionBody: View {
+  @ObservedObject var agentSettings: AgentSettingsViewModel
+  @State private var newGroupName = ""
+
+  var body: some View {
+    HStack {
+      VStack(alignment: .leading, spacing: 2) {
+        Text("Individually Allowed Passwords")
+        Text(allowedItemsSummaryText)
+          .font(.callout)
+          .foregroundStyle(.secondary)
+      }
+      Spacer()
+      Button("Clear") {
+        agentSettings.clearAllowedItems()
+      }
+      .disabled(agentSettings.allowedItemIDs.isEmpty)
+    }
+
+    ForEach(agentSettings.allowedGroups.sorted(), id: \.self) { group in
+      HStack {
+        Text(group)
+        Spacer()
+        Button {
+          agentSettings.allowedGroups.remove(group)
+        } label: {
+          Image(systemName: "xmark.circle.fill")
+            .accessibilityHidden(true)
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(String(localized: "Remove \(group) from allowed groups"))
+      }
+    }
+
+    HStack {
+      TextField("Group Name", text: $newGroupName)
+        .onSubmit(addGroup)
+      Button("Add") { addGroup() }
+        .disabled(newGroupName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+  }
+
+  private func addGroup() {
+    let trimmed = newGroupName.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return }
+    agentSettings.allowedGroups.insert(trimmed)
+    newGroupName = ""
+  }
+
+  // Returned as `String`, not `LocalizedStringKey` — see `AgentsSettingsView.cliInstallFooterText`'s
+  // doc comment for why an interpolated count needs its own `String(localized:)` wrap per case
+  // rather than relying on `Text("literal")` auto-localization.
+  private var allowedItemsSummaryText: String {
+    let count = agentSettings.allowedItemIDs.count
+    if count == 1 {
+      return String(
+        localized: """
+          1 password allowed. Use a password's context menu in the main list to add or remove it.
+          """
+      )
+    }
+    return String(
+      localized: """
+        \(count) passwords allowed. Use a password's context menu in the main list to add or remove it.
+        """
+    )
   }
 }
 
