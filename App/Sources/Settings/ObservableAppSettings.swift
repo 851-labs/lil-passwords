@@ -34,6 +34,14 @@ final class ObservableAppSettings: ObservableObject {
     didSet { settings.warnAboutCompromisedPasswords = warnAboutCompromisedPasswords }
   }
 
+  @Published var showInMenuBar: Bool {
+    didSet { settings.showInMenuBar = showInMenuBar }
+  }
+
+  @Published var menuBarBrowserSuggestionsEnabled: Bool {
+    didSet { settings.menuBarBrowserSuggestionsEnabled = menuBarBrowserSuggestionsEnabled }
+  }
+
   // The 851-2428 agent-access toggles are deliberately not bridged here: they no longer live in
   // `AppSettings`/the shared `UserDefaults` suite at all (see that class's documentation). Settings
   // → Agents binds to `AgentSettingsViewModel`, which reads/writes them through `AgentClient`
@@ -46,5 +54,7 @@ final class ObservableAppSettings: ObservableObject {
     defaultPasswordLength = settings.defaultPasswordLength
     includeSymbolsInGeneratedPasswords = settings.includeSymbolsInGeneratedPasswords
     warnAboutCompromisedPasswords = settings.warnAboutCompromisedPasswords
+    showInMenuBar = settings.showInMenuBar
+    menuBarBrowserSuggestionsEnabled = settings.menuBarBrowserSuggestionsEnabled
   }
 }
