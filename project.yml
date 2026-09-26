@@ -19,8 +19,36 @@ targets:
     sources:
       - path: App/Sources
         type: syncedFolder
+      # SMAppService looks for an agent's launchd plist at exactly this path
+      # inside the app bundle. See Agent/Support/com.851labs.lilpasswords.agent.plist.
+      - path: Agent/Support/com.851labs.lilpasswords.agent.plist
+        buildPhase:
+          copyFiles:
+            destination: wrapper
+            subpath: Contents/Library/LaunchAgents
     dependencies:
       - package: LilPasswordsKit
+      # Both the agent and the CLI are secondary tools, not the app's own
+      # executable, so both embed under Contents/Helpers rather than
+      # alongside "Lil Passwords" in Contents/MacOS. They share one
+      # destination/subpath deliberately: XcodeGen groups embedded
+      # dependencies into one PBXCopyFilesBuildPhase per unique
+      # (destination, subpath) pair, and two phases both named "Embed
+      # Dependencies" turned out to serialize in a non-deterministic
+      # order (see git history for the CI failure this caused). One
+      # shared phase sidesteps that entirely.
+      - target: LilPasswordsAgent
+        embed: true
+        codeSign: true
+        copy:
+          destination: wrapper
+          subpath: Contents/Helpers
+      - target: lilpw
+        embed: true
+        codeSign: true
+        copy:
+          destination: wrapper
+          subpath: Contents/Helpers
     info:
       path: App/Info.plist
       properties:
@@ -36,6 +64,7 @@ targets:
       base:
         PRODUCT_NAME: Lil Passwords
         PRODUCT_BUNDLE_IDENTIFIER: com.851labs.lilpasswords
+        CODE_SIGN_ENTITLEMENTS: Config/Entitlements/App.entitlements
   LilPasswordsAgent:
     type: tool
     platform: macOS
@@ -48,6 +77,9 @@ targets:
       base:
         PRODUCT_NAME: LilPasswordsAgent
         PRODUCT_BUNDLE_IDENTIFIER: com.851labs.lilpasswords.agent
+        CODE_SIGN_ENTITLEMENTS: Config/Entitlements/Agent.entitlements
+        # Embedded by LilPasswords; don't also install a standalone copy into archives.
+        SKIP_INSTALL: YES
   lilpw:
     type: tool
     platform: macOS
@@ -60,6 +92,9 @@ targets:
       base:
         PRODUCT_NAME: lilpw
         PRODUCT_BUNDLE_IDENTIFIER: com.851labs.lilpasswords.cli
+        CODE_SIGN_ENTITLEMENTS: Config/Entitlements/CLI.entitlements
+        # Embedded by LilPasswords; don't also install a standalone copy into archives.
+        SKIP_INSTALL: YES
 schemes:
   LilPasswords:
     build:

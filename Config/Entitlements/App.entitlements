@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	Intentionally empty for the local-only MVP (851-2402, 851-2400):
+
+	- No App Sandbox. The app is Developer ID-distributed, not Mac App Store, so
+	  sandboxing (and the app-group container it would require to share the vault
+	  DB with LilPasswordsAgent) buys nothing here. App and helper share a plain
+	  directory instead; see docs/adr/0001-storage-and-process-model.md.
+	- No keychain-access-groups. Only LilPasswordsAgent touches the Keychain
+	  (legacy file-based keychain, no entitlement required); the app and lilpw
+	  never read the vault key directly, so there is nothing to share an access
+	  group with. keychain-access-groups is also a *restricted* entitlement:
+	  AMFI kills a process that carries it without a matching provisioning
+	  profile, which we don't have until the 851 Labs Apple Developer team
+	  exists (see 851-2400).
+	- No iCloud entitlements, per the project's local-first decision.
+	-->
+</dict>
+</plist>

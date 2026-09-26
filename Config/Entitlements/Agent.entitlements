@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	Intentionally empty for now. LilPasswordsAgent stores the vault key in the
+	legacy file-based Keychain (kSecUseDataProtectionKeychain = false), which
+	needs no entitlement at all — see docs/adr/0001-storage-and-process-model.md.
+
+	Do NOT add keychain-access-groups here without also provisioning it: it's a
+	restricted entitlement, and AMFI SIGKILLs a process that carries it without
+	a matching provisioning profile from the signing team (confirmed empirically
+	while writing the ADR above). That profile doesn't exist until the 851 Labs
+	Apple Developer team is set up (851-2400).
+
+	XPC (851-2427) will likely add a MachServices key to the agent's launchd
+	plist (Agent/Support/com.851labs.lilpasswords.agent.plist), not an
+	entitlement here — Mach service lookup by an unsandboxed client needs no
+	entitlement.
+	-->
+</dict>
+</plist>
