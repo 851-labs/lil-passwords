@@ -24,6 +24,8 @@ struct AppSettingsTests {
     #expect(settings.warnAboutCompromisedPasswords == true)
     #expect(settings.agentAccessEnabled == false)
     #expect(settings.keepAgentAccessAvailableWhileMacUnlocked == false)
+    #expect(settings.showInMenuBar == true)
+    #expect(settings.menuBarBrowserSuggestionsEnabled == false)
   }
 
   @Test("round-trips every setting")
@@ -50,6 +52,12 @@ struct AppSettingsTests {
 
     settings.keepAgentAccessAvailableWhileMacUnlocked = true
     #expect(settings.keepAgentAccessAvailableWhileMacUnlocked == true)
+
+    settings.showInMenuBar = false
+    #expect(settings.showInMenuBar == false)
+
+    settings.menuBarBrowserSuggestionsEnabled = true
+    #expect(settings.menuBarBrowserSuggestionsEnabled == true)
   }
 
   @Test("clamps password length to the supported range")

@@ -35,4 +35,20 @@ extension PasswordItem {
     }
     return String(first).folding(options: .diacriticInsensitive, locale: nil).uppercased()
   }
+
+  /// Whether any of this item's ``websites`` shares a host with `url` — used by the menu bar
+  /// extra's "Suggested" section (851-2425) to match the frontmost browser's current site against
+  /// saved items. Host comparison is case-insensitive and ignores a leading "www." on either
+  /// side, so `https://www.netflix.com` and `https://netflix.com` count as the same site.
+  public func matchesHost(of url: URL) -> Bool {
+    guard let targetHost = url.host?.strippingLeadingWWW else { return false }
+    return websites.contains { $0.host?.strippingLeadingWWW == targetHost }
+  }
+}
+
+extension String {
+  fileprivate var strippingLeadingWWW: String {
+    let lowercased = lowercased()
+    return lowercased.hasPrefix("www.") ? String(lowercased.dropFirst(4)) : lowercased
+  }
 }

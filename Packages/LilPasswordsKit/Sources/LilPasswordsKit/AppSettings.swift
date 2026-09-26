@@ -102,6 +102,8 @@ public final class AppSettings: @unchecked Sendable {
     static let warnAboutCompromisedPasswords = "AppSettings.warnAboutCompromisedPasswords"
     static let agentAccessEnabled = "AppSettings.agentAccessEnabled"
     static let keepAgentAccessAvailableWhileMacUnlocked = "AppSettings.keepAgentAccessAvailableWhileMacUnlocked"
+    static let showInMenuBar = "AppSettings.showInMenuBar"
+    static let menuBarBrowserSuggestionsEnabled = "AppSettings.menuBarBrowserSuggestionsEnabled"
   }
 
   /// Smallest and largest custom password length offered in Settings → General.
@@ -124,6 +126,8 @@ public final class AppSettings: @unchecked Sendable {
       Key.warnAboutCompromisedPasswords: true,
       Key.agentAccessEnabled: false,
       Key.keepAgentAccessAvailableWhileMacUnlocked: false,
+      Key.showInMenuBar: true,
+      Key.menuBarBrowserSuggestionsEnabled: false,
     ])
   }
 
@@ -176,6 +180,24 @@ public final class AppSettings: @unchecked Sendable {
   public var keepAgentAccessAvailableWhileMacUnlocked: Bool {
     get { defaults.bool(forKey: Key.keepAgentAccessAvailableWhileMacUnlocked) }
     set { set(newValue, forKey: Key.keepAgentAccessAvailableWhileMacUnlocked) }
+  }
+
+  /// Settings → General → "Show in menu bar" (851-2425): whether `AppDelegate` shows the
+  /// `NSStatusItem` menu bar extra at all. On by default, matching Apple Passwords.
+  public var showInMenuBar: Bool {
+    get { defaults.bool(forKey: Key.showInMenuBar) }
+    set { set(newValue, forKey: Key.showInMenuBar) }
+  }
+
+  /// Settings → General → "Suggest passwords for the current website" (851-2425): whether the
+  /// menu bar extra's "Suggested" section is allowed to ask the frontmost browser for its current
+  /// site via AppleScript. Off by default — reading another app's front URL is the kind of
+  /// cross-app access a user should opt into deliberately, and doing so the first time prompts for
+  /// Automation permission (System Settings → Privacy & Security → Automation), which shouldn't
+  /// happen out of the box.
+  public var menuBarBrowserSuggestionsEnabled: Bool {
+    get { defaults.bool(forKey: Key.menuBarBrowserSuggestionsEnabled) }
+    set { set(newValue, forKey: Key.menuBarBrowserSuggestionsEnabled) }
   }
 
   private func set(_ value: some Any, forKey key: String) {
