@@ -5,9 +5,9 @@ import AppKit
 ///
 /// Before 851-2463 this was a separate leading-aligned header drawn above the cards, and also
 /// hosted the Edit/Cancel/Done button cluster. That cluster now lives in the toolbar
-/// (`DetailEditToolbarView`, over the detail column), and this view is just the first row inside
-/// `DetailViewController`'s primary `DetailSectionContainerView` — the "Last modified" subtitle
-/// that used to sit under the title is gone too, replaced by the card's own "Created" row.
+/// (`DetailEditToolbarView`, over the detail column), and this view is passed as the `header` of
+/// `DetailViewController`'s primary `CardView` — the "Last modified" subtitle that used to sit
+/// under the title is gone too, replaced by the card's own "Created" row.
 @MainActor
 final class DetailIdentityView: NSView {
   var onTitleChange: ((String) -> Void)?

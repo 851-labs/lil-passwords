@@ -3,11 +3,11 @@ import AppKit
 /// Drives an editable, reorderable list of strings — used in edit mode for both usernames and
 /// websites, which need the same add/remove/reorder behavior over different underlying fields.
 ///
-/// Hands its rendered rows to `onRowsChange` rather than writing straight into a
-/// `DetailSectionContainerView` itself (851-2463): the detail pane's primary card now combines
-/// identity, username, password, verification, website, and "Created" rows into one shared card
-/// (matching Apple Passwords), so `DetailViewController` owns the single `setRows` call that
-/// assembles all of those together instead of each piece managing its own section.
+/// Hands its rendered rows to `onRowsChange` rather than writing straight into a `CardView` itself
+/// (851-2463): the detail pane's primary card now combines identity, username, password,
+/// verification, website, and "Created" rows into one shared card (matching Apple Passwords), so
+/// `DetailViewController` owns the single `setContent` call that assembles all of those together
+/// instead of each piece managing its own section.
 @MainActor
 final class EditableListEditor {
   private var values: [String]

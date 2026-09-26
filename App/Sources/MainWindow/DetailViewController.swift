@@ -7,10 +7,13 @@ import LilPasswordsKit
 /// "nothing selected" empty state, matching Apple Passwords (851-2463).
 ///
 /// Before 851-2463 each of those groups was its own separate rounded card with a leading-aligned
-/// header above them; now everything but Notes lives inside one shared `DetailSectionContainerView`
-/// ("primary card"), matching the reference screenshot's single card containing the centered
-/// icon/title followed by hairline-divided field rows. The Edit/Cancel/Done control also moved out
-/// of this view entirely, into the toolbar (`DetailEditToolbarView`, wired via `editControl` below).
+/// header above them; now everything but Notes lives inside one shared card, matching the
+/// reference screenshot's single card containing the centered icon/title followed by
+/// hairline-divided field rows. Both cards are the same reusable `CardView` (851-2432/#32) the New
+/// Password sheet uses, with `identityView` passed in as the primary card's `header` — that gets
+/// us the divider under the centered title block for free, the same way `CardView` already
+/// dividers every other consecutive pair of rows. The Edit/Cancel/Done control also moved out of
+/// this view entirely, into the toolbar (`DetailEditToolbarView`, wired via `editControl` below).
 ///
 /// Reads and writes go through `VaultViewModel` (the in-memory stand-in for `VaultStore`,
 /// 851-2404), so once the real vault lands this controller doesn't change, only what's injected
@@ -56,8 +59,8 @@ final class DetailViewController: NSViewController {
   private let documentStack = NSStackView()
 
   private let identityView = DetailIdentityView()
-  private let primaryCard = DetailSectionContainerView()
-  private let notesCard = DetailSectionContainerView()
+  private let primaryCard = CardView()
+  private let notesCard = CardView()
 
   /// The toolbar's Edit/Cancel/Done control (851-2463): owned and laid out by
   /// `MainToolbarController`, over the detail column. `MainWindowController` hands it over after
@@ -335,11 +338,14 @@ final class DetailViewController: NSViewController {
   }
 
   /// Assembles the primary card's rows from whichever pieces are currently populated: the
-  /// centered identity view always first, then User Name(s), Password, Verification Code,
-  /// Websites, and finally Created — one shared `DetailSectionContainerView`, matching Apple
-  /// Passwords' single-card layout (851-2463).
+  /// centered identity view as the card's `header`, then User Name(s), Password, Verification
+  /// Code, Websites, and finally Created — one shared `CardView`, matching Apple Passwords'
+  /// single-card layout (851-2463). Passing `identityView` as `header` rather than as `rows[0]`
+  /// (how this worked before adopting `CardView`) is what gets the hairline divider under the
+  /// centered title block: `CardView.setContent` dividers between `header` and the first row
+  /// exactly the same way it dividers every other consecutive pair.
   private func rebuildPrimaryCard() {
-    var rows: [NSView] = [identityView]
+    var rows: [NSView] = []
     rows.append(contentsOf: usernameRows)
     if let passwordRow {
       rows.append(passwordRow)
@@ -349,7 +355,7 @@ final class DetailViewController: NSViewController {
     if let createdRow {
       rows.append(createdRow)
     }
-    primaryCard.setRows(rows)
+    primaryCard.setContent(header: identityView, rows: rows)
   }
 
   private func configureUsernameRows(_ displayItem: PasswordItem) {
@@ -443,10 +449,16 @@ final class DetailViewController: NSViewController {
     }
   }
 
+  /// A plain read-only row — unlike User Name/Password, "Created" is never copyable or editable,
+  /// so it doesn't need `DetailValueRowView`'s hover-to-reveal copy button. That makes it a
+  /// straightforward `KeyValueRow` (851-2432/#32): a right-aligned label as `value`, no accessory.
   private func makeCreatedRow(_ displayItem: PasswordItem) -> NSView {
-    let row = DetailValueRowView()
-    row.configure(label: "Created", value: Self.createdDateFormatter.string(from: displayItem.createdAt))
-    return row
+    let valueField = NSTextField(labelWithString: Self.createdDateFormatter.string(from: displayItem.createdAt))
+    valueField.font = .systemFont(ofSize: 13)
+    valueField.textColor = .secondaryLabelColor
+    valueField.alignment = .right
+    valueField.lineBreakMode = .byTruncatingMiddle
+    return KeyValueRow(label: "Created", value: valueField)
   }
 
   private func configureNotesCard(_ displayItem: PasswordItem) {
@@ -455,7 +467,7 @@ final class DetailViewController: NSViewController {
     row.onValueChange = { [weak self] newValue in
       self?.draft?.notes = newValue
     }
-    notesCard.setRows([row])
+    notesCard.setContent(rows: [row])
   }
 
   private func makeInfoRow(_ text: String) -> NSView {
@@ -469,8 +481,10 @@ final class DetailViewController: NSViewController {
     container.addSubview(label)
     NSLayoutConstraint.activate([
       container.heightAnchor.constraint(greaterThanOrEqualToConstant: 36),
-      label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
-      label.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -12),
+      // 16pt/-16pt, matching every other row's inset (see `DetailValueRowView`'s comment) now that
+      // this card is a `CardView` with 16pt-inset dividers.
+      label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+      label.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -16),
       label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
     ])
     return container

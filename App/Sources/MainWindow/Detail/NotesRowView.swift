@@ -44,13 +44,18 @@ final class NotesRowView: NSView {
     addSubview(editScrollView)
 
     NSLayoutConstraint.activate([
-      readLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-      readLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+      // 16pt/-16pt — see `DetailValueRowView`'s matching comment: lines this row's text up with
+      // `CardView`'s divider inset and `KeyValueRow`'s own label inset.
+      readLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+      readLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
       readLabel.topAnchor.constraint(equalTo: topAnchor, constant: 8),
       readLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
 
-      editScrollView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-      editScrollView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+      // 12pt, not 16: `NSTextView` inside `editScrollView` has its own small internal padding
+      // from `textContainerInset`, so a 16pt outer inset here would visually double up with it and
+      // sit noticeably further in than `readLabel`'s text does at the same 16pt.
+      editScrollView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+      editScrollView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
       editScrollView.topAnchor.constraint(equalTo: topAnchor, constant: 4),
       editScrollView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
       editScrollView.heightAnchor.constraint(equalToConstant: 80),
