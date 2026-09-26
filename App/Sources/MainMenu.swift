@@ -42,6 +42,13 @@ enum MainMenu {
       action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
       keyEquivalent: ""
     )
+    // Sparkle (851-2437). See App/Sources/Updates/UpdaterController.swift.
+    let checkForUpdatesItem = menu.addItem(
+      withTitle: "Check for Updates…",
+      action: #selector(UpdaterController.checkForUpdates(_:)),
+      keyEquivalent: ""
+    )
+    checkForUpdatesItem.target = UpdaterController.shared
     menu.addItem(.separator())
     menu.addItem(
       withTitle: "Settings…",

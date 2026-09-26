@@ -15,6 +15,7 @@
 		C68E97F864E0BE5A9CD3AAE3 /* LilPasswordsKit in Frameworks */ = {isa = PBXBuildFile; productRef = E539F5199FCE7076CD81B5FA /* LilPasswordsKit */; };
 		D97B8D9FFD1D443D7B49DCAF /* lilpw in Embed Dependencies */ = {isa = PBXBuildFile; fileRef = E987E5C00D681F00EA3D6EAD /* lilpw */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		DCF7C7F33992843800251E37 /* com.851labs.lilpasswords.agent.plist in CopyFiles */ = {isa = PBXBuildFile; fileRef = 1205EE660A0836A88635F51F /* com.851labs.lilpasswords.agent.plist */; };
+		EA16D8D61ED6C27BADEA23DF /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 3EF65E8227AAFAF25E3C67B9 /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -117,6 +118,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C68E97F864E0BE5A9CD3AAE3 /* LilPasswordsKit in Frameworks */,
+				EA16D8D61ED6C27BADEA23DF /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -275,6 +277,7 @@
 			name = LilPasswords;
 			packageProductDependencies = (
 				E539F5199FCE7076CD81B5FA /* LilPasswordsKit */,
+				3EF65E8227AAFAF25E3C67B9 /* Sparkle */,
 			);
 			productName = LilPasswords;
 			productReference = E16AB1A3115C01ADF6D2E139 /* LilPasswords.app */;
@@ -314,6 +317,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				BD178B7702B51B6E018967C0 /* XCRemoteSwiftPackageReference "swift-argument-parser" */,
+				8B0421D3E31315F971591AC3 /* XCRemoteSwiftPackageReference "Sparkle" */,
 				71839368EC70ECC54454B357 /* XCLocalSwiftPackageReference "Packages/LilPasswordsKit" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -654,6 +658,14 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		8B0421D3E31315F971591AC3 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = exactVersion;
+				version = 2.10.0;
+			};
+		};
 		BD178B7702B51B6E018967C0 /* XCRemoteSwiftPackageReference "swift-argument-parser" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/apple/swift-argument-parser";
@@ -668,6 +680,11 @@
 		1C98477EB7D07F3015822E98 /* LilPasswordsKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LilPasswordsKit;
+		};
+		3EF65E8227AAFAF25E3C67B9 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8B0421D3E31315F971591AC3 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 		B41A41E642B0A614A5A75DA7 /* LilPasswordsKit */ = {
 			isa = XCSwiftPackageProductDependency;

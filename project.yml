@@ -20,6 +20,12 @@ packages:
   ArgumentParser:
     url: https://github.com/apple/swift-argument-parser
     from: 1.5.0
+  # Pinned exact version so scripts/release/generate-appcast.sh can read the
+  # same version out of Package.resolved and fetch matching `generate_appcast`/
+  # `generate_keys` binaries. Bump deliberately, not via a version range.
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.0
 targets:
   LilPasswords:
     type: application
@@ -36,6 +42,7 @@ targets:
             subpath: Contents/Library/LaunchAgents
     dependencies:
       - package: LilPasswordsKit
+      - package: Sparkle
       # Both the agent and the CLI are secondary tools, not the app's own
       # executable, so both embed under Contents/Helpers rather than
       # alongside "Lil Passwords" in Contents/MacOS. They share one
@@ -68,6 +75,13 @@ targets:
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         NSPrincipalClass: NSApplication
         NSHumanReadableCopyright: Copyright © 2026 851 Labs. MIT License.
+        # Sparkle (851-2437). Feed and DMG both live on GitHub Releases; see
+        # docs/releasing.md. SUPublicEDKey is a build setting placeholder
+        # (Config/Base.xcconfig) until `generate_keys` produces a real one.
+        SUFeedURL: https://github.com/851-labs/lil-passwords/releases/latest/download/appcast.xml
+        SUPublicEDKey: $(SPARKLE_PUBLIC_ED_KEY)
+        SUEnableAutomaticChecks: true
+        SUScheduledCheckInterval: 86400
     settings:
       base:
         PRODUCT_NAME: Lil Passwords
