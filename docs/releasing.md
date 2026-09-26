@@ -84,7 +84,7 @@ secret in this pipeline, it's optional and the step **warns and no-ops
 instead of failing** if it's unset, logging a workflow warning annotation
 and leaving the tap's cask untouched.
 
-The cask itself (`app`, `binary` for the `lilpw` CLI link, `zap`, Sparkle
+The cask itself (`app`, `binary` for the `lilpass` CLI link, `zap`, Sparkle
 `auto_updates`, etc.) is documented in its own comments in
 `Casks/lil-passwords.rb`; it carries an ad hoc-signing caveat identical in
 spirit to the DMG's own — see the note above — until 851-2436 lands.
