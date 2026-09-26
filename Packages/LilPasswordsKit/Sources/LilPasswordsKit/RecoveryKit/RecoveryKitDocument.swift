@@ -94,19 +94,10 @@ public enum RecoveryKitDocument {
     )
 
     cursorY -= 28
-    if let qrImage = qrCodeImage(for: content.displayKey) {
+    if let grid = QRModuleGrid(displayKey: content.displayKey) {
       let displaySize = CGSize(width: 150, height: 150)
       let origin = CGPoint(x: (pageSize.width - displaySize.width) / 2, y: cursorY - displaySize.height)
-      // QR codes must stay crisp, sharp-edged squares to stay scannable — the default
-      // interpolation would blur module edges together at this scale-up. Drawing the `CGImage`
-      // directly (rather than going through `NSImage.draw(in:)`, which routes through
-      // `NSGraphicsContext`'s own, separate `imageInterpolation` property and doesn't reliably
-      // honor the underlying `CGContext.interpolationQuality` set below) is what actually gets
-      // this embedded into the PDF's image XObject as `/Interpolate false`.
-      context.saveGState()
-      context.interpolationQuality = .none
-      context.draw(qrImage, in: CGRect(origin: origin, size: displaySize))
-      context.restoreGState()
+      drawQRCode(grid, in: CGRect(origin: origin, size: displaySize), context: context)
       cursorY = origin.y - 32
     }
 
@@ -182,16 +173,106 @@ public enum RecoveryKitDocument {
     return drawRect.minY
   }
 
-  /// Renders `string` as a QR code image, one point per module (typically ~25x25pt for a key
-  /// this long) — deliberately not pre-scaled, so the caller draws it with nearest-neighbor
-  /// interpolation to keep module edges sharp instead of blurring them together. Returned as a
-  /// `CGImage` rather than an `NSImage`, so the caller can draw it via `CGContext.draw(_:in:)`
-  /// directly and actually get crisp, unsmoothed module edges — see the call site's comment.
-  private static func qrCodeImage(for string: String) -> CGImage? {
+  /// Fills one `CGRect` per dark module directly into `context` — a vector fill per module, not
+  /// an embedded raster image.
+  ///
+  /// The previous approach drew `CIQRCodeGenerator`'s output as a `CGImage` with
+  /// `context.interpolationQuality = .none`, which is exactly what you're supposed to do to stop
+  /// *a context* from resampling an image it draws — but that setting only ever controlled how
+  /// *this* `CGContext` would resample the image if it needed to. Handing a `CGImage` to
+  /// `CGContext.draw(_:in:)` while it's building a PDF still embeds that image as its own,
+  /// independent image XObject; nothing about `interpolationQuality` reaches into how a PDF
+  /// *viewer* later resamples that XObject, and `/Interpolate false` on it (the flag this project
+  /// previously assumed would be set, and would be honored) is only ever a hint some renderers
+  /// ignore outright — which is exactly what left `recovery-kit.pdf`'s QR looking soft. Vector
+  /// rects sidestep the whole question: there's no raster image in the PDF at all for anything to
+  /// resample, at any zoom level or print resolution.
+  ///
+  /// Module boundaries are computed directly from `rect`'s edges (`xEdges`/`yEdges` below), not
+  /// accumulated by repeatedly adding one module's width to the last — so two adjacent modules'
+  /// shared edge is always the exact same floating-point value on both sides, with no
+  /// hairline-gap-from-rounding-drift between them.
+  private static func drawQRCode(_ grid: QRModuleGrid, in rect: CGRect, context: CGContext) {
+    context.saveGState()
+    context.setFillColor(NSColor.black.cgColor)
+
+    let moduleCount = grid.moduleCount
+    let xEdges = (0...moduleCount).map { rect.minX + rect.width * CGFloat($0) / CGFloat(moduleCount) }
+    // PDF drawing here is bottom-up (`draw(_:in:)`'s `NSGraphicsContext(flipped: false)` above),
+    // so module row 0 — the grid's first output row, drawn at the *top* of the QR code — lands
+    // nearest `rect.maxY`, not `rect.minY`.
+    let yEdges = (0...moduleCount).map { rect.maxY - rect.height * CGFloat($0) / CGFloat(moduleCount) }
+
+    for row in 0..<moduleCount {
+      for column in 0..<moduleCount where grid.isDark(row: row, column: column) {
+        context.fill(
+          CGRect(
+            x: xEdges[column],
+            y: yEdges[row + 1],
+            width: xEdges[column + 1] - xEdges[column],
+            height: yEdges[row] - yEdges[row + 1]
+          )
+        )
+      }
+    }
+
+    context.restoreGState()
+  }
+}
+
+/// A one-bit "is this module dark" grid read directly from `CIQRCodeGenerator`'s raw pixel
+/// output — one pixel sampled per module (including whatever quiet-zone border the generator
+/// surrounds the code with), at 1:1 scale, so there's no resampling for this step to get wrong
+/// either.
+struct QRModuleGrid {
+  let moduleCount: Int
+  private let isDarkFlags: [Bool]
+
+  /// - Returns: `nil` if `CIQRCodeGenerator`/`CIContext` can't produce an image for `string` at
+  ///   all (not expected in practice for the short ASCII strings this app ever encodes).
+  init?(displayKey string: String) {
     let filter = CIFilter.qrCodeGenerator()
     filter.message = Data(string.utf8)
     filter.correctionLevel = "M"
-    guard let outputImage = filter.outputImage, outputImage.extent.width > 0 else { return nil }
-    return CIContext().createCGImage(outputImage, from: outputImage.extent)
+    guard let outputImage = filter.outputImage else { return nil }
+
+    let extent = outputImage.extent
+    let moduleCount = Int(extent.width.rounded())
+    guard moduleCount > 0, Int(extent.height.rounded()) == moduleCount else { return nil }
+
+    // Pinned to an explicit 8-bit-per-component RGBA format and a plain device RGB color space —
+    // this reads raw bytes directly below, so the pixel layout needs to be exactly known rather
+    // than whatever `CIContext`'s own default output format happens to be (which varies by OS
+    // version, e.g. an extended-range float format on newer releases).
+    let bytesPerPixel = 4
+    guard
+      let cgImage = CIContext().createCGImage(
+        outputImage,
+        from: extent,
+        format: .RGBA8,
+        colorSpace: CGColorSpaceCreateDeviceRGB()
+      ),
+      let data = cgImage.dataProvider?.data,
+      let bytes = CFDataGetBytePtr(data)
+    else { return nil }
+
+    let bytesPerRow = cgImage.bytesPerRow
+    var flags: [Bool] = []
+    flags.reserveCapacity(moduleCount * moduleCount)
+    for row in 0..<moduleCount {
+      for column in 0..<moduleCount {
+        let offset = row * bytesPerRow + column * bytesPerPixel
+        // `CIQRCodeGenerator` renders pure black modules on a pure white background, so
+        // thresholding the red channel alone is enough to tell them apart.
+        flags.append(bytes[offset] < 128)
+      }
+    }
+
+    self.moduleCount = moduleCount
+    self.isDarkFlags = flags
+  }
+
+  func isDark(row: Int, column: Int) -> Bool {
+    isDarkFlags[row * moduleCount + column]
   }
 }
