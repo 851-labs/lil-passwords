@@ -1,4 +1,5 @@
 import AppKit
+import LilPasswordsKit
 
 /// The three-column layout: sidebar, item list, detail. Mirrors Apple Passwords' split view
 /// sizing so the window feels immediately familiar.
@@ -7,6 +8,10 @@ final class MainSplitViewController: NSSplitViewController {
   let sidebarViewController: SidebarViewController
   let listViewController: ItemListViewController
   let detailViewController: DetailViewController
+
+  // Minimal, interim vault access (851-2416) — there's no real, shared `VaultViewModel` on
+  // `origin/main` yet (that's 851-2415); see `VaultModel/VaultViewModel.swift`.
+  private let vaultViewModel: any VaultViewModel = VaultStoreViewModel()
 
   init(store: VaultSnapshotStore) {
     sidebarViewController = SidebarViewController(store: store)
@@ -47,6 +52,20 @@ final class MainSplitViewController: NSSplitViewController {
     addSplitViewItem(sidebarItem)
     addSplitViewItem(listItem)
     addSplitViewItem(detailItem)
+  }
+
+  /// Opens the New Password sheet (toolbar "+" → New Password…, and File → New Password / ⌘N —
+  /// see `MainToolbarController` and `MainMenu.swift`). Implemented here, rather than on
+  /// `ItemListViewController` as `AppDelegate+MenuActions.swift`'s comment suggests as an
+  /// example, because this controller is guaranteed to be `window.contentViewController` and
+  /// therefore in the responder chain; that's what lets this `@objc` selector take priority over
+  /// `AppDelegate`'s stub fallback without any change to `MainMenu.swift` (851-2416).
+  @objc func newPassword(_ sender: Any?) {
+    guard let window = view.window else { return }
+    NewPasswordSheetController.present(vaultViewModel: vaultViewModel, from: window) { [weak self] outcome in
+      guard case .saved(let item) = outcome else { return }
+      self?.detailViewController.show(item: item)
+    }
   }
 }
 

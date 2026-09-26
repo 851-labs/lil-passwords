@@ -104,12 +104,18 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
   @objc
   private func showAddMenu(_ sender: NSButton) {
     let menu = NSMenu()
-    menu.addItem(withTitle: "New Password…", action: nil, keyEquivalent: "")
+    // `nil`-targeted, same as `MainMenu.swift`'s File → New Password: resolved dynamically via
+    // the responder chain, currently `MainSplitViewController.newPassword(_:)` (851-2416).
+    menu.addItem(
+      withTitle: "New Password…", action: #selector(MainSplitViewController.newPassword(_:)), keyEquivalent: "")
     menu.addItem(withTitle: "New Passkey…", action: nil, keyEquivalent: "")
     menu.addItem(withTitle: "New Wi-Fi Password…", action: nil, keyEquivalent: "")
     menu.addItem(.separator())
     menu.addItem(withTitle: "New Secure Note…", action: nil, keyEquivalent: "")
-    menu.items.forEach { $0.isEnabled = false }
+    // The rest still have no real destination; only "New Password…" above should be enabled.
+    for item in menu.items where item.action == nil {
+      item.isEnabled = false
+    }
     menu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 4), in: sender)
   }
 }
