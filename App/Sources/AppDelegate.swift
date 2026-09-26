@@ -63,6 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ImportExportDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
         MenuBarExtraDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
         NewPasswordDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
+        RegenerateRecoveryKeyDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
         RecoveryKitDebugMenu.runTophatCapture(outputDirectory: URL(fileURLWithPath: tophatDir))
       }
     #endif
