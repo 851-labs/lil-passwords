@@ -36,20 +36,10 @@
 		478BF7B10A4CF34216E35915 /* Embed Dependencies */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 6;
-			files = (
-				1C49D3CFE10E6FD7DDC06E50 /* LilPasswordsAgent in Embed Dependencies */,
-			);
-			name = "Embed Dependencies";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		C29CE0D58F9628BAE28131AA /* Embed Dependencies */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
 			dstPath = Contents/Helpers;
 			dstSubfolderSpec = 1;
 			files = (
+				1C49D3CFE10E6FD7DDC06E50 /* LilPasswordsAgent in Embed Dependencies */,
 				D97B8D9FFD1D443D7B49DCAF /* lilpw in Embed Dependencies */,
 			);
 			name = "Embed Dependencies";
@@ -266,7 +256,6 @@
 				F3D36D0CDF31474810F0A146 /* CopyFiles */,
 				36CCC4E76E3367C3AD14AC69 /* Frameworks */,
 				478BF7B10A4CF34216E35915 /* Embed Dependencies */,
-				C29CE0D58F9628BAE28131AA /* Embed Dependencies */,
 			);
 			buildRules = (
 			);

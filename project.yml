@@ -28,15 +28,21 @@ targets:
             subpath: Contents/Library/LaunchAgents
     dependencies:
       - package: LilPasswordsKit
-      # Embed the helper next to the app's own executable, matching the
-      # BundleProgram path in its launchd plist.
+      # Both the agent and the CLI are secondary tools, not the app's own
+      # executable, so both embed under Contents/Helpers rather than
+      # alongside "Lil Passwords" in Contents/MacOS. They share one
+      # destination/subpath deliberately: XcodeGen groups embedded
+      # dependencies into one PBXCopyFilesBuildPhase per unique
+      # (destination, subpath) pair, and two phases both named "Embed
+      # Dependencies" turned out to serialize in a non-deterministic
+      # order (see git history for the CI failure this caused). One
+      # shared phase sidesteps that entirely.
       - target: LilPasswordsAgent
         embed: true
         codeSign: true
         copy:
-          destination: executables
-      # Embed the CLI under Contents/Helpers rather than alongside the app's
-      # own executable in Contents/MacOS, so it reads as a secondary tool.
+          destination: wrapper
+          subpath: Contents/Helpers
       - target: lilpw
         embed: true
         codeSign: true

@@ -237,16 +237,24 @@ design there's exactly one writer (the helper) and N read-only observers.
   install location. No `RunAtLoad`/`KeepAlive`/`MachServices` yet — with no
   trigger, `launchd` registers the job but never runs it, which is fine: the
   agent has nothing to do until XPC (851-2427) adds a `MachServices` entry.
-- `LilPasswordsAgent` is embedded at `Contents/MacOS/LilPasswordsAgent`
-  (matching the plist's `BundleProgram`); `lilpw` is embedded at
-  `Contents/Helpers/lilpw`. Both are `SKIP_INSTALL: YES` so they aren't also
-  installed standalone into archives.
+- `LilPasswordsAgent` and `lilpw` are both embedded at `Contents/Helpers/`
+  (matching the plist's `BundleProgram`) rather than alongside the app's own
+  executable in `Contents/MacOS`. They deliberately share one
+  `destination`/`subpath` pair: XcodeGen groups embedded dependencies into
+  one `PBXCopyFilesBuildPhase` per unique pair, and giving the agent and the
+  CLI *different* pairs produced two build phases that both serialize under
+  the name "Embed Dependencies" — CI caught these coming out in a different
+  order than a local `xcodegen generate`, failing the "generated project is
+  up to date" check non-deterministically. Both `SKIP_INSTALL: YES` so they
+  aren't also installed standalone into archives.
 - **(tested)** end-to-end: built the real app with this setup, ad-hoc-called
   `SMAppService.agent(plistName:).register()` from inside it (via a temporary
   hook, reverted before the commits on this branch), and confirmed
   `notFound → enabled` with **no System Settings approval step required**,
   then `unregister()` cleanly returned it to `notRegistered` with no residue
-  in `launchctl`. The embedding mechanics in `project.yml` work.
+  in `launchctl`. Re-ran this after moving the agent to `Contents/Helpers`
+  to confirm the path change didn't break registration. The embedding
+  mechanics in `project.yml` work.
 
 ## Consequences
 
