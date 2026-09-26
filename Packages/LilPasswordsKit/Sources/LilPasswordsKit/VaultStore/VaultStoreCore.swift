@@ -166,6 +166,86 @@ final class VaultStoreCore {
     return try storage.appendChangeLogEntry(recordId: id, version: nextVersion, at: record.modifiedAt)
   }
 
+  /// Un-deletes the item at `id`: clears `PasswordItem.deletedAt` and increments its revision,
+  /// the same as any other write — the counterpart to `delete(id:)`.
+  ///
+  /// Throws `VaultStoreError.itemNotFound` if there's no row for `id`, including one that's
+  /// already been permanently erased (`VaultRecord.deleted`), since there's nothing left to
+  /// restore either way. Throws `VaultStoreError.locked` if the store isn't unlocked.
+  func restore(id: UUID) throws -> VaultChangeLogEntry {
+    guard let vaultKey else { throw VaultStoreError.locked }
+    guard let existing = try storage.loadRecord(id: id), !existing.deleted else {
+      throw VaultStoreError.itemNotFound(id)
+    }
+
+    var item = try RecordCodec.open(existing, key: vaultKey)
+    item.deletedAt = nil
+
+    let nextVersion = existing.version + 1
+    let record = try RecordCodec.seal(item, version: nextVersion, deviceId: deviceId, key: vaultKey)
+    try storage.upsertRecord(record)
+    decryptedItems[id] = item
+    return try storage.appendChangeLogEntry(recordId: id, version: nextVersion, at: record.modifiedAt)
+  }
+
+  /// Permanently erases the item at `id`: writes a `VaultRecord` tombstone (`deleted = true`)
+  /// whose sealed payload has been wiped — there's no plaintext left to seal, so this doesn't go
+  /// through `RecordCodec` at all — while still appending a change-log entry, so a future sync
+  /// engine still learns `id` was deleted even though there's nothing left to sync about it.
+  ///
+  /// This is "Delete Permanently" from Recently Deleted, and is also what `purgeExpired(now:)`
+  /// calls for each item it purges. Calling it directly on an item that was never soft-deleted is
+  /// allowed; it just skips straight to the same permanent, unrecoverable outcome.
+  ///
+  /// `now` stamps the tombstone's `modifiedAt` and change-log entry; defaults to the wall clock
+  /// but is overridable so `purgeExpired(now:)` can stamp every tombstone it writes with the same
+  /// `now` it was given, rather than a fresh `Date()` per item.
+  ///
+  /// Throws `VaultStoreError.itemNotFound` if there's no row for `id`, including one already
+  /// permanently deleted. Throws `VaultStoreError.locked` if the store isn't unlocked.
+  func deletePermanently(id: UUID, now: Date = Date()) throws -> VaultChangeLogEntry {
+    guard let vaultKey else { throw VaultStoreError.locked }
+    guard let existing = try storage.loadRecord(id: id), !existing.deleted else {
+      throw VaultStoreError.itemNotFound(id)
+    }
+
+    let nextVersion = existing.version + 1
+    let tombstone = VaultRecord(
+      id: id,
+      type: existing.type,
+      version: nextVersion,
+      modifiedAt: now,
+      deviceId: deviceId,
+      deleted: true,
+      sealed: VaultCrypto.SealedItem(keyId: vaultKey.id, combined: Data()),
+      schemaVersion: existing.schemaVersion
+    )
+    try storage.upsertRecord(tombstone)
+    decryptedItems.removeValue(forKey: id)
+    return try storage.appendChangeLogEntry(recordId: id, version: nextVersion, at: now)
+  }
+
+  /// Permanently erases every item whose `PasswordItem.deletedAt` is more than
+  /// `PasswordItem.recentlyDeletedRetentionPeriod` in the past, as of `now` — the automatic
+  /// 30-day purge. `now` is a parameter (rather than always `Date()`) so a real caller
+  /// (`LilPasswordsAgent`, on a timer) and tests can both drive it deterministically instead of
+  /// depending on the wall clock.
+  ///
+  /// Returns the ids that were purged (order not significant). Throws `VaultStoreError.locked`
+  /// if the store isn't unlocked; never throws `VaultStoreError.itemNotFound`, since the ids it
+  /// acts on come from the store's own up-to-date index.
+  func purgeExpired(now: Date) throws -> [UUID] {
+    guard vaultKey != nil else { throw VaultStoreError.locked }
+    let expiredIds = decryptedItems.values.compactMap { item -> UUID? in
+      guard let deletedAt = item.deletedAt else { return nil }
+      return now.timeIntervalSince(deletedAt) > PasswordItem.recentlyDeletedRetentionPeriod ? item.id : nil
+    }
+    for id in expiredIds {
+      _ = try deletePermanently(id: id, now: now)
+    }
+    return expiredIds
+  }
+
   func item(id: UUID) throws -> PasswordItem? {
     guard vaultKey != nil else { throw VaultStoreError.locked }
     return decryptedItems[id]

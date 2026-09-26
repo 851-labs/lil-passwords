@@ -62,6 +62,25 @@ public actor InMemoryVaultStore: VaultStoring {
     notifyOfLocalChange()
   }
 
+  public func restore(id: UUID) throws {
+    _ = try core.restore(id: id)
+    notifyOfLocalChange()
+  }
+
+  public func deletePermanently(id: UUID) throws {
+    _ = try core.deletePermanently(id: id)
+    notifyOfLocalChange()
+  }
+
+  @discardableResult
+  public func purgeExpired(now: Date) throws -> [UUID] {
+    let purgedIds = try core.purgeExpired(now: now)
+    if !purgedIds.isEmpty {
+      notifyOfLocalChange()
+    }
+    return purgedIds
+  }
+
   public func item(id: UUID) throws -> PasswordItem? {
     try core.item(id: id)
   }
