@@ -61,6 +61,10 @@ final class MenuBarExtraController: NSObject {
       button.image = image
       button.target = self
       button.action = #selector(togglePopover)
+      // The image's `accessibilityDescription` alone isn't reliably surfaced by VoiceOver as this
+      // icon-only button's own label (851-2466, same app-wide gap docs/accessibility.md calls out
+      // for every other icon-only control) — set it explicitly too.
+      button.setAccessibilityLabel(LilPasswordsKit.productName)
     }
     statusItem = item
   }
