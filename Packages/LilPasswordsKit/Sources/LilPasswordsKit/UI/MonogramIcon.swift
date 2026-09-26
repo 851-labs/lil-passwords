@@ -12,6 +12,13 @@ import AppKit
 /// of that shared-row-style move.
 @MainActor
 public enum MonogramIcon {
+  /// The corner radius, as a fraction of the square's side length, every icon in the app is
+  /// clipped to — monograms here, and real fetched website icons via `WebsiteIconRenderer`
+  /// (851-2467), so the two are visually interchangeable in the same rounded square. `public`
+  /// (851-2467, rebased onto this type's 851-2441 move into `LilPasswordsKit`) so the App target's
+  /// `WebsiteIconRenderer` can clip fetched icons to the exact same radius from outside this module.
+  public static let cornerRadiusFraction: CGFloat = 0.28
+
   private static var cache: [CacheKey: NSImage] = [:]
 
   private struct CacheKey: Hashable {
@@ -78,7 +85,7 @@ public enum MonogramIcon {
     }
 
     let image = NSImage(size: NSSize(width: dimension, height: dimension), flipped: false) { rect in
-      let cornerRadius = rect.width * 0.28
+      let cornerRadius = rect.width * cornerRadiusFraction
       let backgroundPath = NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius)
       tint.setFill()
       backgroundPath.fill()

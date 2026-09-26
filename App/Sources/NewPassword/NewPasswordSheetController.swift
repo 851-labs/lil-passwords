@@ -265,7 +265,7 @@ final class NewPasswordSheetController: NSWindowController {
       guard !Task.isCancelled, let self else { return }
       guard Self.parseWebsite(self.websiteField.stringValue)?.host == host else { return }
 
-      WebsiteIconLoader.loadIcon(forHost: host) { [weak self] icon in
+      WebsiteIconLoader.loadIcon(forHost: host, dimension: Self.iconDimension) { [weak self] icon in
         guard let self, Self.parseWebsite(self.websiteField.stringValue)?.host == host else { return }
         self.iconView.image = icon
       }

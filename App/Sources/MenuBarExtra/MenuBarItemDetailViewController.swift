@@ -128,7 +128,7 @@ final class MenuBarItemDetailViewController: NSViewController {
     iconLoadTask?.cancel()
     iconView.image = MonogramIcon.icon(for: item.title, dimension: 44)
     let itemID = item.id
-    iconLoadTask = WebsiteIconLoader.loadIcon(forHost: item.websites.first?.host) { [weak self] icon in
+    iconLoadTask = WebsiteIconLoader.loadIcon(forHost: item.websites.first?.host, dimension: 44) { [weak self] icon in
       guard let self, self.item?.id == itemID else { return }
       self.iconView.image = icon
     }
