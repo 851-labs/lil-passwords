@@ -80,6 +80,41 @@ public protocol VaultStoring: Actor {
   /// `VaultStoreError.locked` if the store isn't unlocked.
   func delete(id: UUID) async throws
 
+  /// Un-deletes the item at `id`: clears `PasswordItem.deletedAt` and increments its revision,
+  /// the same as any other `update`. This is the user-facing "restore from Recently Deleted" —
+  /// the counterpart to `delete(id:)`.
+  ///
+  /// Throws `VaultStoreError.itemNotFound` if there's no existing row, including one that's
+  /// already been permanently deleted (see `deletePermanently(id:)`); throws
+  /// `VaultStoreError.locked` if the store isn't unlocked.
+  func restore(id: UUID) async throws
+
+  /// Permanently erases the item at `id`: writes a `VaultRecord` tombstone
+  /// (`VaultRecord.deleted == true`) with its sealed payload wiped, and increments its revision
+  /// like any other write. The change-log entry for this write is kept — a future sync engine
+  /// still needs to learn that `id` was deleted, even though there's no longer any content to
+  /// sync about it.
+  ///
+  /// This is "Delete Permanently" from Recently Deleted, and is also what `purgeExpired(now:)`
+  /// calls once an item's `PasswordItem.deletedAt` is old enough. Calling it directly on an item
+  /// that hasn't been soft-deleted first is allowed — it just skips straight to the same
+  /// permanent, unrecoverable outcome.
+  ///
+  /// Throws `VaultStoreError.itemNotFound` if there's no existing row (including one already
+  /// permanently deleted), or `VaultStoreError.locked` if the store isn't unlocked.
+  func deletePermanently(id: UUID) async throws
+
+  /// Permanently erases every item whose `PasswordItem.deletedAt` is more than
+  /// `PasswordItem.recentlyDeletedRetentionPeriod` in the past, as of `now` — the automatic
+  /// 30-day purge. `now` is a parameter (rather than always `Date()`) so a real caller
+  /// (`LilPasswordsAgent`, on a timer) and tests can both drive this deterministically instead of
+  /// depending on the wall clock.
+  ///
+  /// Returns the ids that were purged; order is not significant. Throws
+  /// `VaultStoreError.locked` if the store isn't unlocked.
+  @discardableResult
+  func purgeExpired(now: Date) async throws -> [UUID]
+
   /// The item at `id`, or `nil` if there's no row for it. Throws `VaultStoreError.locked` if the
   /// store isn't unlocked.
   func item(id: UUID) async throws -> PasswordItem?

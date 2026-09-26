@@ -24,6 +24,24 @@ import Testing
     try await VaultStoringSharedBehavior.assertSearch(makeStore())
   }
 
+  @Test func restore() async throws {
+    try await VaultStoringSharedBehavior.assertRestore(makeStore())
+  }
+
+  @Test func deletePermanently() async throws {
+    try await VaultStoringSharedBehavior.assertDeletePermanently(makeStore())
+  }
+
+  @Test func purgeExpired() async throws {
+    try await VaultStoringSharedBehavior.assertPurgeExpired(makeStore())
+  }
+
+  @Test func restoreAndDeletePermanentlyAndPurgeExpiredSignalChangeObservers() async throws {
+    try await VaultStoringSharedBehavior.assertRestoreAndDeletePermanentlyAndPurgeExpiredSignalChangeObservers(
+      makeStore()
+    )
+  }
+
   @Test func changeLogOrdering() async throws {
     try await VaultStoringSharedBehavior.assertChangeLogOrdering(makeStore())
   }
@@ -207,5 +225,69 @@ import Testing
     let url = try VaultStore.defaultDatabaseURL()
     #expect(url.lastPathComponent == "vault.sqlite")
     #expect(url.deletingLastPathComponent().lastPathComponent == "Lil Passwords")
+  }
+
+  /// The vault lives in `~/Library/Application Support` — a location a malicious sandboxed app
+  /// or another local user account could otherwise read from directly (no vault key needed to
+  /// exfiltrate ciphertext, and ciphertext is still worth protecting from casual snooping/copying
+  /// even though it's encrypted). Opening a store must lock the containing directory down to
+  /// owner-only access and the database file itself to owner-only read/write.
+  @Test func openingAStoreRestrictsDirectoryAndDatabaseFilePermissions() async throws {
+    func posixPermissions(atPath path: String) throws -> Int {
+      let attributes = try FileManager.default.attributesOfItem(atPath: path)
+      return (attributes[.posixPermissions] as? NSNumber)?.intValue ?? -1
+    }
+
+    let directory = try makeTempDirectory().appendingPathComponent("Lil Passwords", isDirectory: true)
+    let url = directory.appendingPathComponent("vault.sqlite")
+
+    // Loosen the directory's permissions first, so the assertions below only pass if `VaultStore`
+    // actually tightens them back up rather than merely happening to inherit a strict default.
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try FileManager.default.setAttributes([.posixPermissions: 0o777], ofItemAtPath: directory.path)
+
+    let store = try VaultStore(databaseURL: url)
+    _ = try await store.createVault()
+
+    #expect(try posixPermissions(atPath: directory.path) == 0o700)
+    #expect(try posixPermissions(atPath: url.path) == 0o600)
+  }
+
+  /// `-wal`/`-shm` sidecar files this project doesn't currently create (no WAL mode; see
+  /// `docs/adr/0003-vaultstore.md`) but could inherit from a database file created elsewhere, or
+  /// from a future build that does turn WAL on, must not keep whatever permissions they showed up
+  /// with.
+  @Test func openingAStoreRestrictsPreExistingSidecarFilePermissions() throws {
+    let url = try makeDatabaseURL()
+    // `vault.sqlite` must exist for a `-wal`/`-shm` sidecar of it to make sense, so create an
+    // empty placeholder before the sidecars, matching what a real WAL-mode database looks like.
+    FileManager.default.createFile(atPath: url.path, contents: Data())
+    for suffix in ["-wal", "-shm"] {
+      FileManager.default.createFile(atPath: url.path + suffix, contents: Data())
+      try FileManager.default.setAttributes([.posixPermissions: 0o666], ofItemAtPath: url.path + suffix)
+    }
+
+    _ = try VaultStore(databaseURL: url)
+
+    for suffix in ["-wal", "-shm"] {
+      let attributes = try FileManager.default.attributesOfItem(atPath: url.path + suffix)
+      #expect((attributes[.posixPermissions] as? NSNumber)?.intValue == 0o600)
+    }
+  }
+
+  /// `PRAGMA secure_delete = ON` makes SQLite overwrite a deleted row's bytes with zeroes
+  /// in-place rather than just unlinking them from the b-tree and leaving the ciphertext sitting
+  /// in a freed page until something else happens to reuse it — belt-and-suspenders for a file
+  /// that, database-level permissions aside, holds every password this vault has ever had.
+  ///
+  /// `secure_delete` is a per-connection setting, not persisted in the database file (Apple's
+  /// SQLite build defaults every *fresh* connection to `secure_delete = FAST`, which is a
+  /// different, weaker setting than the `ON` this storage explicitly asks for) — so this checks
+  /// the storage's own connection directly via its test-only `isSecureDeleteEnabled()`, rather
+  /// than opening a second, independent connection to the same file and learning nothing about
+  /// the first one's setting.
+  @Test func openingAStoreEnablesSecureDelete() throws {
+    let storage = try SQLiteVaultRecordStorage(databaseURL: try makeDatabaseURL())
+    #expect(try storage.isSecureDeleteEnabled())
   }
 }
