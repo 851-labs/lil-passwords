@@ -168,7 +168,7 @@ enum AccessEventSummary {
     case .totpCode(let reference):
       return Summary(operation: "totpCode", itemId: reference.directId, itemTitle: nil, fields: ["totp"])
 
-    case .status, .unlock, .lock:
+    case .status, .createVault, .unlock, .lock:
       preconditionFailure("AgentServer never sends lock-lifecycle requests to the access log")
     }
   }
