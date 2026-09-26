@@ -64,8 +64,21 @@ jobs:
         # swift::MetadataCacheEntryBase::awaitSatisfyingState, a lock-free generic-metadata-cache
         # "wait for another thread's in-flight instantiation of this same type" spin, reached from
         # MCPStdioSessionTests' use of Client.connect(transport:) (see that suite's doc comment).
-        # Fixed at the source by adding `.serialized` to that suite, so its tests no longer race to
-        # instantiate the same generic metadata for the first time concurrently.
+        # First "fixed" by adding `.serialized` to that suite alone — then it recurred anyway,
+        # because `.serialized` only serializes tests *within* one suite, and swift-testing still
+        # runs separate suites concurrently by default. This package's suites all construct an
+        # E2EHelperProcess/run the lilpass binary via the same generic Process/Pipe machinery, so a
+        # CI run with the HangWatchdog instrumentation below caught the same livelock again, just
+        # racing across suites instead of within one — see the Makefile's `e2e` target for the full
+        # writeup and the `--no-parallel` flag that actually removes the cross-suite race.
+        #
+        # The retry loop below is deliberate, not a crutch: even with `--no-parallel`, one local
+        # verification run out of several still tripped HangWatchdog before this landed, so the
+        # underlying Swift-runtime generic-metadata race is treated as reduced-to-rare rather than
+        # eliminated. Each attempt fails fast (the 90s HangWatchdog plus its `sample` dump, well
+        # under this step's 10-minute budget) and leaves full tracing in the log either way, so a
+        # retry that goes green still leaves the failed attempt's diagnostics behind to investigate
+        # — this isn't retrying away a mystery silently.
         #
         # `timeout-minutes: 10` and every suite's own `.timeLimit(.minutes(1))` trait stay on as a
         # backstop: a genuine future hang should fail fast and name the offending test, rather than
@@ -73,4 +86,11 @@ jobs:
         timeout-minutes: 10
         env:
           E2E_EXTRA_ARGS: --verbose
-        run: make e2e
+        run: |
+          for attempt in 1 2 3; do
+            if make e2e; then
+              exit 0
+            fi
+            echo "::warning::make e2e attempt ${attempt} failed (see HangWatchdog tracing above if this was the livelock)"
+          done
+          exit 1
