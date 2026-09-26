@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import LilPasswordsKit
 
 /// Hosts the main window: a three-column `NSSplitViewController` (sidebar, item list, detail)
@@ -7,11 +8,23 @@ import LilPasswordsKit
 @MainActor
 final class MainWindowController: NSWindowController {
   private let store = VaultSnapshotStore()
+  private let dataSource: VaultViewModel
   private let splitViewController: MainSplitViewController
   private let toolbarController = MainToolbarController()
 
+  private var itemsDidChangeCancellable: AnyCancellable?
+  private var searchKeyMonitor: Any?
+
   init() {
-    splitViewController = MainSplitViewController(store: store)
+    // `InMemoryVaultStore` is a real `VaultStoring` conformance (851-2404) — real crypto, real
+    // CRUD/change-log semantics — just without a SQLite file or cross-process Darwin
+    // notifications. It stands in for the XPC-backed `VaultStore` the app will talk to once
+    // `LilPasswordsAgent` (851-2427) can hand one back; nothing above `VaultViewModel` changes
+    // when that swap happens.
+    let vaultStore = InMemoryVaultStore()
+    let dataSource = VaultStoreViewModel(store: vaultStore)
+    self.dataSource = dataSource
+    splitViewController = MainSplitViewController(store: store, dataSource: dataSource)
 
     let window = NSWindow(
       contentRect: NSRect(x: 0, y: 0, width: 920, height: 560),
@@ -36,16 +49,56 @@ final class MainWindowController: NSWindowController {
     toolbarController.delegate = self
     toolbarController.splitView = splitViewController.splitView
     window.toolbar = toolbarController.makeToolbar()
+
+    store.update(VaultSnapshot(items: dataSource.items))
+    itemsDidChangeCancellable = dataSource.itemsDidChange
+      .receive(on: RunLoop.main)
+      .sink { [weak self] in
+        guard let self else { return }
+        store.update(VaultSnapshot(items: dataSource.items))
+      }
+
+    // `start()` is async (it has to unlock the vault before any CRUD works), but `init()` isn't,
+    // so it's kicked off here as an unstructured `Task` — `dataSource.items` stays empty until it
+    // completes, same as any other async load, and `itemsDidChange` above picks up the result.
+    Task { [dataSource] in
+      var seedItems: [PasswordItem] = []
+      #if DEBUG
+        if SampleData.isEnabled {
+          seedItems = SampleData.makeItems()
+        }
+      #endif
+      await dataSource.start(seeding: seedItems)
+    }
+
+    // ⌘F focuses the search field (851-2417). Handled as a local event monitor, rather than a
+    // `MainMenu.swift` menu item's action, since that file is 851-2424's.
+    searchKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+      guard let self,
+        event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+        event.charactersIgnoringModifiers?.lowercased() == "f"
+      else {
+        return event
+      }
+      toolbarController.focusSearchField()
+      return nil
+    }
   }
 
   @available(*, unavailable)
   required init?(coder: NSCoder) {
     fatalError("init(coder:) is not supported")
   }
+
+  isolated deinit {
+    if let searchKeyMonitor {
+      NSEvent.removeMonitor(searchKeyMonitor)
+    }
+  }
 }
 
 extension MainWindowController: MainToolbarControllerDelegate {
   func toolbarController(_ controller: MainToolbarController, searchTextDidChange text: String) {
-    // Filtering the item list depends on the real item model (851-2403); nothing to filter yet.
+    splitViewController.listViewController.updateSearch(query: text)
   }
 }

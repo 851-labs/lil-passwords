@@ -1,4 +1,5 @@
 import AppKit
+import LilPasswordsKit
 
 /// The three-column layout: sidebar, item list, detail. Mirrors Apple Passwords' split view
 /// sizing so the window feels immediately familiar.
@@ -8,9 +9,9 @@ final class MainSplitViewController: NSSplitViewController {
   let listViewController: ItemListViewController
   let detailViewController: DetailViewController
 
-  init(store: VaultSnapshotStore) {
+  init(store: VaultSnapshotStore, dataSource: VaultViewModel) {
     sidebarViewController = SidebarViewController(store: store)
-    listViewController = ItemListViewController(store: store)
+    listViewController = ItemListViewController(dataSource: dataSource)
     detailViewController = DetailViewController()
     super.init(nibName: nil, bundle: nil)
   }
@@ -23,6 +24,7 @@ final class MainSplitViewController: NSSplitViewController {
   override func viewDidLoad() {
     super.viewDidLoad()
     sidebarViewController.delegate = self
+    listViewController.delegate = self
 
     splitView.autosaveName = "MainSplitView"
     splitView.identifier = NSUserInterfaceItemIdentifier("MainSplitView")
@@ -54,5 +56,18 @@ extension MainSplitViewController: SidebarViewControllerDelegate {
   func sidebarViewController(_ controller: SidebarViewController, didSelect category: SidebarCategory) {
     listViewController.select(category: category)
     detailViewController.showNoSelection(for: category)
+  }
+}
+
+extension MainSplitViewController: ItemListViewControllerDelegate {
+  func itemListViewController(_ controller: ItemListViewController, didChangeSelection items: [PasswordItem]) {
+    switch items.count {
+    case 0:
+      detailViewController.showNoSelection(for: listViewController.currentCategory)
+    case 1:
+      detailViewController.show(item: items[0])
+    default:
+      detailViewController.showMultipleSelection(count: items.count)
+    }
   }
 }

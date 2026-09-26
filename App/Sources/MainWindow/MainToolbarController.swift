@@ -101,6 +101,16 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     }
   }
 
+  /// Focuses and selects-all in the toolbar search field, in response to ⌘F (851-2417). Handled
+  /// here rather than as a `MainMenu.swift` menu item's action, since that file is 851-2424's.
+  func focusSearchField() {
+    guard let searchField = searchToolbarItem?.searchField else { return }
+    searchField.window?.makeFirstResponder(searchField)
+    if let editor = searchField.currentEditor() {
+      editor.selectAll(nil)
+    }
+  }
+
   @objc
   private func showAddMenu(_ sender: NSButton) {
     let menu = NSMenu()
