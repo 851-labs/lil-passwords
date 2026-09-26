@@ -21,4 +21,15 @@ final class SettingsTabViewController: NSTabViewController {
     tabViewItem.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: title)
     addTabViewItem(tabViewItem)
   }
+
+  // `NSTabViewController` doesn't automatically resize the window to match the newly-selected
+  // child's `preferredContentSize` on every switch — only the initially-selected tab's size
+  // reliably takes effect. Without this, switching to a taller tab (Agents, with its access-log
+  // table) leaves the window stuck at whichever tab loaded first and clips the extra content.
+  override func tabView(_ tabView: NSTabView, didSelect tabViewItem: NSTabViewItem?) {
+    super.tabView(tabView, didSelect: tabViewItem)
+    if let size = tabViewItem?.viewController?.preferredContentSize, size != .zero {
+      preferredContentSize = size
+    }
+  }
 }
