@@ -156,7 +156,13 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         try await completePasskeyAssertion(
           credentialId: passkeyIdentity.credentialID,
           relyingPartyIdentifier: passkeyIdentity.relyingPartyIdentifier,
-          clientDataHash: passkeyRequest.clientDataHash
+          clientDataHash: passkeyRequest.clientDataHash,
+          // No LAContext ceremony happens in this process for this entry point — the system only
+          // invokes `provideCredentialWithoutUserInteraction(for:)` when *it's* already satisfied
+          // about user presence, without ever asking this extension to check. See `userVerified`'s
+          // own doc comment on `PasskeyAssertionRequest` for why that means this reports `false`
+          // rather than assuming the system's own check counts as this extension's.
+          userVerified: false
         )
       } catch AgentClient.RequestError.remote(.locked) {
         // Same reasoning as the password path above: no UI is on screen here, so throw
@@ -215,7 +221,10 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
           userHandle: identity.userHandle,
           userName: identity.userName,
           userDisplayName: "",
-          clientDataHash: passkeyRequest.clientDataHash
+          clientDataHash: passkeyRequest.clientDataHash,
+          // Same reasoning as `provideCredentialWithoutUserInteraction(for:)` above: the system
+          // invokes this entry point directly, with no LAContext check performed by this process.
+          userVerified: false
         )
       } catch AgentClient.RequestError.remote(.locked) {
         pendingPasskeyAction = .register(
@@ -239,11 +248,12 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
   /// call sites need different behavior specifically for `.locked` (see each's own catch clause).
   @available(macOS 14, *)
   private func completePasskeyAssertion(
-    credentialId: Data, relyingPartyIdentifier: String, clientDataHash: Data
+    credentialId: Data, relyingPartyIdentifier: String, clientDataHash: Data, userVerified: Bool
   ) async throws {
     let result = try await agentClient.passkeyAssert(
       PasskeyAssertionRequest(
-        credentialId: credentialId, relyingPartyIdentifier: relyingPartyIdentifier, clientDataHash: clientDataHash)
+        credentialId: credentialId, relyingPartyIdentifier: relyingPartyIdentifier, clientDataHash: clientDataHash,
+        userVerified: userVerified)
     )
     let credential = ASPasskeyAssertionCredential(
       userHandle: result.userHandle,
@@ -261,12 +271,13 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
   /// and never appears here, only the resulting `credentialId`/`attestationObject`.
   @available(macOS 14, *)
   private func completePasskeyRegistration(
-    relyingPartyIdentifier: String, userHandle: Data, userName: String, userDisplayName: String, clientDataHash: Data
+    relyingPartyIdentifier: String, userHandle: Data, userName: String, userDisplayName: String,
+    clientDataHash: Data, userVerified: Bool
   ) async throws {
     let result = try await agentClient.passkeyRegister(
       PasskeyRegistrationRequest(
         relyingPartyIdentifier: relyingPartyIdentifier, userHandle: userHandle, userName: userName,
-        userDisplayName: userDisplayName)
+        userDisplayName: userDisplayName, userVerified: userVerified)
     )
     let credential = ASPasskeyRegistrationCredential(
       relyingParty: relyingPartyIdentifier,
@@ -334,15 +345,21 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
     if #available(macOS 14, *), let pendingPasskeyAction {
       self.pendingPasskeyAction = nil
       do {
+        // `userVerified: true` for both cases below: reaching this method at all means
+        // `unlockButtonClicked()` just ran `authenticator.authenticate(reason:)` — a real
+        // `LAContext` biometric/password ceremony this extension performed itself — immediately
+        // before calling here, unlike `provideCredentialWithoutUserInteraction(for:)`/
+        // `prepareInterface(forPasskeyRegistration:)`'s direct paths (see their own call sites).
         switch pendingPasskeyAction {
         case .assert(let credentialId, let relyingPartyIdentifier, let clientDataHash):
           try await completePasskeyAssertion(
-            credentialId: credentialId, relyingPartyIdentifier: relyingPartyIdentifier, clientDataHash: clientDataHash)
+            credentialId: credentialId, relyingPartyIdentifier: relyingPartyIdentifier,
+            clientDataHash: clientDataHash, userVerified: true)
         case .register(
           let relyingPartyIdentifier, let userHandle, let userName, let userDisplayName, let clientDataHash):
           try await completePasskeyRegistration(
             relyingPartyIdentifier: relyingPartyIdentifier, userHandle: userHandle, userName: userName,
-            userDisplayName: userDisplayName, clientDataHash: clientDataHash)
+            userDisplayName: userDisplayName, clientDataHash: clientDataHash, userVerified: true)
         }
       } catch {
         extensionContext.cancelRequest(withError: ASExtensionError(.failed))

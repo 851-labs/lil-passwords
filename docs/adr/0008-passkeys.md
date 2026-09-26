@@ -1,10 +1,12 @@
-# 0007. Passkeys (macOS 14+)
+# 0008. Passkeys (macOS 14+)
 
 - Status: Accepted
 - Related: [851-2442](https://linear.app/851/issue/851-2442) (this work), ADR 0001 (storage and
   process model — "only the helper opens the vault"), ADR 0002 (crypto — how `PasskeyItem`'s
   private key is sealed), ADR 0005 (AutoFill credential provider — the extension and XPC trust
   boundary this ticket adds two ops to)
+- Numbered 0008 rather than 0007 (this ticket's own first choice) to leave 0007 for 851-2445's
+  scoped agent access ADR, which claims it independently on its own branch.
 
 ## Context
 
@@ -67,6 +69,30 @@ case .status, .unlock, .lock, .autoFillIdentities, .autoFillCredential, .passkey
 Both ops are rejected for every other caller (the app, `lilpass`, or any other identity) the same
 way `autoFillIdentities`/`autoFillCredential` already are — see `AgentServerTests` for the
 allow-list assertions this ticket adds alongside the existing ones.
+
+**Security review fix:** `isRequestPermitted(_:for:)`'s AutoFill allow-list only ever *narrows*
+that one caller's own connection — every other caller falls through to `return true` and is
+gated by whatever the individual request handler in `vaultResponse(for:caller:)` checks instead
+(`requireWriteAccess(for:)`, the 851-2433 write-access toggle). `passkeyRegister`/`passkeyAssert`
+first shipped that way too, which meant that with agent write access turned on, `lilpass` (or any
+code-signing-verified peer) could ask the helper to sign a WebAuthn assertion for *any* relying
+party — a full "log in as this person anywhere" primitive, with no Touch ID and no system UI. Fixed
+by making `isRequestPermitted(_:for:)` hard-refuse both ops with `.callerNotAuthorized` for every
+caller except the verified AutoFill connection, structurally, before `requireWriteAccess(for:)` (a
+disableable settings toggle meant for `PasswordItem` CRUD, not "sign into anywhere") ever runs —
+the system's own AutoFill picker UI is the real, non-bypassable user-presence gate for these two
+ops. `.deletePasskey` got the same treatment for a simpler reason: agents never manage passkeys at
+all, full stop, so it's gated by `isAppCaller(_:)` directly rather than the write-access toggle
+that lets `lilpass` delete ordinary `PasswordItem`s. See `AgentServerTests`' `lilpassAndAppCallers…`/
+`deletePasskeyIsAppOnly…` tests, which assert `.callerNotAuthorized` even with write access
+explicitly turned on.
+
+The UV (user-verified) authenticatorData flag also stopped being hardcoded `true`: it now reads
+`PasskeyRegistrationRequest.userVerified`/`PasskeyAssertionRequest.userVerified`, which
+`CredentialProviderViewController` sets to `true` only when it just ran its own `LAContext`
+ceremony (the post-"Unlock…"-button retry path) and `false` for the direct
+`provideCredentialWithoutUserInteraction(for:)`/`prepareInterface(forPasskeyRegistration:)` entry
+points, where no such ceremony happens in this process.
 
 The extension's `prepareInterface(forPasskeyRegistration:)` and
 `provideCredentialWithoutUserInteraction(for:)`/`prepareCredentialList(for:requestParameters:)`
@@ -140,7 +166,11 @@ protocol-level correctness a live webauthn.io round trip would otherwise be the 
   signCount, attested credential data with a COSE EC2 key), attestation object shape, and a full
   sign/verify round trip using the same P-256 key.
 - `AgentServerTests` — `passkeyRegister`/`passkeyAssert` added to the AutoFill-only allow-list
-  assertions; rejected for every other caller identity.
+  assertions; rejected for every other caller identity, **including with agent write access turned
+  on** (`lilpassAndAppCallersAreRejectedForPasskeyRegisterAndAssertEvenWithWriteAccessOn`); the same
+  for `.deletePasskey` being app-only (`deletePasskeyIsAppOnlyEvenWithWriteAccessOn`); and that the
+  UV flag reflects `PasskeyAssertionRequest.userVerified` rather than a hardcoded value
+  (`passkeyAssertReportsUserVerifiedOnlyWhenTheRequestSaysSo`).
 
 ## Consequences
 

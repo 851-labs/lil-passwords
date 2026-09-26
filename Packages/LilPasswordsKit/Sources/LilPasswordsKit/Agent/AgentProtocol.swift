@@ -199,11 +199,25 @@ public struct PasskeyRegistrationRequest: Sendable, Codable, Equatable {
   public var userName: String
   public var userDisplayName: String
 
-  public init(relyingPartyIdentifier: String, userHandle: Data, userName: String, userDisplayName: String) {
+  /// Whether `CredentialProviderViewController` performed its own `LAContext` verification for
+  /// *this* request — i.e. this registration was reached via its "Unlock…" button and the person
+  /// passing that authentication, not via `prepareInterface(forPasskeyRegistration:)`'s direct,
+  /// no-extension-UI path (see that method's doc comment). `AgentServer` reads this straight into
+  /// `PasskeyAuthenticator.authenticatorData(userVerified:)`'s UV flag rather than hardcoding
+  /// `true`: the helper itself has no biometric/PIN ceremony of its own, so it can only report UV
+  /// truthfully by trusting what the extension tells it happened for this specific request.
+  /// Defaults to `false` — the safe assumption absent a caller that explicitly proves otherwise.
+  public var userVerified: Bool
+
+  public init(
+    relyingPartyIdentifier: String, userHandle: Data, userName: String, userDisplayName: String,
+    userVerified: Bool = false
+  ) {
     self.relyingPartyIdentifier = relyingPartyIdentifier
     self.userHandle = userHandle
     self.userName = userName
     self.userDisplayName = userDisplayName
+    self.userVerified = userVerified
   }
 }
 
@@ -233,10 +247,16 @@ public struct PasskeyAssertionRequest: Sendable, Codable, Equatable {
   public var relyingPartyIdentifier: String
   public var clientDataHash: Data
 
-  public init(credentialId: Data, relyingPartyIdentifier: String, clientDataHash: Data) {
+  /// See ``PasskeyRegistrationRequest/userVerified`` — the same "did the extension itself perform
+  /// an `LAContext` check for this specific request" signal, read into the assertion's UV flag
+  /// instead of the registration's. Defaults to `false` for the same fail-closed reason.
+  public var userVerified: Bool
+
+  public init(credentialId: Data, relyingPartyIdentifier: String, clientDataHash: Data, userVerified: Bool = false) {
     self.credentialId = credentialId
     self.relyingPartyIdentifier = relyingPartyIdentifier
     self.clientDataHash = clientDataHash
+    self.userVerified = userVerified
   }
 }
 

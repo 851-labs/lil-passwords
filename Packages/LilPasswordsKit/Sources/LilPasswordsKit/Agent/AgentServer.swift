@@ -135,11 +135,36 @@ public actor AgentServer {
   /// runs in the app, not the extension — the extension resolves a specific passkey purely from the
   /// `ASPasskeyCredentialIdentity` the system hands it, never by asking the helper to enumerate.
   ///
-  /// Every other caller (the app, `lilpass`) is unaffected: this only ever narrows AutoFill's own
-  /// connection, so it's checked first, before any of the existing app-only/access-policy/
-  /// write-access gating below even runs.
+  /// Every other caller (the app, `lilpass`) is mostly unaffected by the block above — it only
+  /// ever narrows AutoFill's own connection, so it's checked first, before any of the existing
+  /// app-only/access-policy/write-access gating below even runs — **except** for
+  /// `.passkeyRegister`/`.passkeyAssert`, which this method also hard-refuses for every caller
+  /// that *isn't* AutoFill.
+  ///
+  /// **Security history (851-2442 review):** those two ops used to fall through to `return true`
+  /// here for the app and `lilpass` alike, leaving `requireWriteAccess(for:)` — the 851-2433
+  /// toggle meant for ordinary `PasswordItem` CRUD — as their only gate. That toggle is
+  /// user-disableable but defaults to reachable, and it exists to let an agent add/edit/delete
+  /// *passwords*, not to let anything other than the system's own AutoFill picker ask the helper
+  /// to produce a live WebAuthn assertion. With write access on, any code-signing-verified peer
+  /// (`lilpass`, an MCP server driving it) could have asked the helper to sign an assertion for
+  /// *any* relying party and gotten one back — a full "log in as this person anywhere" primitive,
+  /// with no Touch ID, no system UI, and nothing on screen for the person to notice. The system's
+  /// AutoFill UI (which only ever invokes the extension after the Mac itself is unlocked, and
+  /// which is the caller `isAutoFillCaller(_:)` verifies) is the actual, structural
+  /// user-presence gate these two ops need — not a settings toggle a background agent could
+  /// already have turned on for an unrelated reason. See `AgentServerTests` for the
+  /// `callerNotAuthorized` assertions covering the app and `lilpass` here, including with write
+  /// access explicitly turned on.
   private func isRequestPermitted(_ request: AgentRequest, for caller: CallerIdentity) -> Bool {
-    guard isAutoFillCaller(caller) else { return true }
+    guard isAutoFillCaller(caller) else {
+      switch request {
+      case .passkeyRegister, .passkeyAssert:
+        return false
+      default:
+        return true
+      }
+    }
     switch request {
     case .status, .unlock, .lock, .autoFillIdentities, .autoFillCredential, .passkeyRegister, .passkeyAssert:
       return true
@@ -485,7 +510,13 @@ public actor AgentServer {
       return .passkeyIdentities(try await vaultStore.allPasskeys().map(PasskeyIdentity.init))
 
     case .deletePasskey(let id):
-      try requireWriteAccess(for: caller)
+      // 851-2442 security fix: app-only, the same way `.createVault`/`.unlock`/`.getAgentSettings`/
+      // `.setAgentSettings` above are — not gated behind `requireWriteAccess(for:)`, the toggle
+      // meant for agent-driven `PasswordItem` CRUD. Agents never manage passkeys at all, write
+      // access on or not: `.passkeys`' read-only `PasskeyMetadata` (never key material) is as far
+      // as agent access to passkeys goes. See `AgentServerTests` for the `callerNotAuthorized`
+      // coverage, including with write access explicitly turned on.
+      guard isAppCaller(caller) else { throw AgentError.callerNotAuthorized }
       guard try await vaultStore.passkey(id: id) != nil else { throw AgentError.notFound }
       try await vaultStore.deletePasskeyPermanently(id: id)
       return .passkeyDeleted
@@ -493,6 +524,17 @@ public actor AgentServer {
     case .passkeyRegister(let registration):
       // 851-2442: the only place a passkey private key is ever generated. It's sealed into the
       // vault via `createPasskey` and never appears in the returned `PasskeyRegistrationResult`.
+      //
+      // Reachable only by the verified AutoFill caller (`isRequestPermitted(_:for:)` hard-refuses
+      // it for everyone else with `.callerNotAuthorized` before dispatch ever reaches here) — this
+      // `requireWriteAccess(for:)` call still applies on top of that, the same "a passkey
+      // registration is as much a vault write as `.createItem`" reasoning `AgentServerTests`
+      // documents, so turning the 851-2433 write-access toggle off also blocks AutoFill from
+      // minting new passkeys, not just app-originated writes.
+      //
+      // Also implicitly requires the vault to already be unlocked: every case in this switch does,
+      // via the `vaultStore.isUnlocked` guard at the top of `vaultResponse(for:caller:)`, before
+      // dispatch ever reaches this case.
       try requireWriteAccess(for: caller)
       let privateKey = P256.Signing.PrivateKey()
       let credentialId = SecureRandom.bytes(32)
@@ -511,6 +553,11 @@ public actor AgentServer {
       )
       let authenticatorData = PasskeyAuthenticator.authenticatorData(
         relyingPartyIdentifier: registration.relyingPartyIdentifier,
+        // 851-2442 security fix: the UV flag reports what `CredentialProviderViewController`
+        // actually told us happened for *this* request — never hardcoded `true` — since the
+        // helper has no biometric/PIN ceremony of its own beyond "the vault is unlocked". See
+        // `PasskeyRegistrationRequest.userVerified`'s documentation.
+        userVerified: registration.userVerified,
         signCount: item.signCount,
         attestedCredentialData: attestedCredentialData
       )
@@ -523,6 +570,9 @@ public actor AgentServer {
       // `credentialId` (the relying-party-facing identifier), not vault `id` — `VaultStoring` has
       // no by-`credentialId` lookup, so this is a linear scan over the (typically small) passkey
       // set, matching how `.autoFillIdentities` above already scans `allItems()`.
+      //
+      // Reachable only by the verified AutoFill caller and only once the vault is unlocked — see
+      // `.passkeyRegister` above for both, which apply here identically.
       try requireWriteAccess(for: caller)
       guard var item = try await vaultStore.allPasskeys().first(where: { $0.credentialId == assertion.credentialId })
       else { throw AgentError.notFound }
@@ -531,6 +581,8 @@ public actor AgentServer {
       item.lastUsedAt = Date()
       let authenticatorData = PasskeyAuthenticator.authenticatorData(
         relyingPartyIdentifier: assertion.relyingPartyIdentifier,
+        // 851-2442 security fix: see the matching comment in `.passkeyRegister` above.
+        userVerified: assertion.userVerified,
         signCount: item.signCount
       )
       let signature = try PasskeyAuthenticator.sign(

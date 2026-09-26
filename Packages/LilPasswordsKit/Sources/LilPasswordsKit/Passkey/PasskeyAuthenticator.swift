@@ -35,8 +35,12 @@ enum PasskeyAuthenticator {
   ///   - userPresent: The UP flag. lil passwords always sets this: by the time this is called,
   ///     the helper is unlocked and the caller (AutoFill, having shown its own Unlock UI, or the
   ///     app) has already established the user is present.
-  ///   - userVerified: The UV flag. Also always set, for the same reason — there's no separate
-  ///     PIN/biometric ceremony beyond the helper's own unlock.
+  ///   - userVerified: The UV flag. Defaults to `true` for this pure function's own tests'
+  ///     convenience, but `AgentServer` (the only production caller) never relies on that default —
+  ///     it always passes `PasskeyRegistrationRequest.userVerified`/`PasskeyAssertionRequest.userVerified`
+  ///     explicitly (851-2442 security fix), since the helper itself has no biometric/PIN ceremony
+  ///     of its own beyond "the vault is unlocked" and must report only what the AutoFill extension
+  ///     actually told it happened for this specific request.
   ///   - signCount: Encoded big-endian into the 4-byte counter (§6.1: "signed 32-bit unsigned
   ///     integer" — this project's `PasskeyItem.signCount` is already `UInt32`).
   ///   - attestedCredentialData: Present only for registration, which sets the AT flag (bit 6);
