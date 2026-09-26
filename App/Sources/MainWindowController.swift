@@ -116,6 +116,12 @@ final class MainWindowController: NSWindowController {
     toolbarController.sortButton.action = #selector(ItemListViewController.showSortMenu(_:))
     splitViewController.listViewController.listTitleView = toolbarController.listTitleView
     splitViewController.detailViewController.editControl = toolbarController.editControl
+    // Codes/Security/Deleted (851-2418/851-2419/851-2420) replace the list+detail split with a
+    // full-width view; none of this toolbar's list/detail-column chrome applies to those, so it's
+    // added/removed to match (851-2463) — see `MainToolbarController.setFullWidthModeActive(_:)`.
+    splitViewController.onFullWidthModeChange = { [weak toolbarController] isFullWidth in
+      toolbarController?.setFullWidthModeActive(isFullWidth)
+    }
     window.toolbar = toolbarController.makeToolbar()
     window.toolbar?.isVisible = false
 

@@ -30,6 +30,20 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
   /// `.sidebarTrackingSeparator`, divider 1 (list/detail) for `ItemIdentifier.listDetailTrackingSeparator`.
   weak var splitView: NSSplitView?
 
+  /// The toolbar built by `makeToolbar()` — kept (weakly; `window.toolbar` owns it) so
+  /// `setFullWidthModeActive(_:)` can add/remove items after the fact, once the window already
+  /// has a toolbar installed.
+  private weak var toolbar: NSToolbar?
+
+  /// Whether a full-width category view (Codes/Security/Deleted, 851-2418/851-2419/851-2420) is
+  /// currently showing in place of the list+detail split. Those views replace
+  /// `MainSplitViewController.detailViewController`'s content but not the window's toolbar, which
+  /// is independent of split-view content — so left alone, this toolbar's list-column title/sort/
+  /// add and detail-column Edit/search would keep floating uselessly (and confusingly, duplicating
+  /// each full-width view's own "N Items" header) over content none of them apply to. Toggled by
+  /// `MainSplitViewController.onFullWidthModeChange`, wired in `MainWindowController.init()`.
+  private var isFullWidthModeActive = false
+
   /// Leading over the list column: the current category's name + item count. `ItemListViewController`
   /// pushes new text into this whenever its rows are rebuilt (rename from before this ticket, when
   /// this text lived in the list's own in-content header row rather than the toolbar).
@@ -89,10 +103,21 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     toolbar.displayMode = .iconOnly
     toolbar.allowsUserCustomization = false
     toolbar.autosavesConfiguration = false
+    self.toolbar = toolbar
     return toolbar
   }
 
   func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+    isFullWidthModeActive ? fullWidthItemIdentifiers : splitViewItemIdentifiers
+  }
+
+  func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+    splitViewItemIdentifiers
+  }
+
+  /// The full list+detail layout's toolbar items (851-2463) — the default, and what's restored
+  /// whenever `setFullWidthModeActive(false)` is called.
+  private var splitViewItemIdentifiers: [NSToolbarItem.Identifier] {
     [
       .toggleSidebar,
       .sidebarTrackingSeparator,
@@ -105,8 +130,38 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     ]
   }
 
-  func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-    toolbarDefaultItemIdentifiers(toolbar)
+  /// The reduced toolbar shown while a full-width category view (Codes/Security/Deleted) is
+  /// showing: just the sidebar toggle — none of the list/detail column chrome applies to a
+  /// single full-width view, which already renders its own title/count/actions in its content.
+  private var fullWidthItemIdentifiers: [NSToolbarItem.Identifier] {
+    [.toggleSidebar, .sidebarTrackingSeparator]
+  }
+
+  /// Adds or removes the list/detail-column toolbar items to match whether a full-width category
+  /// view is showing — see `isFullWidthModeActive`'s documentation. Safe to call before
+  /// `makeToolbar()`/before the toolbar is installed on the window (a no-op until then); the next
+  /// `makeToolbar()` picks up the current mode via `toolbarDefaultItemIdentifiers(_:)`.
+  func setFullWidthModeActive(_ active: Bool) {
+    guard isFullWidthModeActive != active else { return }
+    isFullWidthModeActive = active
+    guard let toolbar else { return }
+
+    let targetIdentifiers = active ? fullWidthItemIdentifiers : splitViewItemIdentifiers
+
+    // Remove first (highest index first, so earlier removals don't shift later indices), then
+    // insert whatever's missing at its target position — by the time the insert loop reaches
+    // index `i`, every earlier index already matches `targetIdentifiers` by construction, so
+    // comparing directly against `toolbar.items[i]` is safe.
+    for index in stride(from: toolbar.items.count - 1, through: 0, by: -1) {
+      if !targetIdentifiers.contains(toolbar.items[index].itemIdentifier) {
+        toolbar.removeItem(at: index)
+      }
+    }
+    for (index, identifier) in targetIdentifiers.enumerated() {
+      if index >= toolbar.items.count || toolbar.items[index].itemIdentifier != identifier {
+        toolbar.insertItem(withItemIdentifier: identifier, at: index)
+      }
+    }
   }
 
   func toolbar(
