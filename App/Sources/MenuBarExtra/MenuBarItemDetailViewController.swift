@@ -24,6 +24,10 @@ final class MenuBarItemDetailViewController: NSViewController {
   private var item: PasswordItem?
   private var totpTimer: Timer?
 
+  /// 851-2459: cancelled and replaced every `configure(with:)` call so a slow fetch for a
+  /// previously-shown item can never land after another item has been selected.
+  private var iconLoadTask: Task<Void, Never>?
+
   private let iconView = NSImageView()
   private let titleField = NSTextField(labelWithString: "")
   private let subtitleField = NSTextField(labelWithString: "")
@@ -113,6 +117,7 @@ final class MenuBarItemDetailViewController: NSViewController {
 
   isolated deinit {
     totpTimer?.invalidate()
+    iconLoadTask?.cancel()
   }
 
   /// Populates every field for `item`, rebuilds the card's rows, and (re)starts the TOTP
@@ -120,7 +125,13 @@ final class MenuBarItemDetailViewController: NSViewController {
   /// suggested item without dismissing the popover first.
   func configure(with item: PasswordItem) {
     self.item = item
+    iconLoadTask?.cancel()
     iconView.image = MonogramIcon.icon(for: item.title, dimension: 44)
+    let itemID = item.id
+    iconLoadTask = WebsiteIconLoader.loadIcon(forHost: item.websites.first?.host) { [weak self] icon in
+      guard let self, self.item?.id == itemID else { return }
+      self.iconView.image = icon
+    }
     titleField.stringValue = item.title
     let username = item.usernames.first(where: { !$0.isEmpty })
     subtitleField.stringValue = username ?? ""

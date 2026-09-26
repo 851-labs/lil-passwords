@@ -42,6 +42,10 @@ final class DetailViewController: NSViewController {
   private var usernameListEditor: EditableListEditor?
   private var websiteListEditor: EditableListEditor?
 
+  /// 851-2459: cancelled and replaced every `reloadContent()` call so a slow fetch for a
+  /// previously-displayed item can never land after the selection has moved on to another one.
+  private var iconLoadTask: Task<Void, Never>?
+
   /// The primary card's rows, assembled by `rebuildPrimaryCard()` from whichever of these pieces
   /// are non-empty right now. Kept as separate arrays/values (rather than recomputing everything
   /// inline in `rebuildPrimaryCard()`) because `EditableListEditor`'s `onRowsChange` needs to
@@ -84,6 +88,10 @@ final class DetailViewController: NSViewController {
   init(vaultViewModel: VaultViewModel) {
     self.vaultViewModel = vaultViewModel
     super.init(nibName: nil, bundle: nil)
+  }
+
+  isolated deinit {
+    iconLoadTask?.cancel()
   }
 
   @available(*, unavailable)
@@ -330,11 +338,17 @@ final class DetailViewController: NSViewController {
   private func reloadContent() {
     guard let displayItem = isEditing ? draft : item else { return }
 
+    iconLoadTask?.cancel()
     identityView.configure(
       title: displayItem.title,
       icon: MonogramIcon.icon(for: displayItem.title, dimension: 64),
       isEditing: isEditing
     )
+    let displayItemID = displayItem.id
+    iconLoadTask = WebsiteIconLoader.loadIcon(forHost: displayItem.websites.first?.host) { [weak self] icon in
+      guard let self, self.itemID == displayItemID else { return }
+      self.identityView.setIcon(icon)
+    }
 
     configureUsernameRows(displayItem)
     configurePasswordRow(displayItem)

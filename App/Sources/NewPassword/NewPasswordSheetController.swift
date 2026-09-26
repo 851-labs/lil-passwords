@@ -21,6 +21,11 @@ final class NewPasswordSheetController: NSWindowController {
   private var completion: ((Outcome) -> Void)?
   private var didFinish = false
 
+  /// 851-2459: debounces the real icon fetch behind a short delay, and is cancelled/replaced on
+  /// every keystroke in the title or website field (`controlTextDidChange` calls `updateIcon()`
+  /// on every one) so typing a website doesn't fire a network request per character.
+  private var iconLoadTask: Task<Void, Never>?
+
   private var iconView: NSImageView!
   private var titleField: NSTextField!
   private var usernameField: NSTextField!
@@ -52,6 +57,10 @@ final class NewPasswordSheetController: NSWindowController {
   @available(*, unavailable)
   required init?(coder: NSCoder) {
     fatalError("init(coder:) is not supported")
+  }
+
+  isolated deinit {
+    iconLoadTask?.cancel()
   }
 
   /// Presents the sheet over `parentWindow`. `completion` fires exactly once, with `.cancelled`
@@ -239,6 +248,28 @@ final class NewPasswordSheetController: NSWindowController {
       effectiveTitle.isEmpty
       ? NSApplication.shared.applicationIconImage
       : MonogramIcon.icon(for: effectiveTitle, dimension: Self.iconDimension)
+    scheduleIconFetch()
+  }
+
+  /// Debounced real icon fetch (851-2459) for whatever host the website field currently resolves
+  /// to. Cancelled and replaced on every call — i.e. every keystroke — so only the host that's
+  /// been sitting still for the debounce delay ever actually triggers a request; the completion
+  /// closure re-checks the field's current value too, in case the debounce delay elapsed just as
+  /// the user resumed typing.
+  private func scheduleIconFetch() {
+    iconLoadTask?.cancel()
+    guard let host = Self.parseWebsite(websiteField.stringValue)?.host, !host.isEmpty else { return }
+
+    iconLoadTask = Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .milliseconds(400))
+      guard !Task.isCancelled, let self else { return }
+      guard Self.parseWebsite(self.websiteField.stringValue)?.host == host else { return }
+
+      WebsiteIconLoader.loadIcon(forHost: host) { [weak self] icon in
+        guard let self, Self.parseWebsite(self.websiteField.stringValue)?.host == host else { return }
+        self.iconView.image = icon
+      }
+    }
   }
 
   private func resolvedTitle() -> String {

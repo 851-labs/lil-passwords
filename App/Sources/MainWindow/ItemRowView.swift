@@ -12,6 +12,11 @@ final class ItemRowCellView: NSTableCellView {
   private let subtitleField = NSTextField(labelWithString: "")
   private let separator = NSBox()
 
+  /// 851-2459: cancelled and replaced every `configure(with:hidesSeparator:)` call so a slow
+  /// fetch for a row this cell used to represent can never land after `NSTableView` has recycled
+  /// the cell for a different item.
+  private var iconLoadTask: Task<Void, Never>?
+
   static func dequeue(from tableView: NSTableView, owner: Any?) -> ItemRowCellView {
     if let existing = tableView.makeView(withIdentifier: reuseIdentifier, owner: owner) as? ItemRowCellView {
       return existing
@@ -78,12 +83,18 @@ final class ItemRowCellView: NSTableCellView {
   ///   rounded selection highlight (851-2463). Kept in sync after the initial `configure` call by
   ///   `setSeparatorHidden(_:)`, since selection changes don't re-invoke `configure`.
   func configure(with item: PasswordItem, hidesSeparator: Bool) {
+    iconLoadTask?.cancel()
     iconView.image = MonogramIcon.icon(for: item.title, dimension: 40)
     titleField.stringValue = item.title
     let subtitle = item.usernames.first(where: { !$0.isEmpty })
     subtitleField.stringValue = subtitle ?? ""
     subtitleField.isHidden = subtitle == nil
     separator.isHidden = hidesSeparator
+
+    let host = item.websites.first?.host
+    iconLoadTask = WebsiteIconLoader.loadIcon(forHost: host) { [weak self] icon in
+      self?.iconView.image = icon
+    }
 
     // A meaningful VoiceOver description for the whole row (851-2426) — "Amazon, jordan@…, has
     // verification code" is the exact shape the ticket calls out — rather than just the title a
@@ -102,5 +113,11 @@ final class ItemRowCellView: NSTableCellView {
 
   func setSeparatorHidden(_ hidden: Bool) {
     separator.isHidden = hidden
+  }
+
+  override func prepareForReuse() {
+    super.prepareForReuse()
+    iconLoadTask?.cancel()
+    iconLoadTask = nil
   }
 }
