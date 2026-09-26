@@ -156,6 +156,26 @@ public struct CLIInstaller: @unchecked Sendable {
     try fileManager.createSymbolicLink(atPath: path, withDestinationPath: paths.embeddedBinary)
   }
 
+  /// The absolute path an MCP config's `command` should use right now (851-2432): the installed
+  /// symlink's path if one exists, so GUI-launched agent processes (Cursor, the Codex desktop app,
+  /// an IDE-launched Claude Code) — which don't inherit the user's shell `PATH` — can still find
+  /// it; otherwise the binary embedded in this app's own bundle directly, which exists regardless
+  /// of install state and needs no `PATH` lookup at all.
+  public func resolvedCommandPath() -> String {
+    if case .installed(let path) = status() { return path }
+    return paths.embeddedBinary
+  }
+
+  /// Every absolute path that should count as "this is lilpass" for the purpose of deciding
+  /// whether an agent's existing MCP config is already pointed at us — ``resolvedCommandPath()``
+  /// plus the app-bundle path, deduplicated but otherwise in preference order. Covers a config
+  /// written against the bundle path before the CLI was installed, or against a symlink path that
+  /// no longer matches after an install/uninstall/relocation.
+  public func acceptableCommandPaths() -> [String] {
+    var seen = Set<String>()
+    return [resolvedCommandPath(), paths.embeddedBinary].filter { seen.insert($0).inserted }
+  }
+
   /// Removes whichever candidate symlink(s) ``status()`` currently finds — safe even if what's
   /// there is a stale link into a different app copy (``CLIInstallStatus/pointsElsewhere``), since
   /// this only ever touches the well-known `lilpass` name in these two specific directories, never

@@ -57,7 +57,8 @@ public enum CodexMCPConfigEditor {
     let command = blockLines.lazy.compactMap { parseStringValue(fromLineStartingWith: "command", in: $0) }.first
     let args = blockLines.lazy.compactMap { parseStringArrayValue(fromLineStartingWith: "args", in: $0) }.first
 
-    return (command == spec.command && args == spec.args) ? .configured : .configuredDifferently
+    let commandMatches = command.map(spec.matches(command:)) ?? false
+    return (commandMatches && args == spec.args) ? .configured : .configuredDifferently
   }
 
   private static func tableHeader(for name: String) -> String {

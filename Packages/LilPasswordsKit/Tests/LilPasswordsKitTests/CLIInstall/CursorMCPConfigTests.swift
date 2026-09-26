@@ -55,6 +55,26 @@ import Testing
     #expect(CursorMCPConfigEditor.status(of: .lilpass, in: existing) == .configuredDifferently)
   }
 
+  @Test func statusReportsConfiguredDifferentlyWhenCommandDoesntMatch() {
+    let existing = """
+      { "mcpServers": { "lilpass": { "command": "/some/other/lilpass", "args": ["mcp"] } } }
+      """
+    #expect(CursorMCPConfigEditor.status(of: .lilpass, in: existing) == .configuredDifferently)
+  }
+
+  @Test func statusReportsConfiguredWhenCommandMatchesAnAlternate() {
+    let spec = AgentMCPServerSpec(
+      name: "lilpass",
+      command: "/usr/local/bin/lilpass",
+      args: ["mcp"],
+      alternateCommands: ["/Applications/lil passwords.app/Contents/Helpers/lilpass"]
+    )
+    let existing = """
+      { "mcpServers": { "lilpass": { "command": "/Applications/lil passwords.app/Contents/Helpers/lilpass", "args": ["mcp"] } } }
+      """
+    #expect(CursorMCPConfigEditor.status(of: spec, in: existing) == .configured)
+  }
+
   @Test func upsertThrowsOnInvalidExistingJSON() {
     #expect(throws: CursorMCPConfigEditor.ConfigError.self) {
       try CursorMCPConfigEditor.upsert(spec: .lilpass, in: "{ not valid json")

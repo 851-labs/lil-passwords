@@ -67,6 +67,21 @@ import Testing
     #expect(CodexMCPConfigEditor.status(of: .lilpass, in: existing) == .configuredDifferently)
   }
 
+  @Test func statusReportsConfiguredWhenCommandMatchesAnAlternate() {
+    let spec = AgentMCPServerSpec(
+      name: "lilpass",
+      command: "/usr/local/bin/lilpass",
+      args: ["mcp"],
+      alternateCommands: ["/Applications/lil passwords.app/Contents/Helpers/lilpass"]
+    )
+    let existing = """
+      [mcp_servers.lilpass]
+      command = "/Applications/lil passwords.app/Contents/Helpers/lilpass"
+      args = ["mcp"]
+      """
+    #expect(CodexMCPConfigEditor.status(of: spec, in: existing) == .configured)
+  }
+
   @Test func leavesAnotherServersBlockUntouched() {
     let existing = """
       [mcp_servers.other]

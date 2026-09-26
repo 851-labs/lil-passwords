@@ -66,8 +66,14 @@ public struct ClaudeCodeMCPConfigurator: Sendable {
   /// defaults to whatever scope makes sense for the terminal the user is already in (e.g. a
   /// project directory), whereas the automatic path has no such context and explicitly asks for
   /// the user-wide scope so it's available everywhere.
+  ///
+  /// `spec.command` is quoted (851-2432): production callers pass an absolute path, which may be
+  /// the app bundle's `Contents/Helpers/lilpass` — containing a space in "lil passwords.app" —
+  /// and this string is meant to be pasted straight into a real shell, unlike the TOML/JSON
+  /// snippets the other two configurators produce, which are already safely quoted as string
+  /// literals regardless of what's inside them.
   public static func copySnippet(for spec: AgentMCPServerSpec = .lilpass) -> String {
-    "claude mcp add \(spec.name) -- \(([spec.command] + spec.args).joined(separator: " "))"
+    (["claude", "mcp", "add", spec.name, "--", "\"\(spec.command)\""] + spec.args).joined(separator: " ")
   }
 
   /// Whether `claude` is on `PATH` at all — gates whether "Add Automatically" is offered.

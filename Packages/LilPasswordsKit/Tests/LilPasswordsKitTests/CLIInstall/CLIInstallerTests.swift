@@ -150,4 +150,32 @@ import Testing
     try sandbox.installer.uninstall()
     #expect(sandbox.installer.status() == .notInstalled)
   }
+
+  @Test func resolvedCommandPathIsTheEmbeddedBinaryWhenNotInstalled() throws {
+    let sandbox = try Sandbox()
+    defer { sandbox.cleanUp() }
+    #expect(sandbox.installer.resolvedCommandPath() == sandbox.embeddedBinary)
+  }
+
+  @Test func resolvedCommandPathIsTheSymlinkOnceInstalled() throws {
+    let sandbox = try Sandbox()
+    defer { sandbox.cleanUp() }
+    try sandbox.installer.install()
+    let expectedPath = sandbox.root.appendingPathComponent("usr-local-bin/lilpass").path
+    #expect(sandbox.installer.resolvedCommandPath() == expectedPath)
+  }
+
+  @Test func acceptableCommandPathsIncludesBothFormsWhenInstalled() throws {
+    let sandbox = try Sandbox()
+    defer { sandbox.cleanUp() }
+    try sandbox.installer.install()
+    let expectedSymlinkPath = sandbox.root.appendingPathComponent("usr-local-bin/lilpass").path
+    #expect(sandbox.installer.acceptableCommandPaths() == [expectedSymlinkPath, sandbox.embeddedBinary])
+  }
+
+  @Test func acceptableCommandPathsDedupesWhenNotInstalled() throws {
+    let sandbox = try Sandbox()
+    defer { sandbox.cleanUp() }
+    #expect(sandbox.installer.acceptableCommandPaths() == [sandbox.embeddedBinary])
+  }
 }

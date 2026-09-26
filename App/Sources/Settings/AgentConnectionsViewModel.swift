@@ -34,22 +34,45 @@ final class AgentConnectionsViewModel: ObservableObject {
   private let claudeCode: ClaudeCodeMCPConfigurator
   private let codex: CodexMCPConfigFile
   private let cursor: CursorMCPConfigFile
+  private let cliInstaller: CLIInstaller
 
   init(
     claudeCode: ClaudeCodeMCPConfigurator = ClaudeCodeMCPConfigurator(),
     codex: CodexMCPConfigFile = CodexMCPConfigFile(),
-    cursor: CursorMCPConfigFile = CursorMCPConfigFile()
+    cursor: CursorMCPConfigFile = CursorMCPConfigFile(),
+    cliInstaller: CLIInstaller = CLIInstaller(paths: CLIInstallViewModel.defaultInstallerPaths())
   ) {
     self.claudeCode = claudeCode
     self.codex = codex
     self.cursor = cursor
+    self.cliInstaller = cliInstaller
+  }
+
+  /// The spec every configurator is actually asked about/told to write (851-2432): `command` is
+  /// always resolved to an absolute path — preferring the installed symlink, falling back to the
+  /// binary inside this app's own bundle — never the bare `lilpass` name, since GUI-launched agent
+  /// processes (Cursor, the Codex desktop app, an IDE-launched Claude Code) spawn MCP servers
+  /// without the user's shell `PATH` and would fail to find a bare command, especially for a
+  /// `~/.local/bin` install. `alternateCommands` carries every other path that should still read
+  /// as "connected," so toggling the CLI install location doesn't make an already-configured agent
+  /// show up as "configured differently."
+  private var resolvedSpec: AgentMCPServerSpec {
+    let command = cliInstaller.resolvedCommandPath()
+    let alternates = cliInstaller.acceptableCommandPaths().filter { $0 != command }
+    return AgentMCPServerSpec(
+      name: AgentMCPServerSpec.lilpass.name,
+      command: command,
+      args: AgentMCPServerSpec.lilpass.args,
+      alternateCommands: alternates
+    )
   }
 
   func refresh() {
+    let spec = resolvedSpec
     statuses = [
-      .claudeCode: claudeCode.status(),
-      .codex: codex.status(),
-      .cursor: cursor.status(),
+      .claudeCode: claudeCode.status(for: spec),
+      .codex: codex.status(for: spec),
+      .cursor: cursor.status(for: spec),
     ]
   }
 
@@ -59,10 +82,11 @@ final class AgentConnectionsViewModel: ObservableObject {
 
   /// The exact text a "Copy Setup" button for `agent` should put on the pasteboard.
   func snippet(for agent: Agent) -> String {
+    let spec = resolvedSpec
     switch agent {
-    case .claudeCode: return ClaudeCodeMCPConfigurator.copySnippet()
-    case .codex: return codex.snippet()
-    case .cursor: return cursor.snippet()
+    case .claudeCode: return ClaudeCodeMCPConfigurator.copySnippet(for: spec)
+    case .codex: return codex.snippet(for: spec)
+    case .cursor: return cursor.snippet(for: spec)
     }
   }
 
@@ -83,11 +107,12 @@ final class AgentConnectionsViewModel: ObservableObject {
   func addAutomatically(for agent: Agent) async {
     agentsAddingAutomatically.insert(agent)
     defer { agentsAddingAutomatically.remove(agent) }
+    let spec = resolvedSpec
     do {
       switch agent {
-      case .claudeCode: try claudeCode.addAutomatically()
-      case .codex: try codex.addAutomatically()
-      case .cursor: try cursor.addAutomatically()
+      case .claudeCode: try claudeCode.addAutomatically(spec: spec)
+      case .codex: try codex.addAutomatically(spec: spec)
+      case .cursor: try cursor.addAutomatically(spec: spec)
       }
       lastErrorMessage = nil
     } catch {

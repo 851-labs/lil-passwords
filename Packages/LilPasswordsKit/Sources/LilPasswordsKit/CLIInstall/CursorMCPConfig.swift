@@ -53,7 +53,8 @@ public enum CursorMCPConfigEditor {
 
     let command = entry["command"] as? String
     let args = entry["args"] as? [String]
-    return (command == spec.command && args == spec.args) ? .configured : .configuredDifferently
+    let commandMatches = command.map(spec.matches(command:)) ?? false
+    return (commandMatches && args == spec.args) ? .configured : .configuredDifferently
   }
 
   private static func serverEntry(for spec: AgentMCPServerSpec) -> [String: Any] {

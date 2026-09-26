@@ -6,20 +6,39 @@ public struct AgentMCPServerSpec: Sendable, Equatable {
   /// The server's name as it should appear in each tool's config (`mcp_servers.lilpass`,
   /// `mcpServers.lilpass`, etc.) — always ``LilPasswordsKit/cliName``.
   public let name: String
-  /// The command to run — bare `lilpass`, resolved via `PATH`, matching 851-2432's assumption
-  /// that the CLI has already been installed via the "Command Line Tool" section above these
-  /// rows.
+  /// The command to run. Production callers should always resolve this to an absolute path
+  /// (``CLIInstaller/resolvedCommandPath()``) rather than the bare `lilpass` name: GUI-launched
+  /// agent processes (Cursor, the Codex desktop app, an IDE-launched Claude Code) spawn MCP
+  /// servers without the user's shell `PATH`, so a bare command name fails to launch, especially
+  /// for a `~/.local/bin` install. `.lilpass` below still defaults to the bare name for tests that
+  /// only care about the text-editing logic, not path resolution.
   public let command: String
   /// Arguments passed to `command` — just `mcp`.
   public let args: [String]
+  /// Other command strings that should also count as "this is lilpass" when checking whether an
+  /// existing config already points at us (``AgentMCPConnectionStatus/configured``) — typically
+  /// the app-bundle fallback path alongside the currently-installed symlink path, so a config
+  /// written against either one doesn't show as ``AgentMCPConnectionStatus/configuredDifferently``
+  /// just because the CLI install location changed since. Never used when *writing* a new
+  /// snippet/block/entry — only `command` is ever written.
+  public let alternateCommands: [String]
 
-  public init(name: String, command: String, args: [String]) {
+  public init(name: String, command: String, args: [String], alternateCommands: [String] = []) {
     self.name = name
     self.command = command
     self.args = args
+    self.alternateCommands = alternateCommands
   }
 
-  /// The real spec every configurator uses in production: `lilpass mcp`.
+  /// Whether `command` should be treated as a match for this spec — either the primary `command`
+  /// or one of `alternateCommands`.
+  public func matches(command: String) -> Bool {
+    command == self.command || alternateCommands.contains(command)
+  }
+
+  /// The bare-name spec every configurator defaults to — mostly useful for tests that only
+  /// exercise text-editing logic. Production call sites should build a spec whose `command` is
+  /// ``CLIInstaller/resolvedCommandPath()`` instead.
   public static let lilpass = AgentMCPServerSpec(
     name: LilPasswordsKit.cliName,
     command: LilPasswordsKit.cliName,
