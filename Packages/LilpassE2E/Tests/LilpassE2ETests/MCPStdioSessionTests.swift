@@ -64,8 +64,19 @@ struct MCPStdioSessionTests {
     return (helper, process, client)
   }
 
+  /// `terminate()` only requests a graceful exit (`SIGTERM`) — if `lilpass mcp` somehow never acts
+  /// on it, a bare `waitUntilExit()` right after would hang this teardown (and, per this suite's
+  /// own `.timeLimit`, eventually the whole test) indefinitely. The watchdog below forces the issue
+  /// with `SIGKILL` after a generous deadline so a stuck child can never outlive its test.
   private func stop(_ session: (helper: E2EHelperProcess, process: Process, client: Client)) {
     session.process.terminate()
+    let deadline = DispatchTime.now() + .seconds(5)
+    while session.process.isRunning, DispatchTime.now() < deadline {
+      Thread.sleep(forTimeInterval: 0.05)
+    }
+    if session.process.isRunning {
+      kill(session.process.processIdentifier, SIGKILL)
+    }
     session.process.waitUntilExit()
     session.helper.stop()
   }

@@ -8,11 +8,15 @@ import LilPasswordsKit
 // production (see docs/adr/0001-storage-and-process-model.md), just registered under a unique
 // test-only name in a temp directory instead of the app's installed plist.
 //
-// Never touches the real vault database or Keychain item: `InMemoryVaultStore` (851-2404) is
-// exclusively in-process memory, so even with several agents building/running this suite
-// concurrently on the same Mac, nothing here can collide with or corrupt
-// `~/Library/Application Support/lil passwords` or the real Keychain item — there is no code path
-// in this file that could reach either.
+// Never touches the real vault database or Keychain item: `InMemoryVaultStore` (851-2404) for the
+// vault itself, `InMemoryVaultKeyStore` for the vault key, and `InMemoryAgentSettingsStore` (seeded
+// below) for the 851-2428/851-2433 agent-access settings are all exclusively in-process memory —
+// every one of `AgentServer`'s Keychain-capable dependencies is explicitly overridden here rather
+// than left to whatever `AgentServer`'s own defaults happen to be, so even with several agents
+// building/running this suite concurrently on the same Mac, nothing here can collide with or
+// corrupt `~/Library/Application Support/lil passwords` or either real Keychain item (the vault key,
+// `KeychainVaultKeyStore`; the agent settings, `KeychainAgentSettingsStore`) — there is no code path
+// in this file that could reach any of them.
 //
 // Every bit of configuration arrives via environment variables set in the per-test plist's own
 // `EnvironmentVariables` dict (never `launchctl setenv`, which is session-wide and would make
@@ -32,6 +36,25 @@ import LilPasswordsKit
 //   `AgentError.agentAccessDisabled` (`LilpassExitCode.agentAccessDisabled`) — for testing the
 //   "agent access turned off" behavior, independent of lock state.
 let environment = ProcessInfo.processInfo.environment
+
+// 851-2434: seeds the in-memory agent-access settings this helper reports/enforces
+// (`AgentServer`'s `agentSettingsStore`) as fully permissive — read access, write access
+// (851-2433), and the unscoped `.allPasswords` view (851-2445) — rather than relying on
+// `AgentServer`'s own default (an *empty* `InMemoryAgentSettingsStore()`, which `AgentSettings
+// .loaded(from:)` fails closed on exactly like a real never-configured install: every toggle off).
+// `CommandsTests`/`MCPStdioSessionTests` assert against a helper that behaves like an agent a user
+// has already turned on and granted write access to, not a fresh install; `LILPASS_E2E_ACCESS_
+// DISABLED` above (via `accessPolicy`, which is what `.status`'s `agentAccessEnabled` field and
+// every request's read-access gate actually consult) is still what those specific tests flip to
+// exercise the "turned off" half.
+let agentSettingsStore = InMemoryAgentSettingsStore(
+  initial: AgentSettings(
+    agentAccessEnabled: true,
+    keepAgentAccessAvailableWhileMacUnlocked: true,
+    agentWriteAccessEnabled: true,
+    accessScope: .allPasswords
+  )
+)
 
 func fail(_ message: String) -> Never {
   FileHandle.standardError.write(Data("LilpassE2EHelper: \(message)\n".utf8))
@@ -103,7 +126,18 @@ if let setupError {
 let accessPolicy: any AccessPolicyProviding =
   environment["LILPASS_E2E_ACCESS_DISABLED"] == "1" ? AlwaysDenyAccessPolicy() : AlwaysAllowAccessPolicy()
 
-let server = AgentServer(vaultStore: store, accessPolicy: accessPolicy)
+// Every dependency below is passed explicitly (never left to `AgentServer`'s own defaults) so it's
+// visible at this call site, not just in `AgentServer`'s doc comments, that this disposable helper
+// never constructs anything Keychain-backed: `InMemoryVaultKeyStore` stands in for
+// `KeychainVaultKeyStore`, and `agentSettingsStore` (seeded above) stands in for
+// `KeychainAgentSettingsStore` — matching production's `Agent/Sources/main.swift`, minus every
+// Keychain-touching type it uses.
+let server = AgentServer(
+  vaultStore: store,
+  vaultKeyStore: InMemoryVaultKeyStore(),
+  accessPolicy: accessPolicy,
+  agentSettingsStore: agentSettingsStore
+)
 
 // `.developmentFallback`, not `AgentConnectionSecurity.requirement(acceptingPeers:)`: this test
 // double is ad-hoc/unsigned like every other local build in this repo (see
