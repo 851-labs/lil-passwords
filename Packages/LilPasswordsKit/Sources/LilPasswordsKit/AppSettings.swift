@@ -198,6 +198,17 @@ public final class AppSettings: @unchecked Sendable {
     set { set(newValue, forKey: Key.menuBarBrowserSuggestionsEnabled) }
   }
 
+  // Settings → Agents → "Allow agents to create, edit, and delete passwords" (851-2433) is
+  // deliberately **not** a property here, for the same reason `agentAccessEnabled`/
+  // `keepAgentAccessAvailableWhileMacUnlocked` aren't (see this file's top-level doc comment and
+  // ``suiteName``'s): it's a security-sensitive toggle that a hostile local process could otherwise
+  // flip back on with a plain `defaults write com.851labs.lilpasswords.shared ...` — this suite is,
+  // by design, world-readable *and* world-writable to any process that knows its name. It instead
+  // lives as `AgentSettings.agentWriteAccessEnabled`, alongside those other two fields in the same
+  // helper-owned, ACL'd Keychain item, gated by verified caller identity and read/written only via
+  // `AgentRequest.getAgentSettings`/`.setAgentSettings` — see `AgentSettingsStoring`'s doc comment
+  // for the full rationale.
+
   private func set(_ value: some Any, forKey key: String) {
     defaults.set(value, forKey: key)
     NotificationCenter.default.post(name: Self.didChangeNotification, object: self)

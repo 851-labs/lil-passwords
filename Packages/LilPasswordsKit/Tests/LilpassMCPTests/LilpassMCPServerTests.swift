@@ -24,7 +24,7 @@ import Testing
     return client
   }
 
-  @Test func listToolsAdvertisesAllFiveToolsAsReadOnly() async throws {
+  @Test func listToolsAdvertisesTheFiveOriginalToolsAsReadOnly() async throws {
     let harness = try await Harness()
     let client = try await connectedClient(to: harness)
 
@@ -32,10 +32,35 @@ import Testing
     #expect(
       Set(tools.map(\.name)) == [
         "list_passwords", "search_passwords", "get_password", "get_verification_code", "generate_password",
+        "create_password", "update_password", "delete_password",
       ])
-    for tool in tools {
+
+    let readOnlyToolNames: Set = [
+      "list_passwords", "search_passwords", "get_password", "get_verification_code", "generate_password",
+    ]
+    for tool in tools where readOnlyToolNames.contains(tool.name) {
       #expect(tool.annotations.readOnlyHint == true)
     }
+  }
+
+  @Test func writeToolsAreAdvertisedAsNotReadOnlyWithCorrectDestructiveHints() async throws {
+    let harness = try await Harness()
+    let client = try await connectedClient(to: harness)
+
+    let (tools, _) = try await client.listTools()
+    let byName = Dictionary(uniqueKeysWithValues: tools.map { ($0.name, $0) })
+
+    let create = try #require(byName["create_password"])
+    #expect(create.annotations.readOnlyHint == false)
+    #expect(create.annotations.destructiveHint == false)
+
+    let update = try #require(byName["update_password"])
+    #expect(update.annotations.readOnlyHint == false)
+    #expect(update.annotations.destructiveHint == true)
+
+    let delete = try #require(byName["delete_password"])
+    #expect(delete.annotations.readOnlyHint == false)
+    #expect(delete.annotations.destructiveHint == true)
   }
 
   @Test func listPasswordsReturnsSummariesWithoutSecrets() async throws {
@@ -123,6 +148,117 @@ import Testing
     let json = try #require(text(of: content))
     let password = try #require(decodePassword(json))
     #expect(password.count == 16)
+  }
+
+  // MARK: - Write tools (851-2433)
+  //
+  // `Harness`'s in-process XPC connection always resolves as the app caller (see its own
+  // documentation), so these test the tools' own request/response shape — not the write-access
+  // gate itself, which only ever rejects a *non-app* caller and is covered end-to-end, with real
+  // synthetic app/CLI callers, by `AgentServerTests`'s write-access matrix.
+
+  @Test func createPasswordAddsAnItemAndReturnsItsSummary() async throws {
+    let harness = try await Harness()
+    let client = try await connectedClient(to: harness)
+
+    let (content, isError) = try await client.callTool(
+      name: "create_password",
+      arguments: ["title": "GitHub", "username": ["octocat"], "password": "hunter2", "website": ["github.com"]]
+    )
+    #expect(isError == false)
+    let json = try #require(text(of: content))
+    #expect(json.contains("GitHub"))
+    #expect(!json.contains("hunter2"))
+
+    let (listContent, _) = try await client.callTool(name: "list_passwords")
+    let listJSON = try #require(text(of: listContent))
+    #expect(listJSON.contains("GitHub"))
+  }
+
+  @Test func createPasswordWithGenerateProducesAPasswordWithoutOneBeingSupplied() async throws {
+    let harness = try await Harness()
+    let client = try await connectedClient(to: harness)
+
+    let (content, isError) = try await client.callTool(
+      name: "create_password", arguments: ["title": "GitHub", "generate": true])
+    #expect(isError == false)
+
+    let created = try #require(text(of: content))
+    #expect(created.contains("GitHub"))
+
+    let (detailContent, _) = try await client.callTool(name: "get_password", arguments: ["item": "GitHub"])
+    let detailJSON = try #require(text(of: detailContent))
+    #expect(!detailJSON.contains("\"password\":\"\""))
+  }
+
+  @Test func createPasswordWithBothPasswordAndGenerateReturnsAUsageError() async throws {
+    let harness = try await Harness()
+    let client = try await connectedClient(to: harness)
+
+    let (content, isError) = try await client.callTool(
+      name: "create_password",
+      arguments: ["title": "GitHub", "password": "hunter2", "generate": true]
+    )
+    #expect(isError == true)
+    let message = try #require(text(of: content))
+    #expect(message.contains("password") && message.contains("generate"))
+  }
+
+  @Test func createPasswordWithoutATitleReturnsAUsageError() async throws {
+    let harness = try await Harness()
+    let client = try await connectedClient(to: harness)
+
+    let (content, isError) = try await client.callTool(name: "create_password", arguments: ["password": "hunter2"])
+    #expect(isError == true)
+    let message = try #require(text(of: content))
+    #expect(message.contains("title"))
+  }
+
+  @Test func updatePasswordChangesOnlyTheFieldsPassed() async throws {
+    let item = makeTestItem(title: "GitHub", usernames: ["octocat"], password: "hunter2", notes: "old notes")
+    let harness = try await Harness(items: [item])
+    let client = try await connectedClient(to: harness)
+
+    let (content, isError) = try await client.callTool(
+      name: "update_password", arguments: ["item": "GitHub", "title": "GitHub Enterprise"])
+    #expect(isError == false)
+    let json = try #require(text(of: content))
+    #expect(json.contains("GitHub Enterprise"))
+
+    let (detailContent, _) = try await client.callTool(
+      name: "get_password", arguments: ["item": "GitHub Enterprise"])
+    let detailJSON = try #require(text(of: detailContent))
+    #expect(detailJSON.contains("hunter2"))
+    #expect(detailJSON.contains("old notes"))
+  }
+
+  @Test func deletePasswordSoftDeletesTheItem() async throws {
+    let item = makeTestItem(title: "GitHub")
+    let harness = try await Harness(items: [item])
+    let client = try await connectedClient(to: harness)
+
+    let (content, isError) = try await client.callTool(name: "delete_password", arguments: ["item": "GitHub"])
+    #expect(isError == false)
+    let json = try #require(text(of: content))
+    #expect(json.contains("GitHub"))
+
+    let (listContent, _) = try await client.callTool(name: "list_passwords")
+    let listJSON = try #require(text(of: listContent))
+    #expect(!listJSON.contains("GitHub"))
+  }
+
+  @Test func deletePasswordOnAnUnknownItemReturnsTheCLIsNotFoundMessage() async throws {
+    let harness = try await Harness()
+    let client = try await connectedClient(to: harness)
+
+    let (content, isError) = try await client.callTool(
+      name: "delete_password", arguments: ["item": "nonexistent"])
+    #expect(isError == true)
+    let message = try #require(text(of: content))
+    let expected = try await expectedCLIMessage {
+      _ = try await LilpassCommands.remove(client: harness.client, identifier: "nonexistent")
+    }
+    #expect(message == expected)
   }
 
   // MARK: - Error mapping (same messages as the CLI's `LilpassError`)

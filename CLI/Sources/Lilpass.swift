@@ -32,6 +32,9 @@ struct Lilpass: AsyncParsableCommand {
       ReadCommand.self,
       TotpCommand.self,
       GenerateCommand.self,
+      AddCommand.self,
+      EditCommand.self,
+      RmCommand.self,
       RunCommand.self,
       InjectCommand.self,
       McpCommand.self,
@@ -42,8 +45,9 @@ struct Lilpass: AsyncParsableCommand {
   ///
   /// This mirrors that default implementation exactly (parse, run, catch-and-exit — see
   /// `AsyncParsableCommand.main(_:)`) except for the `catch` branch: 851-2430 specifies a stable
-  /// 0–7 exit code scheme (``LilpassExitCode``) that doesn't match any of ArgumentParser's own
-  /// defaults (`EX_USAGE` = 64 for a parse/validation failure, `EXIT_FAILURE` = 1 for an arbitrary
+  /// 0–7 exit code scheme (``LilpassExitCode``, extended by 851-2433 with
+  /// `.agentWriteAccessDisabled`) that doesn't match any of ArgumentParser's own defaults
+  /// (`EX_USAGE` = 64 for a parse/validation failure, `EXIT_FAILURE` = 1 for an arbitrary
   /// thrown error), so every failure is routed through ``exitReportingError(_:)`` instead of
   /// `Lilpass.exit(withError:)`.
   static func main() async {

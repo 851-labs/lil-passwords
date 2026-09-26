@@ -3,10 +3,16 @@ import Testing
 
 @testable import LilPasswordsKit
 
-/// A togglable `AccessPolicyProviding` for tests that need to flip "agent access enabled" mid-test.
+/// A togglable `AccessPolicyProviding` for tests that need to flip "agent access enabled" mid-test,
+/// independently of the ``AgentSettings/agentWriteAccessEnabled`` toggle — which the tests below
+/// set directly on an `InMemoryAgentSettingsStore` instead, mirroring how `AgentServer` itself
+/// reads the two independently (`accessPolicy` for read access, `agentSettingsStore` for write
+/// access — see `AgentServer.requireWriteAccess(for:)`).
 private actor ToggleableAccessPolicy: AccessPolicyProviding {
   private var enabled: Bool
-  init(enabled: Bool = true) { self.enabled = enabled }
+  init(enabled: Bool = true) {
+    self.enabled = enabled
+  }
   func set(_ enabled: Bool) { self.enabled = enabled }
   func isAgentAccessEnabled() async -> Bool { enabled }
 }
@@ -70,7 +76,8 @@ private let cliCaller = CallerIdentity(
   private func makeServer(
     accessPolicy: any AccessPolicyProviding = AlwaysAllowAccessPolicy(),
     accessLog: any AccessLogging = NoOpAccessLog(),
-    items: [PasswordItem] = []
+    items: [PasswordItem] = [],
+    agentSettingsStore: any AgentSettingsStoring = InMemoryAgentSettingsStore()
   ) async throws -> (server: AgentServer, key: VaultCrypto.Key) {
     let store = InMemoryVaultStore()
     try await store.createVault()
@@ -85,9 +92,24 @@ private let cliCaller = CallerIdentity(
       vaultStore: store,
       vaultKeyStore: keyStore,
       accessPolicy: accessPolicy,
-      accessLog: accessLog
+      accessLog: accessLog,
+      agentSettingsStore: agentSettingsStore
     )
     return (server, key)
+  }
+
+  /// An `InMemoryAgentSettingsStore` pre-seeded with just ``AgentSettings/agentWriteAccessEnabled``
+  /// set — `agentAccessEnabled`/`keepAgentAccessAvailableWhileMacUnlocked` are irrelevant to the
+  /// write-access tests below since `makeServer`'s default `accessPolicy` (`AlwaysAllowAccessPolicy`)
+  /// grants read access unconditionally, independent of this store.
+  private func writeAccessSettingsStore(writeAccessEnabled: Bool) -> InMemoryAgentSettingsStore {
+    InMemoryAgentSettingsStore(
+      initial: AgentSettings(
+        agentAccessEnabled: true,
+        keepAgentAccessAvailableWhileMacUnlocked: false,
+        agentWriteAccessEnabled: writeAccessEnabled
+      )
+    )
   }
 
   private func send(_ request: AgentRequest, to server: AgentServer, caller: CallerIdentity = testCaller) async
@@ -279,6 +301,190 @@ private let cliCaller = CallerIdentity(
 
     guard case .failure(.agentAccessDisabled) = await send(.list, to: server) else {
       Issue.record("expected .failure(.agentAccessDisabled)")
+      return
+    }
+  }
+
+  // MARK: - Write access (851-2433)
+
+  @Test func writeOperationsAreAllowedForTheAppCallerRegardlessOfWriteAccessToggle() async throws {
+    let settingsStore = writeAccessSettingsStore(writeAccessEnabled: false)
+    let (server, _) = try await makeServer(agentSettingsStore: settingsStore)
+    _ = await send(.unlock, to: server)
+
+    let newItem = makeItem(title: "Mail")
+    guard case .success(.created) = await send(.createItem(newItem), to: server, caller: appCaller) else {
+      Issue.record("expected the app caller to create an item even with write access off")
+      return
+    }
+
+    var updated = newItem
+    updated.title = "Mail 2"
+    guard case .success(.updated(let updatedItem)) = await send(.updateItem(updated), to: server, caller: appCaller)
+    else {
+      Issue.record("expected the app caller to update an item even with write access off")
+      return
+    }
+    #expect(updatedItem.title == "Mail 2")
+
+    guard case .success(.deleted) = await send(.deleteItem(.id(newItem.id)), to: server, caller: appCaller) else {
+      Issue.record("expected the app caller to delete an item even with write access off")
+      return
+    }
+  }
+
+  @Test func writeOperationsAreRejectedForANonAppCallerWhenWriteAccessIsOff() async throws {
+    let item = makeItem()
+    let settingsStore = writeAccessSettingsStore(writeAccessEnabled: false)
+    let (server, _) = try await makeServer(items: [item], agentSettingsStore: settingsStore)
+    _ = await send(.unlock, to: server)
+
+    guard
+      case .failure(.agentWriteAccessDisabled) =
+        await send(.createItem(makeItem(title: "Mail")), to: server, caller: cliCaller)
+    else {
+      Issue.record("expected .failure(.agentWriteAccessDisabled)")
+      return
+    }
+
+    var updated = item
+    updated.title = "Changed"
+    guard case .failure(.agentWriteAccessDisabled) = await send(.updateItem(updated), to: server, caller: cliCaller)
+    else {
+      Issue.record("expected .failure(.agentWriteAccessDisabled)")
+      return
+    }
+
+    guard
+      case .failure(.agentWriteAccessDisabled) =
+        await send(.deleteItem(.id(item.id)), to: server, caller: cliCaller)
+    else {
+      Issue.record("expected .failure(.agentWriteAccessDisabled)")
+      return
+    }
+
+    // Confirm none of the rejected calls actually mutated anything.
+    guard case .success(.items(let items)) = await send(.list, to: server, caller: cliCaller) else {
+      Issue.record("expected .items")
+      return
+    }
+    #expect(items.map(\.title) == [item.title])
+  }
+
+  @Test func writeOperationsSucceedForANonAppCallerWhenWriteAccessIsOn() async throws {
+    let settingsStore = writeAccessSettingsStore(writeAccessEnabled: true)
+    let (server, _) = try await makeServer(agentSettingsStore: settingsStore)
+    _ = await send(.unlock, to: server)
+
+    let newItem = makeItem(title: "Mail")
+    guard case .success(.created) = await send(.createItem(newItem), to: server, caller: cliCaller) else {
+      Issue.record("expected .created")
+      return
+    }
+
+    var updated = newItem
+    updated.title = "Mail 2"
+    guard case .success(.updated(let updatedItem)) = await send(.updateItem(updated), to: server, caller: cliCaller)
+    else {
+      Issue.record("expected .updated")
+      return
+    }
+    #expect(updatedItem.title == "Mail 2")
+
+    guard case .success(.deleted) = await send(.deleteItem(.id(newItem.id)), to: server, caller: cliCaller) else {
+      Issue.record("expected .deleted")
+      return
+    }
+  }
+
+  @Test func readOperationsRemainAvailableToANonAppCallerEvenWhenWriteAccessIsOff() async throws {
+    let item = makeItem()
+    let settingsStore = writeAccessSettingsStore(writeAccessEnabled: false)
+    let (server, _) = try await makeServer(items: [item], agentSettingsStore: settingsStore)
+    _ = await send(.unlock, to: server)
+
+    guard case .success(.items(let items)) = await send(.list, to: server, caller: cliCaller) else {
+      Issue.record("expected .items")
+      return
+    }
+    #expect(items.map(\.id) == [item.id])
+
+    guard case .success(.item(let fetched)) = await send(.getItem(.id(item.id)), to: server, caller: cliCaller)
+    else {
+      Issue.record("expected .item")
+      return
+    }
+    #expect(fetched.id == item.id)
+  }
+
+  @Test func writeOperationsFailWithAgentAccessDisabledRatherThanWriteAccessDisabledWhenReadAccessIsAlsoOff()
+    async throws
+  {
+    // Read access gates every vault operation before `requireWriteAccess` ever runs (see
+    // `vaultResponse(for:caller:)`), so a caller should never see `.agentWriteAccessDisabled` while
+    // read access itself is off — even if, as here, the agent settings store happens to say write
+    // access is "on". `accessPolicy` here is a `ToggleableAccessPolicy`, deliberately independent of
+    // `agentSettingsStore`, precisely so this combination is reachable in a test even though real
+    // production wiring (`AgentSettingsAccessPolicy` reading the same `agentSettingsStore`
+    // `AgentServer` does) couldn't actually produce it — the precedence still has to hold regardless
+    // of what the store answers.
+    let policy = ToggleableAccessPolicy(enabled: false)
+    let settingsStore = writeAccessSettingsStore(writeAccessEnabled: true)
+    let (server, _) = try await makeServer(
+      accessPolicy: policy,
+      items: [makeItem()],
+      agentSettingsStore: settingsStore
+    )
+    _ = await send(.unlock, to: server)
+
+    guard
+      case .failure(.agentAccessDisabled) =
+        await send(.createItem(makeItem(title: "Mail")), to: server, caller: cliCaller)
+    else {
+      Issue.record("expected .failure(.agentAccessDisabled)")
+      return
+    }
+  }
+
+  /// Regression test for the exact attack this ticket's toggle used to be vulnerable to (and, in an
+  /// earlier draft of this branch, actually was): `agentWriteAccessEnabled` living on `AppSettings`,
+  /// backed by the shared `com.851labs.lilpasswords.shared` `UserDefaults` suite that every local
+  /// process — including a misbehaving agent — can freely rewrite with `defaults write
+  /// com.851labs.lilpasswords.shared AppSettings.agentWriteAccessEnabled -bool true`, silently
+  /// re-enabling its own write access. That property has never existed on `AppSettings` in this
+  /// branch's final, rebased-onto-851-2428 shape (see that type's source) — `agentWriteAccessEnabled`
+  /// is a field of ``AgentSettings``, persisted only through the helper-owned, ACL'd
+  /// `AgentSettingsStoring`/`KeychainAgentSettingsStore` (see that protocol's documentation) — so
+  /// there's nothing left for such a command to even name today. This test proves the actual runtime
+  /// behavior rather than relying on "the property is gone" as the only evidence: it pokes the
+  /// legacy suite/key pair directly, bypassing `AppSettings`'s Swift API entirely (exactly like the
+  /// shell command above would), and confirms `AgentServer` — which reads write access exclusively
+  /// from its injected `agentSettingsStore`, never from `UserDefaults` — is completely unaffected.
+  @Test func tamperingWithTheSharedUserDefaultsSuiteHasNoEffectOnWriteAccess() async throws {
+    let sharedDefaults = UserDefaults(suiteName: AppSettings.suiteName)!
+    let legacyKey = "AppSettings.agentWriteAccessEnabled"
+    let previousValue = sharedDefaults.object(forKey: legacyKey)
+    defer {
+      if let previousValue {
+        sharedDefaults.set(previousValue, forKey: legacyKey)
+      } else {
+        sharedDefaults.removeObject(forKey: legacyKey)
+      }
+    }
+    sharedDefaults.set(true, forKey: legacyKey)
+
+    // The default `agentSettingsStore` (an empty `InMemoryAgentSettingsStore`) fails closed to
+    // `.disabled` — matching a freshly launched helper that's never had the real, Keychain-backed
+    // settings written at all — so if tampering with `UserDefaults` had any effect, this would flip
+    // to `.success` instead.
+    let (server, _) = try await makeServer()
+    _ = await send(.unlock, to: server)
+
+    guard
+      case .failure(.agentWriteAccessDisabled) =
+        await send(.createItem(makeItem(title: "Mail")), to: server, caller: cliCaller)
+    else {
+      Issue.record("expected .failure(.agentWriteAccessDisabled) even with the legacy UserDefaults key set to true")
       return
     }
   }

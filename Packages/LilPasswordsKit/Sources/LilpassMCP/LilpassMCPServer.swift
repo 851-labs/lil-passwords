@@ -3,18 +3,23 @@ import LilPasswordsKit
 import LilpassCore
 import MCP
 
-/// Builds the `lilpass mcp` server: a stdio MCP server exposing five read-only tools that wrap
-/// `LilpassCommands`, the exact same logic layer the `lilpass` CLI itself calls (851-2431).
+/// Builds the `lilpass mcp` server: a stdio MCP server wrapping `LilpassCommands`, the exact same
+/// logic layer the `lilpass` CLI itself calls (851-2431), including the write tools
+/// `create_password`/`update_password`/`delete_password` (851-2433).
 ///
-/// Every tool here is read-only (`readOnlyHint: true`) — none of them mutate the vault, matching
-/// `lilpass`'s own command set (nothing in 851-2430 writes to the vault either). Every tool's error
-/// text is `LilpassError.from(_:).message`, the identical safe-to-print message the CLI writes to
-/// stderr for the same failure, satisfying "errors must map to MCP tool errors with the same
-/// messages as the CLI." Only the transport differs: an MCP `CallTool.Result(isError: true)`
-/// instead of a stderr line plus one of `LilpassExitCode`'s process exit codes.
+/// The five original tools are read-only (`readOnlyHint: true`) — none of them mutate the vault,
+/// matching `lilpass`'s own read-only command set at the time (851-2430). `create_password`/
+/// `update_password`/`delete_password` are the only tools with `readOnlyHint: false`; each fails
+/// with the same `agentWriteAccessDisabled` message the CLI's `add`/`edit`/`rm` would while
+/// Settings → Agents' write-access toggle is off, since they call through the identical
+/// `AgentServer` write gate. Every tool's error text is `LilpassError.from(_:).message`, the
+/// identical safe-to-print message the CLI writes to stderr for the same failure, satisfying
+/// "errors must map to MCP tool errors with the same messages as the CLI." Only the transport
+/// differs: an MCP `CallTool.Result(isError: true)` instead of a stderr line plus one of
+/// `LilpassExitCode`'s process exit codes.
 public enum LilpassMCP {
   /// `lilpass mcp`'s server identity, echoed to clients during `initialize`.
-  public static let serverName = "lilpass"
+  public static let serverName = LilPasswordsKit.cliName
   public static let serverVersion = "1.0.0"
 
   /// Builds a fully configured `Server` with every tool handler registered, ready for
@@ -141,6 +146,109 @@ public enum LilpassMCP {
       ]),
       annotations: Tool.Annotations(title: "Generate password", readOnlyHint: true, openWorldHint: false)
     ),
+    Tool(
+      name: "create_password",
+      description: """
+        Create a new password item in the vault. Requires agent write access, a separate toggle \
+        from read access in Settings → Agents — fails with a clear error while it's off, same as \
+        every other write tool here. Supply either "password" or "generate": true (never both). \
+        Returns the same non-secret summary as list_passwords, not the password you supplied.
+        """,
+      inputSchema: .object([
+        "type": "object",
+        "properties": .object([
+          "title": .object(["type": "string", "description": "The item's title."]),
+          "username": .object([
+            "type": "array", "items": .object(["type": "string"]),
+            "description": "Usernames or account identifiers for this item.",
+          ]),
+          "password": .object([
+            "type": "string", "description": "The item's password. Omit if generate is true.",
+          ]),
+          "generate": .object([
+            "type": "boolean",
+            "description": "Generate a password instead of supplying one. Defaults to false.",
+          ]),
+          "length": .object([
+            "type": "integer", "description": "Exact length when generate is true. Defaults to Apple's format.",
+          ]),
+          "noSymbols": .object([
+            "type": "boolean", "description": "Exclude symbols when generate is true.",
+          ]),
+          "website": .object([
+            "type": "array", "items": .object(["type": "string"]),
+            "description": "Website URLs or domains for this item.",
+          ]),
+          "notes": .object(["type": "string", "description": "Free-text notes."]),
+          "group": .object(["type": "string", "description": "The group/folder this item belongs to."]),
+        ]),
+        "required": .array(["title"]),
+      ]),
+      annotations: Tool.Annotations(
+        title: "Create password", readOnlyHint: false, destructiveHint: false, idempotentHint: false,
+        openWorldHint: false
+      )
+    ),
+    Tool(
+      name: "update_password",
+      description: """
+        Update an existing password item. Only the fields you pass are changed — "username" and \
+        "website" each replace that field's whole list when given at all. Requires agent write \
+        access, same as create_password. Supply either "password" or "generate": true to change \
+        the password; omit both to leave it as-is.
+        """,
+      inputSchema: .object([
+        "type": "object",
+        "properties": .object([
+          "item": .object(["type": "string", "description": "The item's title, id, or other identifier."]),
+          "title": .object(["type": "string", "description": "Replace the item's title."]),
+          "username": .object([
+            "type": "array", "items": .object(["type": "string"]),
+            "description": "Replace the item's usernames.",
+          ]),
+          "password": .object(["type": "string", "description": "Replace the item's password."]),
+          "generate": .object([
+            "type": "boolean", "description": "Generate a new password instead of supplying one.",
+          ]),
+          "length": .object([
+            "type": "integer", "description": "Exact length when generate is true. Defaults to Apple's format.",
+          ]),
+          "noSymbols": .object([
+            "type": "boolean", "description": "Exclude symbols when generate is true.",
+          ]),
+          "website": .object([
+            "type": "array", "items": .object(["type": "string"]),
+            "description": "Replace the item's websites.",
+          ]),
+          "notes": .object(["type": "string", "description": "Replace the item's notes."]),
+          "group": .object(["type": "string", "description": "Replace the item's group/folder."]),
+        ]),
+        "required": .array(["item"]),
+      ]),
+      annotations: Tool.Annotations(
+        title: "Update password", readOnlyHint: false, destructiveHint: true, idempotentHint: false,
+        openWorldHint: false
+      )
+    ),
+    Tool(
+      name: "delete_password",
+      description: """
+        Delete a password item. Soft-deletes only — the item moves to Recently Deleted, exactly \
+        like deleting it from the app; there is no permanent-delete this tool can reach. Requires \
+        agent write access, same as create_password/update_password.
+        """,
+      inputSchema: .object([
+        "type": "object",
+        "properties": .object([
+          "item": .object(["type": "string", "description": "The item's title, id, or other identifier."])
+        ]),
+        "required": .array(["item"]),
+      ]),
+      annotations: Tool.Annotations(
+        title: "Delete password", readOnlyHint: false, destructiveHint: true, idempotentHint: true,
+        openWorldHint: false
+      )
+    ),
   ]
 
   // MARK: - Dispatch
@@ -181,6 +289,40 @@ public enum LilpassMCP {
         let password = try await LilpassCommands.generate(client: client, length: length, noSymbols: noSymbols)
         return try encoded(GeneratedPassword(password: password))
 
+      case "create_password":
+        let title = try requireString("title", from: params)
+        let password = try await resolvePassword(from: params, client: client)
+        let created = try await LilpassCommands.add(
+          client: client,
+          title: title,
+          usernames: stringArray("username", from: params),
+          password: password,
+          websites: stringArray("website", from: params),
+          notes: params.arguments?["notes"]?.stringValue ?? "",
+          group: params.arguments?["group"]?.stringValue
+        )
+        return try encoded(created)
+
+      case "update_password":
+        let item = try requireString("item", from: params)
+        let password = try await resolveOptionalPassword(from: params, client: client)
+        let updated = try await LilpassCommands.edit(
+          client: client,
+          identifier: item,
+          title: params.arguments?["title"]?.stringValue,
+          usernames: stringArray("username", from: params),
+          password: password,
+          websites: stringArray("website", from: params),
+          notes: params.arguments?["notes"]?.stringValue,
+          group: params.arguments?["group"]?.stringValue
+        )
+        return try encoded(updated)
+
+      case "delete_password":
+        let item = try requireString("item", from: params)
+        let removed = try await LilpassCommands.remove(client: client, identifier: item)
+        return try encoded(removed)
+
       default:
         return errorResult("Unknown tool: \(params.name)")
       }
@@ -196,6 +338,57 @@ public enum LilpassMCP {
       throw LilpassError(exitCode: .usage, message: "\(params.name) requires a non-empty \"\(key)\" argument")
     }
     return value
+  }
+
+  /// Reads a `key` array argument as `[String]`, dropping any non-string element rather than
+  /// failing the whole call — the same lenient spirit as `requireString`'s "from" reads only what
+  /// it needs. Missing entirely reads as empty, matching `create_password`/`update_password`'s
+  /// "not given" default for `--username`/`--website`.
+  private static func stringArray(_ key: String, from params: CallTool.Parameters) -> [String] {
+    params.arguments?[key]?.arrayValue?.compactMap(\.stringValue) ?? []
+  }
+
+  /// `create_password`'s password resolution: exactly one of `"password"` or `"generate": true`
+  /// must be given, mirroring `AddCommand`'s `validate()` (minus the CLI-only `ps`-leak rationale
+  /// for stdin — an MCP tool argument never appears in `ps` output the way a command-line argument
+  /// would, so a plain string argument is fine here).
+  private static func resolvePassword(
+    from params: CallTool.Parameters, client: AgentClient
+  ) async throws -> String {
+    let generate = params.arguments?["generate"]?.boolValue ?? false
+    let explicit = params.arguments?["password"]?.stringValue
+    if generate {
+      guard explicit == nil else {
+        throw LilpassError(exitCode: .usage, message: "\(params.name) can't take both \"password\" and \"generate\"")
+      }
+      let length = params.arguments?["length"].flatMap { Int($0) }
+      let noSymbols = params.arguments?["noSymbols"]?.boolValue ?? false
+      return try await LilpassCommands.generate(client: client, length: length, noSymbols: noSymbols)
+    }
+    guard let explicit, !explicit.isEmpty else {
+      throw LilpassError(
+        exitCode: .usage, message: "\(params.name) requires either \"password\" or \"generate\": true"
+      )
+    }
+    return explicit
+  }
+
+  /// `update_password`'s password resolution: `nil` (leave the password unchanged) unless the
+  /// caller passed `"password"` or `"generate": true`.
+  private static func resolveOptionalPassword(
+    from params: CallTool.Parameters, client: AgentClient
+  ) async throws -> String? {
+    let generate = params.arguments?["generate"]?.boolValue ?? false
+    let explicit = params.arguments?["password"]?.stringValue
+    if generate {
+      guard explicit == nil else {
+        throw LilpassError(exitCode: .usage, message: "\(params.name) can't take both \"password\" and \"generate\"")
+      }
+      let length = params.arguments?["length"].flatMap { Int($0) }
+      let noSymbols = params.arguments?["noSymbols"]?.boolValue ?? false
+      return try await LilpassCommands.generate(client: client, length: length, noSymbols: noSymbols)
+    }
+    return explicit
   }
 
   private static func encoded<T: Encodable>(_ value: T) throws -> CallTool.Result {

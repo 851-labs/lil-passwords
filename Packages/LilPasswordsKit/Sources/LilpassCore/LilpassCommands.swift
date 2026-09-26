@@ -89,6 +89,100 @@ public enum LilpassCommands {
     }
   }
 
+  /// `lilpass add`: creates a new item. Requires agent write access on top of read access — see
+  /// `AgentError.agentWriteAccessDisabled` (851-2433) — and is always denied for a plain `lilpass`
+  /// invocation while that toggle is off, regardless of `--generate` vs. a piped-in `--password`.
+  ///
+  /// Returns an ``ItemSummary`` rather than the full item: like `list`/`search`, `add`/`edit`/`rm`
+  /// are not among 851-2430's secret-revealing commands, even for a password the caller itself just
+  /// supplied — a consistent rule is simpler to reason about than "except when you just typed it
+  /// yourself", and the caller already has the plaintext they passed in anyway.
+  public static func add(
+    client: AgentClient,
+    title: String,
+    usernames: [String],
+    password: String,
+    websites: [String],
+    notes: String,
+    group: String?
+  ) async throws -> ItemSummary {
+    let parsedWebsites = try websites.map(parseWebsite)
+    let item = PasswordItem(
+      title: title,
+      usernames: usernames,
+      password: password,
+      websites: parsedWebsites,
+      notes: notes,
+      group: group
+    )
+    do {
+      let created = try await client.create(item)
+      return ItemSummary(created)
+    } catch {
+      throw LilpassError.from(error)
+    }
+  }
+
+  /// `lilpass edit <item>`: a partial update — every parameter left `nil` (or, for the array
+  /// parameters, empty) leaves that field unchanged on the existing item. There is deliberately no
+  /// way to clear ``PasswordItem/usernames``, ``PasswordItem/websites``, or
+  /// ``PasswordItem/group`` back to empty/`nil` through `edit` today (only to replace them with a
+  /// new non-empty value) — a real gap, but one `lilpass rm` + `lilpass add` already works around, and
+  /// not one this ticket's `--field value` shape was asked to close.
+  public static func edit(
+    client: AgentClient,
+    identifier: String,
+    title: String?,
+    usernames: [String],
+    password: String?,
+    websites: [String],
+    notes: String?,
+    group: String?
+  ) async throws -> ItemSummary {
+    var item = try await resolveItem(identifier, client: client)
+    if let title { item.title = title }
+    if !usernames.isEmpty { item.usernames = usernames }
+    if let password { item.password = password }
+    if !websites.isEmpty { item.websites = try websites.map(parseWebsite) }
+    if let notes { item.notes = notes }
+    if let group { item.group = group }
+    item.modifiedAt = Date()
+    do {
+      let updated = try await client.update(item)
+      return ItemSummary(updated)
+    } catch {
+      throw LilpassError.from(error)
+    }
+  }
+
+  /// `lilpass rm <item>`: soft-deletes (moves to Recently Deleted) — see `AgentServer.vaultResponse`'s
+  /// `.deleteItem` case — there is no permanent-delete request an agent caller (or this command)
+  /// can reach. Returns the resolved item's ``ItemSummary`` (as it was immediately before deletion)
+  /// so the caller can confirm what was removed.
+  @discardableResult
+  public static func remove(client: AgentClient, identifier: String) async throws -> ItemSummary {
+    let item = try await resolveItem(identifier, client: client)
+    do {
+      try await client.delete(.id(item.id))
+      return ItemSummary(item)
+    } catch {
+      throw LilpassError.from(error)
+    }
+  }
+
+  /// Normalizes a `--website` argument the same way CSV import does (``ImportedCredential``):
+  /// a bare `"example.com"` gets an `https://` scheme, and anything that still doesn't parse into a
+  /// `URL` with a host is rejected rather than silently dropped — unlike import, a single bad
+  /// `--website` on an explicit `add`/`edit` invocation should fail loudly, not disappear.
+  private static func parseWebsite(_ string: String) throws -> URL {
+    let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+    let withScheme = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
+    guard let url = URL(string: withScheme), let host = url.host, !host.isEmpty else {
+      throw LilpassError(exitCode: .usage, message: "\"\(string)\" isn't a valid website")
+    }
+    return url
+  }
+
   /// Shared by every command that needs to resolve exactly one item: fetches the full list once
   /// and resolves `identifier` against it with `ItemResolver`. `LilpassRun` and `LilpassInject` call
   /// this directly for each `lilpass://` reference they need to resolve.
