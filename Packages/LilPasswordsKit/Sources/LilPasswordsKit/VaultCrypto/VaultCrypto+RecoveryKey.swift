@@ -79,3 +79,39 @@ extension VaultCrypto {
     }
   }
 }
+
+extension VaultCrypto.RecoveryKey {
+  /// A restore-vault UI wants to tell a user *why* the string they typed didn't work, not just
+  /// that `init?(displayString:)` returned `nil` — this classifies that same failure into one of
+  /// a small number of reasons a friendly error message can be built from. See
+  /// ``validate(displayString:)``.
+  public enum ValidationError: Swift.Error, Sendable, Equatable {
+    /// The string is empty, or only whitespace/dashes.
+    case empty
+    /// The string doesn't decode to a Crockford Base32 payload of exactly `byteCount + 1` bytes
+    /// — the wrong character(s), or too few/many of them.
+    case wrongLength
+    /// The string decodes to the right length, but its trailing checksum byte doesn't match the
+    /// entropy it's paired with — almost always a single mistyped or mis-copied character.
+    case checksumMismatch
+  }
+
+  /// `init?(displayString:)` with a specific reason attached to the failure, for a restore-vault
+  /// UI that wants to surface *why* an input was rejected instead of a bare "that didn't work."
+  public static func validate(displayString: String) -> Swift.Result<VaultCrypto.RecoveryKey, ValidationError> {
+    if let key = VaultCrypto.RecoveryKey(displayString: displayString) {
+      return .success(key)
+    }
+
+    let strippedOfSeparators = displayString.filter { !$0.isWhitespace && $0 != "-" }
+    if strippedOfSeparators.isEmpty {
+      return .failure(.empty)
+    }
+    guard let payload = Base32Crockford.decode(displayString), payload.count == Self.byteCount + 1 else {
+      return .failure(.wrongLength)
+    }
+    // Decodes to the right length, so `init?(displayString:)` above must have rejected it for
+    // failing the checksum check — that's the only other thing it verifies.
+    return .failure(.checksumMismatch)
+  }
+}

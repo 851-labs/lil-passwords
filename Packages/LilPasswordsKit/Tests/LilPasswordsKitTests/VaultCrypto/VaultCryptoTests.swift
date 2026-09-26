@@ -211,6 +211,37 @@ import Testing
   }
 }
 
+@Suite struct VaultCryptoRecoveryKeyValidationTests {
+  @Test func validateSucceedsForAWellFormedDisplayString() throws {
+    let key = VaultCrypto.RecoveryKey.generate()
+
+    let result = VaultCrypto.RecoveryKey.validate(displayString: key.displayString)
+
+    #expect(try result.get() == key)
+  }
+
+  @Test func validateFailsWithEmptyForBlankInput() {
+    #expect(VaultCrypto.RecoveryKey.validate(displayString: "") == .failure(.empty))
+    #expect(VaultCrypto.RecoveryKey.validate(displayString: "   ") == .failure(.empty))
+    #expect(VaultCrypto.RecoveryKey.validate(displayString: "---") == .failure(.empty))
+  }
+
+  @Test func validateFailsWithWrongLengthForGarbageInput() {
+    #expect(VaultCrypto.RecoveryKey.validate(displayString: "not a recovery key") == .failure(.wrongLength))
+    #expect(VaultCrypto.RecoveryKey.validate(displayString: "4S9K") == .failure(.wrongLength))
+  }
+
+  @Test func validateFailsWithChecksumMismatchForATypo() {
+    let key = VaultCrypto.RecoveryKey.generate()
+    var displayString = key.displayString
+    let firstIndex = displayString.startIndex
+    let replacement: Character = displayString[firstIndex] == "0" ? "1" : "0"
+    displayString.replaceSubrange(firstIndex...firstIndex, with: String(replacement))
+
+    #expect(VaultCrypto.RecoveryKey.validate(displayString: displayString) == .failure(.checksumMismatch))
+  }
+}
+
 @Suite struct VaultCryptoRecoveryWrapTests {
   @Test func wrapThenUnwrapRecoversTheOriginalKey() throws {
     let vaultKey = VaultCrypto.Key.generate()
