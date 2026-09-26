@@ -14,9 +14,14 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-**Today the 851 Labs org has no Apple Developer team**, so releases build with
-ad hoc signing and no notarization. Nothing about the workflow needs to
-change once the org exists — see [Turning on Developer ID signing](#turning-on-developer-id-signing-and-notarization)
+**Today there's no Developer ID Application certificate or notarization
+credentials**, so releases build with ad hoc signing and no notarization.
+(lil passwords ships under Alexandru Turcanu's personal Apple Developer team,
+`WH4QW9ND3J` — see 851-2400/PR #16 and the signing comment in
+`Config/Base.xcconfig` — but that's only wired up for local Xcode dev
+signing; it doesn't by itself unlock Developer ID release signing, which
+still needs the certificate below.) Nothing about the workflow needs to
+change once that certificate exists — see [Turning on Developer ID signing](#turning-on-developer-id-signing-and-notarization)
 below.
 
 ## Pipeline
@@ -67,28 +72,31 @@ All optional; the pipeline degrades gracefully without each one.
 | --- | --- |
 | `DEVELOPER_ID_CERT_P12` | Base64-encoded `.p12` export of the "Developer ID Application" certificate. |
 | `DEVELOPER_ID_CERT_PASSWORD` | Export password for the `.p12` above. |
-| `APPLE_TEAM_ID` | The 851 Labs org's Apple Developer Team ID. |
+| `APPLE_TEAM_ID` | Apple Developer Team ID. Optional — defaults to Alexandru Turcanu's team (`WH4QW9ND3J`, see `scripts/release/lib.sh`), who lil passwords ships under until the 851 Labs org has its own team. Only set this to override that default. |
 | `NOTARY_APPLE_ID` + `NOTARY_PASSWORD` | An Apple ID (with an [app-specific password](https://support.apple.com/en-us/102654)) enrolled in the team, for `notarytool`. Alternative to the API key below. |
 | `NOTARY_API_KEY_ID` + `NOTARY_API_ISSUER_ID` + `NOTARY_API_KEY_P8` | An App Store Connect API key instead of an Apple ID/password, for `notarytool`. |
 | `SPARKLE_ED_PRIVATE_KEY` | The EdDSA private key Sparkle uses to sign appcast entries — see [Sparkle keys](#sparkle-keys). |
 
-`DEVELOPER_ID_CERT_P12`/`DEVELOPER_ID_CERT_PASSWORD`/`APPLE_TEAM_ID` gate
-Developer ID signing (`lib.sh`'s `has_developer_id_cert`). Notarization
-additionally needs either the Apple ID pair or the API key trio
-(`has_notary_credentials`), and is skipped even with those set if there's no
-Developer ID identity to have signed with — Apple rejects ad hoc submissions
-outright.
+`DEVELOPER_ID_CERT_P12`/`DEVELOPER_ID_CERT_PASSWORD` gate Developer ID
+signing (`lib.sh`'s `has_developer_id_cert`); `APPLE_TEAM_ID` isn't part of
+that gate since it always has a value. Notarization additionally needs
+either the Apple ID pair or the API key trio (`has_notary_credentials`), and
+is skipped even with those set if there's no Developer ID identity to have
+signed with — Apple rejects ad hoc submissions outright.
 
 ### Turning on Developer ID signing and notarization
 
-Once the 851 Labs org has an Apple Developer membership:
+Once a Developer ID Application certificate exists (whether issued under
+Alexandru Turcanu's team or a future 851 Labs org team):
 
 1. Export the "Developer ID Application" certificate + private key as a
    `.p12` from Keychain Access, then `base64 -i cert.p12 | pbcopy` into the
    `DEVELOPER_ID_CERT_P12` repo/org secret (and its export password into
    `DEVELOPER_ID_CERT_PASSWORD`).
-2. Set `APPLE_TEAM_ID` to the team's 10-character ID (Apple Developer
-   account → Membership).
+2. Only set `APPLE_TEAM_ID` if the certificate belongs to a *different* team
+   than `WH4QW9ND3J` (Apple Developer account → Membership, for the
+   10-character ID) — it already defaults to Alexandru Turcanu's team, see
+   the Secrets table above.
 3. Either create an [app-specific password](https://support.apple.com/en-us/102654)
    for an Apple ID on the team (`NOTARY_APPLE_ID`/`NOTARY_PASSWORD`), or
    generate an App Store Connect API key with the Developer role

@@ -8,7 +8,7 @@ notarize_and_staple() {
   local target="$1"
 
   if [[ "$(signing_identity)" == "-" ]]; then
-    warn "Ad hoc signed — skipping notarization (Apple rejects ad hoc submissions). Configure DEVELOPER_ID_CERT_P12/DEVELOPER_ID_CERT_PASSWORD/APPLE_TEAM_ID to enable. See docs/releasing.md and 851-2436."
+    warn "Ad hoc signed — skipping notarization (Apple rejects ad hoc submissions). Configure DEVELOPER_ID_CERT_P12/DEVELOPER_ID_CERT_PASSWORD to enable. See docs/releasing.md and 851-2436."
     return 0
   fi
 

@@ -1,11 +1,11 @@
 # Shared config/helpers for scripts/release/*.sh. Source, don't execute:
 #   source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 #
-# Design: today the 851 Labs org has no Apple Developer team, so every script
-# here must work end to end with ad hoc signing and no notarization. Once
-# DEVELOPER_ID_CERT_P12/DEVELOPER_ID_CERT_PASSWORD/APPLE_TEAM_ID exist as
-# secrets, signing_identity() starts returning a real Developer ID identity
-# and everything downstream (notarization, stapling) switches on
+# Design: today the 851 Labs org has no Developer ID certificate or notary
+# credentials, so every script here must work end to end with ad hoc signing
+# and no notarization. Once DEVELOPER_ID_CERT_P12/DEVELOPER_ID_CERT_PASSWORD
+# exist as secrets, signing_identity() starts returning a real Developer ID
+# identity and everything downstream (notarization, stapling) switches on
 # automatically — see has_developer_id_cert()/has_notary_credentials() below
 # and docs/releasing.md.
 
@@ -49,6 +49,15 @@ DMG_PATH="$DIST_DIR/$DMG_NAME"
 
 GITHUB_REPO="851-labs/lil-passwords"
 
+# lil passwords ships under Alexandru Turcanu's personal Apple Developer team
+# until the 851 Labs org has its own (851-2400, PR #16 — see the signing
+# comment in Config/Base.xcconfig). Defaulting it here means a real Developer
+# ID release doesn't need an org-issued APPLE_TEAM_ID secret configured
+# separately; set APPLE_TEAM_ID explicitly to override once the org has its
+# own team. This alone never turns on Developer ID signing — that still
+# requires the actual certificate, see has_developer_id_cert() below.
+APPLE_TEAM_ID="${APPLE_TEAM_ID:-WH4QW9ND3J}"
+
 log() { printf '\033[1;34m==>\033[0m %s\n' "$*" >&2; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 die() {
@@ -56,9 +65,11 @@ die() {
   exit 1
 }
 
-# Developer ID signing turns on once all three of these secrets exist.
+# Developer ID signing turns on once the certificate exists. APPLE_TEAM_ID
+# always has a value (defaulted above), so it doesn't gate this — only the
+# actual cert and its password do.
 has_developer_id_cert() {
-  [[ -n "${DEVELOPER_ID_CERT_P12:-}" && -n "${DEVELOPER_ID_CERT_PASSWORD:-}" && -n "${APPLE_TEAM_ID:-}" ]]
+  [[ -n "${DEVELOPER_ID_CERT_P12:-}" && -n "${DEVELOPER_ID_CERT_PASSWORD:-}" ]]
 }
 
 # Notarization turns on once notary credentials exist too (either an Apple ID

@@ -18,11 +18,15 @@ jobs:
     timeout-minutes: 60
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # Ad hoc signed and unnotarized until the 851 Labs org has a Developer
-      # ID team — every secret below is optional today. See docs/releasing.md
-      # and 851-2436/851-2437: once these exist in the repo/org secrets, this
-      # workflow switches to Developer ID signing + notarization + stapling
-      # automatically, with no code changes needed.
+      # Ad hoc signed and unnotarized until a Developer ID certificate exists
+      # — every secret below is optional today. See docs/releasing.md and
+      # 851-2436/851-2437: once DEVELOPER_ID_CERT_P12/DEVELOPER_ID_CERT_PASSWORD
+      # (and notary credentials) exist in the repo/org secrets, this workflow
+      # switches to Developer ID signing + notarization + stapling
+      # automatically, with no code changes needed. APPLE_TEAM_ID defaults to
+      # Alexandru Turcanu's team (WH4QW9ND3J, 851-2400/PR #16), which is who
+      # lil passwords ships under until the 851 Labs org has its own team —
+      # only set this secret to override that default.
       DEVELOPER_ID_CERT_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
       DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}

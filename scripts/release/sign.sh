@@ -7,7 +7,8 @@
 #
 # Uses whatever scripts/release/lib.sh's signing_identity() returns: ad hoc
 # ("-") today, or a real "Developer ID Application: ..." identity once
-# DEVELOPER_ID_CERT_P12/DEVELOPER_ID_CERT_PASSWORD/APPLE_TEAM_ID exist.
+# DEVELOPER_ID_CERT_P12/DEVELOPER_ID_CERT_PASSWORD exist (APPLE_TEAM_ID
+# defaults to Alexandru Turcanu's team, WH4QW9ND3J — see lib.sh).
 #
 # Hardened runtime (`--options runtime`) is only applied with a real Developer
 # ID identity, NOT ad hoc. This isn't just "the only thing that changes" —

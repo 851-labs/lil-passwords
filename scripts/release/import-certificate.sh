@@ -12,7 +12,7 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-has_developer_id_cert || die "import-certificate.sh requires DEVELOPER_ID_CERT_P12, DEVELOPER_ID_CERT_PASSWORD, and APPLE_TEAM_ID"
+has_developer_id_cert || die "import-certificate.sh requires DEVELOPER_ID_CERT_P12 and DEVELOPER_ID_CERT_PASSWORD"
 
 KEYCHAIN_PATH="$SCRATCH_DIR/release-signing.keychain-db"
 KEYCHAIN_PASSWORD="$(uuidgen)"
