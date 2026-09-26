@@ -181,6 +181,30 @@ public actor AgentClient {
     return updated
   }
 
+  /// 851-2441: every live item whose website matches one of `serviceIdentifiers`, narrowed to just
+  /// `CredentialIdentity` (never a password) — powers the AutoFill extension's
+  /// `prepareCredentialList(for:)`. Restricted to the AutoFill extension's own verified connection
+  /// by the helper; see `AgentServer.isRequestPermitted(_:for:)`.
+  public func autoFillIdentities(serviceIdentifiers: [String]) async throws -> [CredentialIdentity] {
+    let request = AgentRequest.autoFillIdentities(serviceIdentifiers: serviceIdentifiers)
+    guard case .autoFillIdentities(let identities) = try await send(request) else {
+      throw RequestError.connection(.invalidReply)
+    }
+    return identities
+  }
+
+  /// 851-2441: the username+password for exactly one item id — nothing else about the item is ever
+  /// returned. Powers `provideCredentialWithoutUserInteraction(for:)`/
+  /// `prepareInterfaceToProvideCredential(for:)`. Restricted to the AutoFill extension's own
+  /// verified connection by the helper; throws `AgentError.locked` while the vault is locked (see
+  /// `ASExtensionError.userInteractionRequired` at the call site).
+  public func autoFillCredential(id: UUID) async throws -> (username: String, password: String) {
+    guard case .autoFillCredential(let username, let password) = try await send(.autoFillCredential(id: id)) else {
+      throw RequestError.connection(.invalidReply)
+    }
+    return (username, password)
+  }
+
   /// Tears down the current connection, if any. The next call reconnects. Not required in normal
   /// use (interruption/invalidation already clear it), but useful for tests and for explicit
   /// "log out" style flows.

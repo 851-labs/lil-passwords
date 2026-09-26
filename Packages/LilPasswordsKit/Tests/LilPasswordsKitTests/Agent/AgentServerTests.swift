@@ -46,6 +46,16 @@ private let cliCaller = CallerIdentity(
   bundleIdentifier: AgentConnectionSecurity.PeerIdentifier.cli.rawValue
 )
 
+/// 851-2441: the AutoFill credential provider extension's verified connection — a third, much
+/// narrower peer than either ``appCaller`` or ``cliCaller``. See
+/// `AgentServer.isRequestPermitted(_:for:)` for exactly what it can and can't reach.
+private let autoFillCaller = CallerIdentity(
+  pid: 4,
+  processPath: "/Applications/lil passwords.app/Contents/PlugIns/AutoFill.appex/Contents/MacOS/AutoFill",
+  parentProcessName: nil,
+  bundleIdentifier: AgentConnectionSecurity.PeerIdentifier.autoFill.rawValue
+)
+
 @Suite struct AgentServerTests {
   private func makeItem(title: String = "GitHub") -> PasswordItem {
     // Pinned to whole-second precision: `AgentWireCoding`'s `.iso8601` date strategy drops
@@ -778,5 +788,162 @@ private let cliCaller = CallerIdentity(
 
     let events = await log.events
     #expect(events.isEmpty)
+  }
+
+  // MARK: - 851-2441: AutoFill credential provider extension
+
+  private func makeCredentialItem(
+    title: String = "Netflix",
+    username: String = "octocat",
+    password: String = "hunter2",
+    website: String? = "https://netflix.com"
+  ) -> PasswordItem {
+    PasswordItem(
+      title: title,
+      usernames: username.isEmpty ? [] : [username],
+      password: password,
+      websites: website.map { [URL(string: $0)!] } ?? [],
+      createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+      modifiedAt: Date(timeIntervalSince1970: 1_700_000_000)
+    )
+  }
+
+  /// The structural half of "only return the credential for the chosen identity, not general
+  /// list/search access": every request AutoFill *can't* reach should fail with
+  /// `.callerNotAuthorized`, regardless of what `AccessPolicyProviding`/write-access/lock state
+  /// would otherwise say — `isRequestPermitted(_:for:)` runs before any of that.
+  @Test func autoFillCallerIsRejectedForEveryRequestExceptItsFive() async throws {
+    let item = makeCredentialItem()
+    let (server, _) = try await makeServer(items: [item])
+    _ = await send(.unlock, to: server, caller: autoFillCaller)
+
+    let disallowed: [AgentRequest] = [
+      .createVault,
+      .rotateRecoveryKey,
+      .getAgentSettings,
+      .setAgentSettings(.disabled),
+      .list,
+      .search(query: "netflix"),
+      .getItem(.id(item.id)),
+      .createItem(makeCredentialItem(title: "New")),
+      .updateItem(item),
+      .deleteItem(.id(item.id)),
+      .generatePassword(.appleStrong),
+      .totpCode(.id(item.id)),
+    ]
+    for request in disallowed {
+      guard case .failure(.callerNotAuthorized) = await send(request, to: server, caller: autoFillCaller) else {
+        Issue.record("expected .callerNotAuthorized for \(request)")
+        continue
+      }
+    }
+  }
+
+  @Test func autoFillCallerCanUnlockLockAndCheckStatus() async throws {
+    let (server, _) = try await makeServer()
+
+    guard case .success(.unlocked) = await send(.unlock, to: server, caller: autoFillCaller) else {
+      Issue.record("expected .unlocked")
+      return
+    }
+    guard case .success(.status(let status)) = await send(.status, to: server, caller: autoFillCaller) else {
+      Issue.record("expected .status")
+      return
+    }
+    #expect(status.locked == false)
+    guard case .success(.locked) = await send(.lock, to: server, caller: autoFillCaller) else {
+      Issue.record("expected .locked")
+      return
+    }
+  }
+
+  @Test func autoFillIdentitiesMatchesByHostIgnoringSchemeAndWWW() async throws {
+    let netflix = makeCredentialItem(title: "Netflix", website: "https://www.netflix.com/login")
+    let github = makeCredentialItem(title: "GitHub", username: "octocat", website: "https://github.com")
+    let noWebsite = makeCredentialItem(title: "No website", website: nil)
+    let noUsername = makeCredentialItem(title: "No username", username: "", website: "https://noun.example")
+    let (server, _) = try await makeServer(items: [netflix, github, noWebsite, noUsername])
+    _ = await send(.unlock, to: server, caller: autoFillCaller)
+
+    guard
+      case .success(.autoFillIdentities(let identities)) = await send(
+        .autoFillIdentities(serviceIdentifiers: ["netflix.com"]),
+        to: server,
+        caller: autoFillCaller
+      )
+    else {
+      Issue.record("expected .autoFillIdentities")
+      return
+    }
+    #expect(identities.map(\.title) == ["Netflix"])
+    #expect(identities.first?.username == "octocat")
+
+    guard
+      case .success(.autoFillIdentities(let noMatches)) = await send(
+        .autoFillIdentities(serviceIdentifiers: ["example.org"]),
+        to: server,
+        caller: autoFillCaller
+      )
+    else {
+      Issue.record("expected .autoFillIdentities")
+      return
+    }
+    #expect(noMatches.isEmpty)
+  }
+
+  @Test func autoFillCredentialReturnsOnlyUsernameAndPassword() async throws {
+    let item = makeCredentialItem(username: "octocat", password: "hunter2")
+    let (server, _) = try await makeServer(items: [item])
+    _ = await send(.unlock, to: server, caller: autoFillCaller)
+
+    guard
+      case .success(.autoFillCredential(let username, let password)) = await send(
+        .autoFillCredential(id: item.id),
+        to: server,
+        caller: autoFillCaller
+      )
+    else {
+      Issue.record("expected .autoFillCredential")
+      return
+    }
+    #expect(username == "octocat")
+    #expect(password == "hunter2")
+  }
+
+  @Test func autoFillCredentialFailsWithNotFoundForAnUnknownOrDeletedId() async throws {
+    let (server, _) = try await makeServer()
+    _ = await send(.unlock, to: server, caller: autoFillCaller)
+
+    guard
+      case .failure(.notFound) = await send(.autoFillCredential(id: UUID()), to: server, caller: autoFillCaller)
+    else {
+      Issue.record("expected .notFound")
+      return
+    }
+  }
+
+  @Test func autoFillCredentialFailsWithLockedBeforeUnlock() async throws {
+    let item = makeCredentialItem()
+    let (server, _) = try await makeServer(items: [item])
+
+    guard
+      case .failure(.locked) = await send(.autoFillCredential(id: item.id), to: server, caller: autoFillCaller)
+    else {
+      Issue.record("expected .locked")
+      return
+    }
+  }
+
+  @Test func autoFillCallerIsExemptFromTheAgentAccessToggleLikeTheApp() async throws {
+    let item = makeCredentialItem()
+    let policy = AgentSettingsAccessPolicy(store: InMemoryAgentSettingsStore(initial: .disabled))
+    let (server, _) = try await makeServer(accessPolicy: policy, items: [item])
+    _ = await send(.unlock, to: server, caller: autoFillCaller)
+
+    let outcome = await send(.autoFillCredential(id: item.id), to: server, caller: autoFillCaller)
+    guard case .success(.autoFillCredential) = outcome else {
+      Issue.record("expected .autoFillCredential even with agent access disabled")
+      return
+    }
   }
 }

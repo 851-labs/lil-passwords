@@ -10,9 +10,12 @@
 		0908BAD594DE4DA89139148E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 67B8972C5CBD3222176705D1 /* Assets.xcassets */; };
 		18DBFFAF699B21118F7DE3E8 /* lilpass in Embed Dependencies */ = {isa = PBXBuildFile; fileRef = C1EE44597B7D4A967C806C1E /* lilpass */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		1C49D3CFE10E6FD7DDC06E50 /* LilPasswordsAgent in Embed Dependencies */ = {isa = PBXBuildFile; fileRef = F2BF470827AD396CCE39BD0D /* LilPasswordsAgent */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		267D69B0FDC8F7CCA501CA6A /* LilPasswordsKit in Frameworks */ = {isa = PBXBuildFile; productRef = 0DC1BC2D86FF619359D8B36D /* LilPasswordsKit */; };
 		3FDE1453EFCCB1610818D52B /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = D04D57C140F0BF5DDE5329C7 /* Localizable.xcstrings */; };
+		405DCF38F0433938DE71B586 /* AutoFillExtension.appex in Embed Dependencies */ = {isa = PBXBuildFile; fileRef = 43FA4DB604FF6F00E313725C /* AutoFillExtension.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		78FFF7FF14F6A9EACB0E37E6 /* LilPasswordsKit in Frameworks */ = {isa = PBXBuildFile; productRef = B41A41E642B0A614A5A75DA7 /* LilPasswordsKit */; };
 		79287A7FC0FE66AC92E1BFC4 /* LilPasswordsKit in Frameworks */ = {isa = PBXBuildFile; productRef = 5EBA761A968E93EEADB84FEA /* LilPasswordsKit */; };
+		C5A80B02D57B98D2DDDEC6CC /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = DC5B8E0638B81737CB1AB704 /* Localizable.xcstrings */; };
 		C68E97F864E0BE5A9CD3AAE3 /* LilPasswordsKit in Frameworks */ = {isa = PBXBuildFile; productRef = E539F5199FCE7076CD81B5FA /* LilPasswordsKit */; };
 		DCF7C7F33992843800251E37 /* com.851labs.lilpasswords.agent.plist in CopyFiles */ = {isa = PBXBuildFile; fileRef = 1205EE660A0836A88635F51F /* com.851labs.lilpasswords.agent.plist */; };
 		E4B94333172C44B03CF0C9BC /* LilpassCore in Frameworks */ = {isa = PBXBuildFile; productRef = 23A2A855BC2ABEAE1636380C /* LilpassCore */; };
@@ -28,6 +31,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = C7BA3BBB2757E54A90FDA6C6;
 			remoteInfo = lilpass;
+		};
+		84DC6670B43AC067400B9DAE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9DD56955C3C8D41688239CF2 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 48298E5FA57F8073D03F2BEE;
+			remoteInfo = AutoFillExtension;
 		};
 		85CF5696180923F9EE86BB69 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -51,6 +61,17 @@
 			name = "Embed Dependencies";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C29CE0D58F9628BAE28131AA /* Embed Dependencies */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				405DCF38F0433938DE71B586 /* AutoFillExtension.appex in Embed Dependencies */,
+			);
+			name = "Embed Dependencies";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F3D36D0CDF31474810F0A146 /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -66,10 +87,12 @@
 /* Begin PBXFileReference section */
 		1205EE660A0836A88635F51F /* com.851labs.lilpasswords.agent.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = com.851labs.lilpasswords.agent.plist; sourceTree = "<group>"; };
 		1552750737D8BD27B57FCF51 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		43FA4DB604FF6F00E313725C /* AutoFillExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AutoFillExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		67B8972C5CBD3222176705D1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9752809980BB70168B33CB2C /* LilPasswordsKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LilPasswordsKit; path = Packages/LilPasswordsKit; sourceTree = SOURCE_ROOT; };
 		C1EE44597B7D4A967C806C1E /* lilpass */ = {isa = PBXFileReference; includeInIndex = 0; path = lilpass; sourceTree = BUILT_PRODUCTS_DIR; };
 		D04D57C140F0BF5DDE5329C7 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		DC5B8E0638B81737CB1AB704 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		E16AB1A3115C01ADF6D2E139 /* LilPasswords.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LilPasswords.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2BF470827AD396CCE39BD0D /* LilPasswordsAgent */ = {isa = PBXFileReference; includeInIndex = 0; path = LilPasswordsAgent; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -86,6 +109,16 @@
 			sourceTree = "<group>";
 		};
 		1565B1A364AC5FCD3D16BA04 /* Sources */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			name = Sources;
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		15AA11632268230C21FDA078 /* Sources */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			explicitFileTypes = {
 			};
@@ -114,6 +147,14 @@
 			files = (
 				C68E97F864E0BE5A9CD3AAE3 /* LilPasswordsKit in Frameworks */,
 				EA16D8D61ED6C27BADEA23DF /* Sparkle in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		779ECA8FE80492CD988A0517 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				267D69B0FDC8F7CCA501CA6A /* LilPasswordsKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -181,16 +222,34 @@
 			path = Agent;
 			sourceTree = "<group>";
 		};
+		771E7FE57F7A6A7BDB12E45E /* AutoFillExtension */ = {
+			isa = PBXGroup;
+			children = (
+				7ECA476F050B8CF467BE70C1 /* Resources */,
+				15AA11632268230C21FDA078 /* Sources */,
+			);
+			path = AutoFillExtension;
+			sourceTree = "<group>";
+		};
 		7947B44B282CBC4A3964C805 = {
 			isa = PBXGroup;
 			children = (
 				6997AE3F21BA4CCC1AB800C3 /* Agent */,
 				C1EAD955654A56F5F33FB756 /* App */,
+				771E7FE57F7A6A7BDB12E45E /* AutoFillExtension */,
 				09FEC2AB3FC76EC862908F1E /* CLI */,
 				9275A01A6D7DC0966E1710B4 /* Config */,
 				0F446391754462A9B5945A5C /* Packages */,
 				A903EE70C6B646F3E5436F31 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		7ECA476F050B8CF467BE70C1 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				DC5B8E0638B81737CB1AB704 /* Localizable.xcstrings */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		9275A01A6D7DC0966E1710B4 /* Config */ = {
@@ -204,6 +263,7 @@
 		A903EE70C6B646F3E5436F31 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				43FA4DB604FF6F00E313725C /* AutoFillExtension.appex */,
 				C1EE44597B7D4A967C806C1E /* lilpass */,
 				E16AB1A3115C01ADF6D2E139 /* LilPasswords.app */,
 				F2BF470827AD396CCE39BD0D /* LilPasswordsAgent */,
@@ -246,6 +306,29 @@
 			productReference = F2BF470827AD396CCE39BD0D /* LilPasswordsAgent */;
 			productType = "com.apple.product-type.tool";
 		};
+		48298E5FA57F8073D03F2BEE /* AutoFillExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 30D10862368BD511C85593C8 /* Build configuration list for PBXNativeTarget "AutoFillExtension" */;
+			buildPhases = (
+				5313B922C332863683680B80 /* Sources */,
+				626ACC1683B63E9170E69800 /* Resources */,
+				779ECA8FE80492CD988A0517 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				15AA11632268230C21FDA078 /* Sources */,
+			);
+			name = AutoFillExtension;
+			packageProductDependencies = (
+				0DC1BC2D86FF619359D8B36D /* LilPasswordsKit */,
+			);
+			productName = AutoFillExtension;
+			productReference = 43FA4DB604FF6F00E313725C /* AutoFillExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		C6C645DBFB45116D7AB9C120 /* LilPasswords */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 44D2149F85D073AC5C682A41 /* Build configuration list for PBXNativeTarget "LilPasswords" */;
@@ -255,6 +338,7 @@
 				F3D36D0CDF31474810F0A146 /* CopyFiles */,
 				36CCC4E76E3367C3AD14AC69 /* Frameworks */,
 				478BF7B10A4CF34216E35915 /* Embed Dependencies */,
+				C29CE0D58F9628BAE28131AA /* Embed Dependencies */,
 				8979FCA890D6F55204BAFADF /* Re-sign embedded helpers with their own bundle identifiers (851-2465) */,
 			);
 			buildRules = (
@@ -262,6 +346,7 @@
 			dependencies = (
 				02BACF80CDDA64EAC0D740DB /* PBXTargetDependency */,
 				AFF7F6DB66C28A8088734966 /* PBXTargetDependency */,
+				7821C86DF7B3BA982ED1D903 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				8BD3E7C9863E5099B2172F5C /* Sources */,
@@ -314,6 +399,10 @@
 						DevelopmentTeam = WH4QW9ND3J;
 						ProvisioningStyle = Manual;
 					};
+					48298E5FA57F8073D03F2BEE = {
+						DevelopmentTeam = WH4QW9ND3J;
+						ProvisioningStyle = Manual;
+					};
 					C6C645DBFB45116D7AB9C120 = {
 						DevelopmentTeam = WH4QW9ND3J;
 						ProvisioningStyle = Manual;
@@ -346,6 +435,7 @@
 				C6C645DBFB45116D7AB9C120 /* LilPasswords */,
 				4807B7DB294ECA66F2907C7F /* LilPasswordsAgent */,
 				C7BA3BBB2757E54A90FDA6C6 /* lilpass */,
+				48298E5FA57F8073D03F2BEE /* AutoFillExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -364,6 +454,14 @@
 			files = (
 				0908BAD594DE4DA89139148E /* Assets.xcassets in Resources */,
 				3FDE1453EFCCB1610818D52B /* Localizable.xcstrings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		626ACC1683B63E9170E69800 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C5A80B02D57B98D2DDDEC6CC /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -394,12 +492,19 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -euo pipefail\nHELPERS=\"$TARGET_BUILD_DIR/$WRAPPER_NAME/Contents/Helpers\"\nIDENTITY=\"${EXPANDED_CODE_SIGN_IDENTITY:-$CODE_SIGN_IDENTITY}\"\ncodesign --force -o runtime --timestamp=none \\\n  --sign \"$IDENTITY\" --identifier com.851labs.lilpasswords.agent \\\n  --entitlements \"$SRCROOT/Config/Entitlements/Agent.entitlements\" \\\n  \"$HELPERS/LilPasswordsAgent\"\ncodesign --force -o runtime --timestamp=none \\\n  --sign \"$IDENTITY\" --identifier com.851labs.lilpasswords.cli \\\n  --entitlements \"$SRCROOT/Config/Entitlements/CLI.entitlements\" \\\n  \"$HELPERS/lilpass\"\n";
+			shellScript = "set -euo pipefail\nHELPERS=\"$TARGET_BUILD_DIR/$WRAPPER_NAME/Contents/Helpers\"\nIDENTITY=\"${EXPANDED_CODE_SIGN_IDENTITY:-$CODE_SIGN_IDENTITY}\"\ncodesign --force -o runtime --timestamp=none \\\n  --sign \"$IDENTITY\" --identifier com.851labs.lilpasswords.agent \\\n  --entitlements \"$SRCROOT/Config/Entitlements/Agent.entitlements\" \\\n  \"$HELPERS/LilPasswordsAgent\"\ncodesign --force -o runtime --timestamp=none \\\n  --sign \"$IDENTITY\" --identifier com.851labs.lilpasswords.cli \\\n  --entitlements \"$SRCROOT/Config/Entitlements/CLI.entitlements\" \\\n  \"$HELPERS/lilpass\"\n# 851-2441: the embed step's own \"Code Sign On Copy\" re-signs AutoFill.appex with a bare\n# `codesign --sign -`, ad hoc and with no entitlements at all (confirmed: `codesign -dvv\n# --entitlements :-` on the copied bundle showed none) — the same gap the two re-signs\n# above exist to fix, just for an app extension instead of a bare tool. Re-sign it here,\n# explicitly, with its real entitlements (Config/Entitlements/AutoFillExtension.entitlements)\n# so a real Apple Development/Developer ID identity (once 851-2400 lands a provisioning\n# profile) would seal them the same way this whole app is sealed — without this, even a\n# correctly-provisioned build would silently ship an extension with no\n# autofill-credential-provider/app-sandbox entitlements at all. `codesign` itself has no\n# provisioning-profile check (that's an Xcode build-system/AMFI concern, not this tool's),\n# so this succeeds today under ad-hoc signing exactly like the two re-signs above.\nPLUGINS=\"$TARGET_BUILD_DIR/$WRAPPER_NAME/Contents/PlugIns\"\ncodesign --force -o runtime --timestamp=none \\\n  --sign \"$IDENTITY\" --identifier com.851labs.lilpasswords.autofill \\\n  --entitlements \"$SRCROOT/Config/Entitlements/AutoFillExtension.entitlements\" \\\n  \"$PLUGINS/AutoFill.appex\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		3BF069C1EDB02361F5C88559 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5313B922C332863683680B80 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -428,6 +533,11 @@
 			target = 4807B7DB294ECA66F2907C7F /* LilPasswordsAgent */;
 			targetProxy = 85CF5696180923F9EE86BB69 /* PBXContainerItemProxy */;
 		};
+		7821C86DF7B3BA982ED1D903 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 48298E5FA57F8073D03F2BEE /* AutoFillExtension */;
+			targetProxy = 84DC6670B43AC067400B9DAE /* PBXContainerItemProxy */;
+		};
 		AFF7F6DB66C28A8088734966 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = C7BA3BBB2757E54A90FDA6C6 /* lilpass */;
@@ -436,6 +546,26 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		0E892B84E4D004864A23B042 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_ENTITLEMENTS = Config/Entitlements/AutoFillExtension.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = AutoFillExtension/Support/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.851labs.lilpasswords.autofill;
+				PRODUCT_NAME = AutoFill;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Release;
+		};
 		2EC5B3E941AC41F6AE05C591 /* Release */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 1552750737D8BD27B57FCF51 /* Base.xcconfig */;
@@ -564,6 +694,26 @@
 			};
 			name = Release;
 		};
+		8CBAEB129D2FD1D9DCF15F20 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_ENTITLEMENTS = Config/Entitlements/AutoFillExtension.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = AutoFillExtension/Support/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.851labs.lilpasswords.autofill;
+				PRODUCT_NAME = AutoFill;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Debug;
+		};
 		A3014E95082860AD0C915A49 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 1552750737D8BD27B57FCF51 /* Base.xcconfig */;
@@ -675,6 +825,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		30D10862368BD511C85593C8 /* Build configuration list for PBXNativeTarget "AutoFillExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8CBAEB129D2FD1D9DCF15F20 /* Debug */,
+				0E892B84E4D004864A23B042 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		421137312003CE382C4C37BB /* Build configuration list for PBXProject "LilPasswords" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -731,6 +890,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		0DC1BC2D86FF619359D8B36D /* LilPasswordsKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LilPasswordsKit;
+		};
 		23A2A855BC2ABEAE1636380C /* LilpassCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LilpassCore;

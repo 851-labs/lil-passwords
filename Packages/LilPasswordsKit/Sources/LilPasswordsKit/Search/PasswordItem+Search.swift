@@ -44,6 +44,16 @@ extension PasswordItem {
     guard let targetHost = url.host?.strippingLeadingWWW else { return false }
     return websites.contains { $0.host?.strippingLeadingWWW == targetHost }
   }
+
+  /// Same host comparison as ``matchesHost(of:)``, but from a raw host/domain string rather than a
+  /// full `URL` — 851-2441's AutoFill credential provider receives `ASCredentialServiceIdentifier`
+  /// values that are typically bare domains (e.g. `"netflix.com"`), not `URL`s: `URL(string:)` on a
+  /// scheme-less string like that leaves `.host` `nil` (the whole string parses as a path), so
+  /// `matchesHost(of:)` itself can't be reused directly for this caller.
+  public func matchesHost(ofServiceIdentifier identifier: String) -> Bool {
+    let targetHost = identifier.strippingLeadingWWW
+    return websites.contains { $0.host?.strippingLeadingWWW == targetHost }
+  }
 }
 
 extension String {

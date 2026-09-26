@@ -39,7 +39,11 @@ import Testing
       items: [PasswordItem] = [],
       accessPolicy: any AccessPolicyProviding = AlwaysAllowAccessPolicy(),
       connectionSecurity: AgentConnectionSecurity.Requirement = .developmentFallback(reason: "test"),
-      preseedVault: Bool = true
+      preseedVault: Bool = true,
+      // 851-2441: tests exercising `.autoFillIdentities`/`.autoFillCredential` need the in-process
+      // test peer trusted as the AutoFill extension too — see `Harness`'s own documentation on why
+      // this can't just fall back to `isDebugBuild` the way a real unsigned build would.
+      trustSelfAsAutoFillCaller: Bool = false
     ) async throws {
       let store = InMemoryVaultStore()
       let keyStore = InMemoryVaultKeyStore()
@@ -58,12 +62,14 @@ import Testing
       }
 
       let selfIdentity = CallerIdentityResolver.resolve(pid: ProcessInfo.processInfo.processIdentifier)
+      let resolvedSelfIdentifier = selfIdentity.bundleIdentifier ?? AgentConnectionSecurity.PeerIdentifier.app.rawValue
       server = AgentServer(
         vaultStore: store,
         vaultKeyStore: keyStore,
         accessPolicy: accessPolicy,
-        appCallerBundleIdentifier: selfIdentity.bundleIdentifier
-          ?? AgentConnectionSecurity.PeerIdentifier.app.rawValue
+        appCallerBundleIdentifier: resolvedSelfIdentifier,
+        autoFillCallerBundleIdentifier: trustSelfAsAutoFillCaller
+          ? resolvedSelfIdentifier : AgentConnectionSecurity.PeerIdentifier.autoFill.rawValue
       )
       listener = NSXPCListener.anonymous()
       delegate = AgentXPCListenerDelegate(server: server, connectionSecurity: connectionSecurity)
@@ -198,6 +204,58 @@ import Testing
 
     let totp = try await harness.client.totpCode(.id(item.id))
     #expect(totp.code.count == 6)
+  }
+
+  /// The ticket's "XPC request path" test for 851-2441: the AutoFill extension's actual request
+  /// flow — `prepareCredentialList(for:)` (`.autoFillIdentities`) followed by picking one result
+  /// and filling it (`.autoFillCredential`) — exercised over a real `NSXPCConnection`, not just
+  /// `AgentServer.handle(_:caller:)` directly.
+  @Test func autoFillIdentitiesThenAutoFillCredentialRoundTripOverXPC() async throws {
+    let wholeSecond = Date(timeIntervalSince1970: 1_700_000_000)
+    let item = PasswordItem(
+      title: "Netflix",
+      usernames: ["octocat"],
+      password: "hunter2",
+      websites: [URL(string: "https://www.netflix.com")!],
+      createdAt: wholeSecond,
+      modifiedAt: wholeSecond
+    )
+    let harness = try await Harness(items: [item], trustSelfAsAutoFillCaller: true)
+    try await harness.unlock()
+
+    let identities = try await harness.client.autoFillIdentities(serviceIdentifiers: ["netflix.com"])
+    #expect(identities.count == 1)
+    #expect(identities.first?.id == item.id)
+    #expect(identities.first?.username == "octocat")
+
+    let credential = try await harness.client.autoFillCredential(id: item.id)
+    #expect(credential.username == "octocat")
+    #expect(credential.password == "hunter2")
+
+    // Structurally can't reach `.list`/`.search`/etc., even over the real connection — see
+    // `AgentServerTests.autoFillCallerIsRejectedForEveryRequestExceptItsFive` for the exhaustive
+    // version of this assertion; this just spot-checks it survives the real XPC round trip too.
+    do {
+      _ = try await harness.client.list()
+      Issue.record("expected .list to throw")
+    } catch let AgentClient.RequestError.remote(error) {
+      #expect(error == .callerNotAuthorized)
+    }
+  }
+
+  @Test func autoFillCredentialFailsWithUserInteractionRequiredWhileLockedOverXPC() async throws {
+    let item = PasswordItem(title: "Netflix", usernames: ["octocat"], password: "hunter2")
+    let harness = try await Harness(items: [item], trustSelfAsAutoFillCaller: true)
+    // Deliberately never unlocked — mirrors `provideCredentialWithoutUserInteraction(for:)` racing
+    // an auto-lock, which must surface as `AgentError.locked` for the extension to translate into
+    // `ASExtensionError.userInteractionRequired`.
+
+    do {
+      _ = try await harness.client.autoFillCredential(id: item.id)
+      Issue.record("expected .autoFillCredential to throw")
+    } catch let AgentClient.RequestError.remote(error) {
+      #expect(error == .locked)
+    }
   }
 
   @Test func agentAccessDisabledSurfacesAsATypedErrorOverXPC() async throws {

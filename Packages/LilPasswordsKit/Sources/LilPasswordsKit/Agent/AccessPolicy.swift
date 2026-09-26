@@ -67,11 +67,18 @@ public struct AlwaysDenyAccessPolicy: AccessPolicyProviding {
 /// The app's own XPC connection is exempt from this toggle: the toggle exists to gate *agents*
 /// (`lilpass`, the MCP server, anything scripting against the vault), not the app whose Settings
 /// window the toggle lives in — a user who's turned agent access off has not asked their own app's
-/// item list/detail views to stop working. `AgentConnectionSecurity.requirement(acceptingPeers:)`
-/// only ever accepts connections from exactly two code-signed peers (`.app`, `.cli`; see its
-/// documentation), so by the time a `CallerIdentity` reaches here it is guaranteed to be one or the
-/// other — ``isAppCaller(_:)`` only has to tell those two apart, not defend against an arbitrary
-/// process.
+/// item list/detail views to stop working. 851-2441's AutoFill credential provider extension is
+/// exempt for the same reason but a different justification: it's not a background agent either —
+/// every connection from it is directly triggered by the user picking "lil passwords" in the
+/// system AutoFill UI, which itself requires unlocking the Mac/authenticating, so there's no
+/// scenario where turning agent access off should also turn off Safari/system AutoFill. (It's still
+/// far more restricted than the app — see `AgentServer.isRequestPermitted(_:for:)` — this exemption
+/// only concerns the 851-2428 toggle, not what operations it can reach at all.)
+/// `AgentConnectionSecurity.requirement(acceptingPeers:)` only ever accepts connections from
+/// exactly three code-signed peers (`.app`, `.cli`, `.autoFill`; see its documentation), so by the
+/// time a `CallerIdentity` reaches here it is guaranteed to be one of those three —
+/// ``isAppCaller(_:)``/``isAutoFillCaller(_:)`` only have to tell them apart, not defend against an
+/// arbitrary process.
 ///
 /// **Security history (851-2428 review):** this type used to be named `AppSettingsAccessPolicy` and
 /// read `AppSettings.agentAccessEnabled`/`.keepAgentAccessAvailableWhileMacUnlocked` straight out of
@@ -86,18 +93,22 @@ public struct AlwaysDenyAccessPolicy: AccessPolicyProviding {
 public struct AgentSettingsAccessPolicy: AccessPolicyProviding {
   private let store: any AgentSettingsStoring
   private let isAppCaller: @Sendable (CallerIdentity) -> Bool
+  private let isAutoFillCaller: @Sendable (CallerIdentity) -> Bool
 
   /// - Parameters:
   ///   - store: Where the 851-2428 settings actually live — required, with no default, since a
   ///     policy silently defaulting to some store here could too easily paper over production
   ///     wiring forgetting to share the same instance `AgentServer` writes through.
   ///   - isAppCaller: Overridable for tests. Defaults to ``defaultIsAppCaller(_:)``.
+  ///   - isAutoFillCaller: Overridable for tests. Defaults to ``defaultIsAutoFillCaller(_:)``.
   public init(
     store: any AgentSettingsStoring,
-    isAppCaller: @escaping @Sendable (CallerIdentity) -> Bool = AgentSettingsAccessPolicy.defaultIsAppCaller
+    isAppCaller: @escaping @Sendable (CallerIdentity) -> Bool = AgentSettingsAccessPolicy.defaultIsAppCaller,
+    isAutoFillCaller: @escaping @Sendable (CallerIdentity) -> Bool = AgentSettingsAccessPolicy.defaultIsAutoFillCaller
   ) {
     self.store = store
     self.isAppCaller = isAppCaller
+    self.isAutoFillCaller = isAutoFillCaller
   }
 
   public func isAgentAccessEnabled() async -> Bool {
@@ -105,7 +116,7 @@ public struct AgentSettingsAccessPolicy: AccessPolicyProviding {
   }
 
   public func isAccessAllowed(for caller: CallerIdentity) async -> Bool {
-    if isAppCaller(caller) { return true }
+    if isAppCaller(caller) || isAutoFillCaller(caller) { return true }
     return currentSettings().agentAccessEnabled
   }
 
@@ -132,5 +143,16 @@ public struct AgentSettingsAccessPolicy: AccessPolicyProviding {
   /// spoofable string, against the product name) was a security bug this delegation fixes.
   public static func defaultIsAppCaller(_ caller: CallerIdentity) -> Bool {
     caller.isVerifiedApp()
+  }
+
+  /// The 851-2441 counterpart to ``defaultIsAppCaller(_:)``: verified via the same
+  /// `CallerIdentity.isVerifiedApp(appBundleIdentifier:)`, just with the AutoFill extension's own
+  /// bundle identifier. Unlike `AgentServer.isAutoFillCaller(_:)` (which deliberately does *not* use
+  /// this method, for a *restrictive* check — see that method's documentation), this one only ever
+  /// *grants* an exemption, so falling back to the DEBUG "no resolvable bundle identifier" behavior
+  /// `isVerifiedApp` already has is safe here: it can only make an unsigned local/CI build's caller
+  /// exempt from the 851-2428 toggle too, never lock anything out.
+  public static func defaultIsAutoFillCaller(_ caller: CallerIdentity) -> Bool {
+    caller.isVerifiedApp(appBundleIdentifier: AgentConnectionSecurity.PeerIdentifier.autoFill.rawValue)
   }
 }

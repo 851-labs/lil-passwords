@@ -61,11 +61,12 @@ let server = AgentServer(
   agentSettingsStore: agentSettingsStore
 )
 
-// Accept only connections from the app or `lilpass`, validated against our own running process's
-// code-signing team identifier — see `AgentConnectionSecurity`'s documentation for why this reads
-// the team id from `self` rather than a hardcoded constant, and for the ad-hoc/unsigned-build
-// fallback (the default for local dev builds and CI; see `Config/Base.xcconfig`).
-let connectionSecurity = AgentConnectionSecurity.requirement(acceptingPeers: [.app, .cli])
+// Accept only connections from the app, `lilpass`, or (851-2441) the AutoFill credential provider
+// extension, validated against our own running process's code-signing team identifier — see
+// `AgentConnectionSecurity`'s documentation for why this reads the team id from `self` rather than
+// a hardcoded constant, and for the ad-hoc/unsigned-build fallback (the default for local dev
+// builds and CI; see `Config/Base.xcconfig`).
+let connectionSecurity = AgentConnectionSecurity.requirement(acceptingPeers: [.app, .cli, .autoFill])
 let listenerDelegate = AgentXPCListenerDelegate(server: server, connectionSecurity: connectionSecurity)
 
 let listener = NSXPCListener(machServiceName: AgentXPC.machServiceName)

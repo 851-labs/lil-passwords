@@ -511,7 +511,7 @@ extension AddVerificationCodeSheetController: NSTableViewDataSource, NSTableView
 
   func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
     guard filteredItems.indices.contains(row) else { return nil }
-    let cell = ItemRowCellView.dequeue(from: tableView, owner: self)
+    let cell = CredentialRowView.dequeue(from: tableView, owner: self)
     // This picker list doesn't use the item list's rounded, inset selection highlight (851-2463),
     // so there's no selection shape for a hairline to visually cut through — always show it.
     cell.configure(with: filteredItems[row], hidesSeparator: false)

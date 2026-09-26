@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	851-2441: unlike App/Agent/CLI's own (deliberately empty) entitlements files, this extension
+	needs real entitlements just to exist — an AutoFill credential provider is sandboxed and
+	extension-scoped by definition, not an optional hardening step. Both of the following are
+	*restricted* entitlements: AMFI kills a process that carries either one without a matching
+	provisioning profile from the signing team, the same empirically-confirmed failure mode
+	docs/adr/0001-storage-and-process-model.md documents for `keychain-access-groups`, and the same
+	one docs/adr/0005-autofill-credential-provider.md documents for this extension specifically.
+	That profile doesn't exist until the 851 Labs Apple Developer Program team is set up
+	(851-2400) — until then this target builds and embeds fine (ad-hoc/unsigned, `make build`
+	stays green) but AMFI will not let a locally-run copy actually load as a credential provider.
+	Documented on Linear 851-2441 for Alexandru; do not remove these keys to "fix" that — the
+	fix is a real provisioning profile, not a smaller entitlement set.
+	-->
+
+	<!-- Mandatory for any app extension, AutoFill or otherwise. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+
+	<!-- Registers this bundle as an AutoFill credential provider at all — without it, the
+	     extension point never shows up as a candidate in System Settings → General → AutoFill &
+	     Passwords, regardless of Info.plist's NSExtensionPointIdentifier. -->
+	<key>com.apple.developer.authentication-services.autofill-credential-provider</key>
+	<true/>
+
+	<!-- The extension is sandboxed but LilPasswordsAgent's Mach service
+	     (com.851labs.lilpasswords.agent.xpc) isn't app-group-scoped — the app and the CLI both
+	     reach it unsandboxed today, and adding an App Group would mean touching App/CLI/Agent's own
+	     entitlements (all currently empty, per those files' own comments) just for this one new
+	     peer. A temporary-exception mach-lookup is the narrower change: it grants exactly one
+	     named service lookup, nothing else, and every actual request this extension can make over
+	     that connection is still gated on the helper side by `AgentServer.isRequestPermitted(_:for:)`
+	     (see AgentServer.swift) — this entitlement only gets the XPC connection open, it grants no
+	     vault access by itself. -->
+	<key>com.apple.security.temporary-exception.mach-lookup-global-name</key>
+	<array>
+		<string>com.851labs.lilpasswords.agent.xpc</string>
+	</array>
+</dict>
+</plist>

@@ -168,6 +168,17 @@ enum AccessEventSummary {
     case .totpCode(let reference):
       return Summary(operation: "totpCode", itemId: reference.directId, itemTitle: nil, fields: ["totp"])
 
+    case .autoFillIdentities:
+      // 851-2441: no single item (a list, like `.list`/`.search`), and never a password — the
+      // response type itself (`[CredentialIdentity]`) structurally cannot carry one.
+      return Summary(operation: "autoFillIdentities", itemId: nil, itemTitle: nil, fields: ["username", "website"])
+
+    case .autoFillCredential(let id):
+      // Unlike `.getItem`, this can only ever have touched "username" and "password" — the
+      // response type (`AgentResponse.autoFillCredential(username:password:)`) has no other fields
+      // to report, by construction.
+      return Summary(operation: "autoFillCredential", itemId: id, itemTitle: nil, fields: ["username", "password"])
+
     case .status, .createVault, .unlock, .lock, .getAgentSettings, .setAgentSettings, .rotateRecoveryKey:
       preconditionFailure(
         "AgentServer never sends lock-lifecycle/helper-configuration requests to the access log"

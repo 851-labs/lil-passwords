@@ -50,6 +50,8 @@ import Testing
       .generatePassword(.appleStrong),
       .generatePassword(.custom(length: 20, characterCategories: .all)),
       .totpCode(.id(item.id)),
+      .autoFillIdentities(serviceIdentifiers: ["netflix.com", "github.com"]),
+      .autoFillCredential(id: item.id),
     ]
 
     for request in requests {
@@ -72,6 +74,16 @@ import Testing
       .deleted,
       .generatedPassword("abcdef-ghijk2-lmNopq"),
       .totpCode(TOTPCodeResult(code: "123456", expiresAt: Date(timeIntervalSince1970: 30))),
+      .autoFillIdentities([
+        CredentialIdentity(
+          id: item.id,
+          title: item.title,
+          username: "octocat",
+          website: URL(string: "https://netflix.com")
+        ),
+        CredentialIdentity(id: .v7(), title: "No website", username: "someone", website: nil),
+      ]),
+      .autoFillCredential(username: "octocat", password: "hunter2"),
     ]
 
     for response in responses {
