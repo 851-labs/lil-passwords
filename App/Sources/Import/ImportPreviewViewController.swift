@@ -37,7 +37,7 @@ final class ImportPreviewViewController: NSViewController {
     summaryField.textColor = .secondaryLabelColor
     summaryField.stringValue = summaryText()
 
-    let titleField = NSTextField(labelWithString: "Import Passwords")
+    let titleField = NSTextField(labelWithString: String(localized: "Import Passwords"))
     titleField.translatesAutoresizingMaskIntoConstraints = false
     titleField.font = .systemFont(ofSize: 16, weight: .semibold)
 
@@ -56,15 +56,20 @@ final class ImportPreviewViewController: NSViewController {
     scrollView.hasVerticalScroller = true
     scrollView.borderType = .bezelBorder
 
-    let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelTapped))
+    let cancelButton = NSButton(title: String(localized: "Cancel"), target: self, action: #selector(cancelTapped))
     cancelButton.translatesAutoresizingMaskIntoConstraints = false
     cancelButton.bezelStyle = .rounded
     cancelButton.keyEquivalent = "\u{1b}"
 
     importButton.translatesAutoresizingMaskIntoConstraints = false
-    importButton.title = "Import"
+    importButton.title = String(localized: "Import")
     importButton.bezelStyle = .rounded
     importButton.keyEquivalent = "\r"
+    // `keyEquivalent = "\r"` alone doesn't reliably paint this blue for a plain NSButton hosted
+    // in a custom sheet the way it does for NSAlert's own default button — review note (851-2426):
+    // "make Import the default (blue) button." `bezelColor` is the explicit, focus-independent way
+    // to opt a push button into that "prominent/default" tint.
+    importButton.bezelColor = .controlAccentColor
     importButton.target = self
     importButton.action = #selector(importTapped)
     importButton.isEnabled = !rows.isEmpty
@@ -99,8 +104,12 @@ final class ImportPreviewViewController: NSViewController {
   }
 
   private func summaryText() -> String {
-    "\(rows.newCount) new · \(rows.duplicateCount) duplicate (skipped) · \(rows.conflictCount) conflict"
-      + (rows.conflictCount == 1 ? "" : "s")
+    String(
+      localized: """
+        \(rows.newCount) new · \(rows.duplicateCount) duplicate (skipped) · \
+        \(rows.conflictCount) conflict\(rows.conflictCount == 1 ? "" : "s")
+        """
+    )
   }
 
   @objc private func cancelTapped() {

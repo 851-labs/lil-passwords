@@ -102,11 +102,15 @@ final class CodesViewController: NSViewController {
     addButton.translatesAutoresizingMaskIntoConstraints = false
     addButton.bezelStyle = .texturedRounded
     addButton.isBordered = false
-    addButton.image = NSImage(systemSymbolName: "plus.circle", accessibilityDescription: "Add Verification Code")
+    addButton.image = NSImage(
+      systemSymbolName: "plus.circle",
+      accessibilityDescription: String(localized: "Add Verification Code")
+    )
     addButton.imagePosition = .imageOnly
     addButton.target = self
     addButton.action = #selector(addVerificationCode(_:))
-    addButton.toolTip = "Add Verification Code"
+    addButton.toolTip = String(localized: "Add Verification Code")
+    addButton.setAccessibilityLabel(String(localized: "Add Verification Code"))
 
     headerBar.addSubview(countLabel)
     headerBar.addSubview(addButton)
@@ -182,7 +186,7 @@ final class CodesViewController: NSViewController {
     tableView.reloadData()
 
     let count = items.count
-    countLabel.stringValue = count == 1 ? "1 Code" : "\(count) Codes"
+    countLabel.stringValue = count == 1 ? String(localized: "1 Code") : String(localized: "\(count) Codes")
 
     let hasItems = !items.isEmpty
     headerBar.isHidden = false

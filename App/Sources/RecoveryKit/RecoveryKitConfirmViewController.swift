@@ -34,19 +34,22 @@ final class RecoveryKitConfirmViewController: NSViewController {
   }
 
   override func loadView() {
-    let titleField = NSTextField(labelWithString: "Confirm You Saved It")
+    let titleField = NSTextField(labelWithString: String(localized: "Confirm You Saved It"))
     titleField.font = .boldSystemFont(ofSize: 15)
 
     let subtitleField = NSTextField(
-      wrappingLabelWithString:
-        "To make sure you saved your \(appName) recovery key correctly, type its last group of "
-        + "characters below."
+      wrappingLabelWithString: String(
+        localized: """
+          To make sure you saved your \(appName) recovery key correctly, type its last group of \
+          characters below.
+          """
+      )
     )
     subtitleField.font = .systemFont(ofSize: 12)
     subtitleField.textColor = .secondaryLabelColor
 
     let field = NSTextField()
-    field.placeholderString = "Last group"
+    field.placeholderString = String(localized: "Last group")
     field.font = .monospacedSystemFont(ofSize: 16, weight: .regular)
     field.alignment = .center
     field.delegate = self
@@ -60,9 +63,12 @@ final class RecoveryKitConfirmViewController: NSViewController {
     error.isHidden = true
     errorLabel = error
 
-    let backButton = NSButton(title: "Back", target: self, action: #selector(backTapped))
-    let confirm = NSButton(title: "Confirm", target: self, action: #selector(confirmTapped))
+    let backButton = NSButton(title: String(localized: "Back"), target: self, action: #selector(backTapped))
+    let confirm = NSButton(title: String(localized: "Confirm"), target: self, action: #selector(confirmTapped))
     confirm.keyEquivalent = "\r"
+    // Same fix as `ImportPreviewViewController.importButton` (851-2426 tophat visual audit):
+    // `keyEquivalent = "\r"` alone doesn't reliably paint this blue in a custom sheet.
+    confirm.bezelColor = .controlAccentColor
     confirm.isEnabled = false
     confirmButton = confirm
 
@@ -104,7 +110,7 @@ final class RecoveryKitConfirmViewController: NSViewController {
     let typed = normalized(lastGroupField.stringValue)
     guard !typed.isEmpty else { return }
     guard typed == normalized(expectedLastGroup) else {
-      errorLabel.stringValue = "That doesn't match the last group of your recovery key. Try again."
+      errorLabel.stringValue = String(localized: "That doesn't match the last group of your recovery key. Try again.")
       errorLabel.isHidden = false
       return
     }

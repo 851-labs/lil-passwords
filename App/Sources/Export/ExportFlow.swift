@@ -16,12 +16,15 @@ enum ExportFlow {
   static func makePlaintextWarningAlert() -> NSAlert {
     let alert = NSAlert()
     alert.alertStyle = .warning
-    alert.messageText = "This File Will Contain Your Passwords in Plain Text"
-    alert.informativeText =
-      "Anyone with access to the exported file can read every password and two-factor code in it, "
-      + "unprotected. Store it somewhere safe, and delete it as soon as you're done with it."
-    alert.addButton(withTitle: "Continue")
-    alert.addButton(withTitle: "Cancel")
+    alert.messageText = String(localized: "This File Will Contain Your Passwords in Plain Text")
+    alert.informativeText = String(
+      localized: """
+        Anyone with access to the exported file can read every password and two-factor code in it, \
+        unprotected. Store it somewhere safe, and delete it as soon as you're done with it.
+        """
+    )
+    alert.addButton(withTitle: String(localized: "Continue"))
+    alert.addButton(withTitle: String(localized: "Cancel"))
     return alert
   }
 
@@ -34,11 +37,11 @@ enum ExportFlow {
     Task {
       do {
         try await deviceAuthenticator.authenticate(
-          reason: "authenticate to export all your passwords as a plaintext file"
+          reason: String(localized: "authenticate to export all your passwords as a plaintext file")
         )
       } catch {
         presentFailureAlert(
-          message: "Authentication failed, so nothing was exported.",
+          message: String(localized: "Authentication failed, so nothing was exported."),
           over: parentWindow
         )
         return
@@ -54,9 +57,9 @@ enum ExportFlow {
 
   private static func presentSavePanel(dataSource: VaultViewModel, from parentWindow: NSWindow) {
     let panel = NSSavePanel()
-    panel.title = "Export All Passwords"
-    panel.prompt = "Export"
-    panel.nameFieldStringValue = "\(LilPasswordsKit.productName) Export.csv"
+    panel.title = String(localized: "Export All Passwords")
+    panel.prompt = String(localized: "Export")
+    panel.nameFieldStringValue = String(localized: "\(LilPasswordsKit.productName) Export.csv")
     panel.allowedContentTypes = [.commaSeparatedText]
 
     panel.beginSheetModal(for: parentWindow) { response in
@@ -67,7 +70,7 @@ enum ExportFlow {
         presentSuccessAlert(count: dataSource.items.filter { $0.deletedAt == nil }.count, over: parentWindow)
       } catch {
         presentFailureAlert(
-          message: "The file couldn't be written: \(error.localizedDescription)",
+          message: String(localized: "The file couldn't be written: \(error.localizedDescription)"),
           over: parentWindow
         )
       }
@@ -77,15 +80,17 @@ enum ExportFlow {
   private static func presentSuccessAlert(count: Int, over window: NSWindow) {
     let alert = NSAlert()
     alert.alertStyle = .informational
-    alert.messageText = "Exported \(count) Password\(count == 1 ? "" : "s")"
-    alert.informativeText = "Remember to delete the exported file once you're done with it — it's plain text."
+    alert.messageText = String(localized: "Exported \(count) Password\(count == 1 ? "" : "s")")
+    alert.informativeText = String(
+      localized: "Remember to delete the exported file once you're done with it — it's plain text."
+    )
     alert.beginSheetModal(for: window)
   }
 
   private static func presentFailureAlert(message: String, over window: NSWindow) {
     let alert = NSAlert()
     alert.alertStyle = .critical
-    alert.messageText = "Couldn't Export Passwords"
+    alert.messageText = String(localized: "Couldn't Export Passwords")
     alert.informativeText = message
     alert.beginSheetModal(for: window)
   }

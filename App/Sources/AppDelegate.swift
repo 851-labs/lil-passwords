@@ -112,11 +112,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     guard let window = mainWindowController?.window else { return }
     let alert = NSAlert()
     alert.alertStyle = .informational
-    alert.messageText = "Allow \(LilPasswordsKit.productName) to Run in the Background"
-    alert.informativeText =
-      "\(LilPasswordsKit.productName) needs its helper turned on in Login Items to lock and unlock your vault. Open System Settings and enable it, then reopen \(LilPasswordsKit.productName)."
-    alert.addButton(withTitle: "Open System Settings")
-    alert.addButton(withTitle: "Not Now")
+    alert.messageText = String(localized: "Allow \(LilPasswordsKit.productName) to Run in the Background")
+    alert.informativeText = String(
+      localized:
+        "\(LilPasswordsKit.productName) needs its helper turned on in Login Items to lock and unlock your vault. Open System Settings and enable it, then reopen \(LilPasswordsKit.productName)."
+    )
+    alert.addButton(withTitle: String(localized: "Open System Settings"))
+    alert.addButton(withTitle: String(localized: "Not Now"))
     alert.beginSheetModal(for: window) { [helperAgentRegistrar] response in
       guard response == .alertFirstButtonReturn else { return }
       helperAgentRegistrar.openSystemSettingsLoginItems()

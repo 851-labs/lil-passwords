@@ -16,12 +16,14 @@ final class ItemPreviewView: NSView {
   private let passwordField = NSTextField(labelWithString: "")
   private let notesField = NSTextField(wrappingLabelWithString: "")
   private let revealButton = NSButton(
-    image: NSImage(systemSymbolName: "eye", accessibilityDescription: "Reveal Password") ?? NSImage(),
+    image: NSImage(systemSymbolName: "eye", accessibilityDescription: String(localized: "Reveal Password"))
+      ?? NSImage(),
     target: nil,
     action: nil
   )
   private let copyButton = NSButton(
-    image: NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: "Copy Password") ?? NSImage(),
+    image: NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: String(localized: "Copy Password"))
+      ?? NSImage(),
     target: nil,
     action: nil
   )
@@ -107,7 +109,8 @@ final class ItemPreviewView: NSView {
     passwordField.stringValue = isRevealed ? password : String(repeating: "•", count: max(password.count, 8))
     revealButton.image = NSImage(
       systemSymbolName: isRevealed ? "eye.slash" : "eye",
-      accessibilityDescription: isRevealed ? "Hide Password" : "Reveal Password"
+      accessibilityDescription: isRevealed
+        ? String(localized: "Hide Password") : String(localized: "Reveal Password")
     )
   }
 }

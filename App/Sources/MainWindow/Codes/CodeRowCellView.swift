@@ -15,7 +15,7 @@ final class CodeRowCellView: NSTableCellView {
   private let subtitleField = NSTextField(labelWithString: "")
   private let codeField = NSTextField(labelWithString: "")
   private let ringView = CodeCountdownRingView()
-  private let copiedLabel = NSTextField(labelWithString: "Copied")
+  private let copiedLabel = NSTextField(labelWithString: String(localized: "Copied"))
 
   /// The item currently bound to this cell, kept so a stray, already-scheduled `flashCopied()`
   /// from a previous row (before reuse) can't paint over a different item's cell.
@@ -113,6 +113,11 @@ final class CodeRowCellView: NSTableCellView {
     } else {
       codeField.stringValue = ""
     }
+
+    // A meaningful VoiceOver description for the whole row (851-2426), matching the pattern used
+    // for the other list-style rows in the app.
+    setAccessibilityElement(true)
+    setAccessibilityLabel(String(localized: "\(item.title), \(subtitleText(for: item))"))
   }
 
   /// Refreshes only the code text and countdown ring, without touching the icon/title/subtitle —
@@ -150,7 +155,7 @@ final class CodeRowCellView: NSTableCellView {
   private func subtitleText(for item: PasswordItem) -> String {
     if let uri = item.totpURI, let url = URL(string: uri), let parsed = try? OTPAuthURI(url: url) {
       if let issuer = parsed.issuer, !issuer.isEmpty, issuer != item.title {
-        return "\(issuer) · \(parsed.accountName)"
+        return String(localized: "\(issuer) · \(parsed.accountName)")
       }
       return parsed.accountName
     }

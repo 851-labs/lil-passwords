@@ -1,0 +1,961 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "%@ Command Installed" : {
+
+    },
+    "%@ couldn't capture the screen. Check that it has Screen Recording " : {
+
+    },
+    "%@ Export.csv" : {
+
+    },
+    "%@ Help" : {
+
+    },
+    "%@ is locked" : {
+
+    },
+    "%@ Isn't Available Yet" : {
+
+    },
+    "%@ locks and requires Touch ID or your password again after this much inactivity." : {
+
+    },
+    "%@ needs its helper turned on in Login Items to lock and unlock your vault. Open System Settings and enable it, then reopen %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ needs its helper turned on in Login Items to lock and unlock your vault. Open System Settings and enable it, then reopen %2$@."
+          }
+        }
+      }
+    },
+    "%@ Recovery Kit" : {
+
+    },
+    "%@ Recovery Kit.pdf" : {
+
+    },
+    "%@, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "%@, %@ remaining before permanent deletion" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@ remaining before permanent deletion"
+          }
+        }
+      }
+    },
+    "%@, %@: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@: %3$@"
+          }
+        }
+      }
+    },
+    "%@: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@"
+          }
+        }
+      }
+    },
+    "%lld Codes" : {
+
+    },
+    "%lld days" : {
+
+    },
+    "%lld days remaining before permanent deletion" : {
+
+    },
+    "%lld items" : {
+
+    },
+    "%lld Items" : {
+
+    },
+    "%lld items selected" : {
+
+    },
+    "%lld Items Selected" : {
+
+    },
+    "%lld new · %lld duplicate (skipped) · %lld conflict%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld new · %2$lld duplicate (skipped) · %3$lld conflict%4$@"
+          }
+        }
+      }
+    },
+    "%lld." : {
+
+    },
+    "1 Code" : {
+
+    },
+    "1 day" : {
+
+    },
+    "1 day remaining before permanent deletion" : {
+
+    },
+    "1 item" : {
+
+    },
+    "1 Item" : {
+
+    },
+    "1. Open the Passwords app.\n2. Choose File → Export All Passwords…\n3. Authenticate, then choose where to save the CSV file.\n4. Select that file here to import it." : {
+
+    },
+    "A different program is at %@ (%@)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A different program is at %1$@ (%2$@)"
+          }
+        }
+      }
+    },
+    "About %@" : {
+
+    },
+    "Access Log" : {
+
+    },
+    "Account Name" : {
+
+    },
+    "Add" : {
+
+    },
+    "Add Automatically" : {
+
+    },
+    "Add Code for %@" : {
+
+    },
+    "Add Username" : {
+
+    },
+    "Add Verification Code" : {
+
+    },
+    "Add Website" : {
+
+    },
+    "Agent" : {
+
+    },
+    "Agents" : {
+
+    },
+    "All Passwords" : {
+
+    },
+    "Allow %@ to Run in the Background" : {
+
+    },
+    "Allow agents to access passwords" : {
+
+    },
+    "Allow agents to create, edit, and delete passwords" : {
+
+    },
+    "Anyone with access to the exported file can read every password and two-factor code in it, unprotected. Store it somewhere safe, and delete it as soon as you're done with it." : {
+
+    },
+    "Applies to the custom password format; Apple's Strong Password suggestion is always 20 characters." : {
+
+    },
+    "Ascending" : {
+
+    },
+    "authenticate to export all your passwords as a plaintext file" : {
+
+    },
+    "authenticate to generate a new recovery key" : {
+
+    },
+    "Authentication failed, so no new recovery key was generated." : {
+
+    },
+    "Authentication failed, so nothing was exported." : {
+
+    },
+    "Auto-Lock" : {
+
+    },
+    "Back" : {
+
+    },
+    "Bring All to Front" : {
+
+    },
+    "Cancel" : {
+
+    },
+    "Category" : {
+
+    },
+    "Change Password on Website" : {
+
+    },
+    "Check for Updates…" : {
+
+    },
+    "Choose a Different File…" : {
+
+    },
+    "Choose an image containing this item's verification code QR code." : {
+
+    },
+    "Choose QR Image File…" : {
+
+    },
+    "Choose which item this verification code belongs to." : {
+
+    },
+    "Clear Clipboard" : {
+
+    },
+    "Clear Log" : {
+
+    },
+    "Close Window" : {
+
+    },
+    "Code" : {
+
+    },
+    "Command Line Tool" : {
+
+    },
+    "Configured differently" : {
+
+    },
+    "Confirm" : {
+
+    },
+    "Confirm You Saved It" : {
+
+    },
+    "Connect Agents" : {
+
+    },
+    "Connected" : {
+
+    },
+    "Continue" : {
+
+    },
+    "Continue…" : {
+
+    },
+    "Copied" : {
+
+    },
+    "Copied passwords and verification codes are removed from the clipboard automatically." : {
+
+    },
+    "Copy" : {
+
+    },
+    "Copy %@" : {
+
+    },
+    "Copy Key" : {
+
+    },
+    "Copy Password" : {
+
+    },
+    "Copy Setup" : {
+
+    },
+    "Copy Username" : {
+
+    },
+    "Copy Verification Code" : {
+
+    },
+    "Couldn't create your vault: %@" : {
+
+    },
+    "Couldn't Export Passwords" : {
+
+    },
+    "Couldn't Generate a New Recovery Key" : {
+
+    },
+    "Couldn't install the %@ command: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't install the %1$@ command: %2$@"
+          }
+        }
+      }
+    },
+    "Couldn't move the file to the Trash: %@" : {
+
+    },
+    "Couldn't Read That File" : {
+
+    },
+    "Couldn't remove the %@ command: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't remove the %1$@ command: %2$@"
+          }
+        }
+      }
+    },
+    "Couldn't set up %@ automatically. Try Copy Setup instead." : {
+
+    },
+    "Created" : {
+
+    },
+    "Cut" : {
+
+    },
+    "Date Created" : {
+
+    },
+    "Date Edited" : {
+
+    },
+    "Date Modified" : {
+
+    },
+    "Delete" : {
+
+    },
+    "Delete “%@” Permanently?" : {
+
+    },
+    "Delete %lld Items Permanently?" : {
+
+    },
+    "Delete All" : {
+
+    },
+    "Delete Permanently" : {
+
+    },
+    "Delete Permanently…" : {
+
+    },
+    "Descending" : {
+
+    },
+    "Detect a QR code currently on screen" : {
+
+    },
+    "Done" : {
+
+    },
+    "Edit" : {
+
+    },
+    "Enter Setup Key" : {
+
+    },
+    "Enter the recovery key you saved when you set up %@." : {
+
+    },
+    "Enter your recovery key." : {
+
+    },
+    "example.com" : {
+
+    },
+    "Export" : {
+
+    },
+    "Export All Passwords" : {
+
+    },
+    "Export All Passwords…" : {
+
+    },
+    "Exported %lld Password%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Exported %1$lld Password%2$@"
+          }
+        }
+      }
+    },
+    "Fields" : {
+
+    },
+    "File" : {
+
+    },
+    "Filter" : {
+
+    },
+    "Find" : {
+
+    },
+    "General" : {
+
+    },
+    "Generate a New Recovery Key?" : {
+
+    },
+    "Generate New Key" : {
+
+    },
+    "Generate New Recovery Key…" : {
+
+    },
+    "has verification code" : {
+
+    },
+    "Help" : {
+
+    },
+    "Hide %@" : {
+
+    },
+    "Hide Others" : {
+
+    },
+    "Hide Password" : {
+
+    },
+    "Hide Security Warning" : {
+
+    },
+    "How would you like to add this verification code?" : {
+
+    },
+    "Import" : {
+
+    },
+    "Import a QR code from an image" : {
+
+    },
+    "Import Passwords" : {
+
+    },
+    "Import Passwords…" : {
+
+    },
+    "Imported %lld %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Imported %1$lld %2$@"
+          }
+        }
+      }
+    },
+    "Include symbols (!@#$…)" : {
+
+    },
+    "Install \"%@\" Command" : {
+
+    },
+    "Install %@ Command…" : {
+
+    },
+    "Installed at %@" : {
+
+    },
+    "Installed to %@." : {
+
+    },
+    "Installed to %@. If your terminal can't find it, add ~/.local/bin to your shell's PATH." : {
+
+    },
+    "Installs a \"%@\" command so agents (and you) can use it from a terminal." : {
+
+    },
+    "Invalid Verification Code URI" : {
+
+    },
+    "Issuer (e.g. GitHub)" : {
+
+    },
+    "Item" : {
+
+    },
+    "Keep agent access available while the Mac is unlocked" : {
+
+    },
+    "Last group" : {
+
+    },
+    "List Actions" : {
+
+    },
+    "Menu Bar" : {
+
+    },
+    "Minimize" : {
+
+    },
+    "Move CSV to Trash" : {
+
+    },
+    "Move Down" : {
+
+    },
+    "Move Up" : {
+
+    },
+    "Moved to Trash." : {
+
+    },
+    "Name" : {
+
+    },
+    "Network" : {
+
+    },
+    "New Item" : {
+
+    },
+    "New Passkey…" : {
+
+    },
+    "New Password" : {
+
+    },
+    "New password length: %lld characters" : {
+
+    },
+    "New Password…" : {
+
+    },
+    "New Passwords" : {
+
+    },
+    "New Secure Note…" : {
+
+    },
+    "New Wi-Fi Password…" : {
+
+    },
+    "No %@ Selected" : {
+
+    },
+    "No agent activity yet." : {
+
+    },
+    "No display was available to capture." : {
+
+    },
+    "No Item Selected" : {
+
+    },
+    "No notes." : {
+
+    },
+    "No Passwords" : {
+
+    },
+    "No Results" : {
+
+    },
+    "No Special Characters" : {
+
+    },
+    "No vault was found to restore." : {
+
+    },
+    "No Verification Code Found" : {
+
+    },
+    "No verification code QR code was found on screen. Make sure it's visible, then try again." : {
+
+    },
+    "No verification code." : {
+
+    },
+    "Not connected" : {
+
+    },
+    "Not installed" : {
+
+    },
+    "Not Now" : {
+
+    },
+    "Notes" : {
+
+    },
+    "OK" : {
+
+    },
+    "One of the characters looks mistyped. Double-check each group and try again." : {
+
+    },
+    "Open %@" : {
+
+    },
+    "Open in Browser" : {
+
+    },
+    "Open Login Items…" : {
+
+    },
+    "Open Security Settings…" : {
+
+    },
+    "Open System Settings" : {
+
+    },
+    "Other Passwords" : {
+
+    },
+    "Otherwise, agent access follows %@' own auto-lock." : {
+
+    },
+    "otpauth://totp/..." : {
+
+    },
+    "Passkey" : {
+
+    },
+    "Password" : {
+
+    },
+    "Password Copied" : {
+
+    },
+    "Password Options" : {
+
+    },
+    "Paste" : {
+
+    },
+    "Paste the otpauth:// setup URI from your two-factor provider." : {
+
+    },
+    "permission in System Settings > Privacy & Security, then try again." : {
+
+    },
+    "Print…" : {
+
+    },
+    "Quit %@" : {
+
+    },
+    "Recover" : {
+
+    },
+    "Recover All" : {
+
+    },
+    "Redo" : {
+
+    },
+    "Regenerate Password" : {
+
+    },
+    "Remember to delete the exported file once you're done with it — it's plain text." : {
+
+    },
+    "Remove" : {
+
+    },
+    "Remove Verification Code" : {
+
+    },
+    "Restore" : {
+
+    },
+    "Restore %@ Vault" : {
+
+    },
+    "Restore Your Vault" : {
+
+    },
+    "Results" : {
+
+    },
+    "Reveal Password" : {
+
+    },
+    "Save" : {
+
+    },
+    "Save PDF…" : {
+
+    },
+    "Save Your Recovery Key" : {
+
+    },
+    "Scan Screen for QR Code" : {
+
+    },
+    "Search" : {
+
+    },
+    "Search Passwords" : {
+
+    },
+    "Security" : {
+
+    },
+    "Security Recommendations" : {
+
+    },
+    "Select All" : {
+
+    },
+    "Select an item to recover it or delete it permanently." : {
+
+    },
+    "Services" : {
+
+    },
+    "Set Up Verification Code" : {
+
+    },
+    "Set Up Verification Code…" : {
+
+    },
+    "Settings" : {
+
+    },
+    "Settings…" : {
+
+    },
+    "Setup Key" : {
+
+    },
+    "Shared Groups" : {
+
+    },
+    "Show All" : {
+
+    },
+    "Show in menu bar" : {
+
+    },
+    "Show Sidebar" : {
+
+    },
+    "Sidebar" : {
+
+    },
+    "So agents (and you) can use %@ from a terminal." : {
+
+    },
+    "Something else is already at %@ (pointing to %@). Installing will replace it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Something else is already at %1$@ (pointing to %2$@). Installing will replace it."
+          }
+        }
+      }
+    },
+    "Something went wrong generating the new key." : {
+
+    },
+    "Something went wrong restoring this vault. Please try again." : {
+
+    },
+    "Sort" : {
+
+    },
+    "Sort By" : {
+
+    },
+    "Sort By Date Created" : {
+
+    },
+    "Sort By Date Modified" : {
+
+    },
+    "Sort By Name" : {
+
+    },
+    "Suggest passwords for the current website" : {
+
+    },
+    "Suggested" : {
+
+    },
+    "That doesn't look like a full recovery key — check that you typed every group." : {
+
+    },
+    "That doesn't look like a valid otpauth:// setup URI." : {
+
+    },
+    "That doesn't match the last group of your recovery key. Try again." : {
+
+    },
+    "That file couldn't be opened: %@" : {
+
+    },
+    "That file couldn't be read as a CSV: %@" : {
+
+    },
+    "That file didn't contain any passwords to import." : {
+
+    },
+    "That file's format wasn't recognized as one this app can import." : {
+
+    },
+    "That image doesn't seem to contain a verification code QR code." : {
+
+    },
+    "That setup key doesn't look valid. Double-check it and try again." : {
+
+    },
+    "The file couldn't be written: %@" : {
+
+    },
+    "The file you imported from contains your passwords in plain text. For your security, delete it once you've confirmed the import." : {
+
+    },
+    "This can't be undone." : {
+
+    },
+    "This File Will Contain Your Passwords in Plain Text" : {
+
+    },
+    "This key is the only way to restore your %@ vault on a new Mac, or if this Mac's Keychain is ever lost. It's shown once, right now — save the PDF, print it, or copy the key below before you continue." : {
+
+    },
+    "This recovery key doesn't match this vault. Double-check each group and try again." : {
+
+    },
+    "This will work once %@ is done." : {
+
+    },
+    "Time" : {
+
+    },
+    "Title" : {
+
+    },
+    "To export your passwords from Apple Passwords:" : {
+
+    },
+    "To make sure you saved your %@ recovery key correctly, type its last group of characters below." : {
+
+    },
+    "Touch ID" : {
+
+    },
+    "Touch ID or enter your password to continue." : {
+
+    },
+    "Try a different search." : {
+
+    },
+    "Try Again" : {
+
+    },
+    "Type in a code manually" : {
+
+    },
+    "Undo" : {
+
+    },
+    "Uninstall" : {
+
+    },
+    "Unlock…" : {
+
+    },
+    "Untitled" : {
+
+    },
+    "Use Password…" : {
+
+    },
+    "user" : {
+
+    },
+    "User Name" : {
+
+    },
+    "User Names" : {
+
+    },
+    "Username or Email" : {
+
+    },
+    "Verification Code" : {
+
+    },
+    "Verification code is set up." : {
+
+    },
+    "View" : {
+
+    },
+    "Warn about compromised or reused passwords" : {
+
+    },
+    "Website" : {
+
+    },
+    "Will be deleted permanently today" : {
+
+    },
+    "Window" : {
+
+    },
+    "XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" : {
+
+    },
+    "Your current recovery key will stop working immediately. Make sure you save the new one somewhere safe — there's no way to see it again later." : {
+
+    },
+    "Zoom" : {
+
+    }
+  },
+  "version" : "1.0"
+}

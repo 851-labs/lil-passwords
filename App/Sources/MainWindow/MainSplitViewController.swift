@@ -149,4 +149,8 @@ extension MainSplitViewController: ItemListViewControllerDelegate {
       detailViewController.showMultipleSelection(count: items.count)
     }
   }
+
+  func itemListViewControllerDidRequestEdit(_ controller: ItemListViewController) {
+    detailViewController.beginEditingCurrentItem()
+  }
 }

@@ -25,7 +25,7 @@ final class NotesRowView: NSView {
 
     readLabel.font = .systemFont(ofSize: 13)
     readLabel.textColor = .secondaryLabelColor
-    readLabel.stringValue = notes.isEmpty ? "No notes." : notes
+    readLabel.stringValue = notes.isEmpty ? String(localized: "No notes.") : notes
     readLabel.translatesAutoresizingMaskIntoConstraints = false
 
     textView.string = notes

@@ -26,7 +26,7 @@ final class RestoreVaultSheetController: NSWindowController {
   private init(store: any VaultStoring, appName: String) {
     self.store = store
     let window = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
-    window.title = "Restore \(appName) Vault"
+    window.title = String(localized: "Restore \(appName) Vault")
     super.init(window: window)
     buildContent(appName: appName)
   }
@@ -58,17 +58,19 @@ final class RestoreVaultSheetController: NSWindowController {
   }
 
   private func buildContent(appName: String) {
-    let titleField = NSTextField(labelWithString: "Restore Your Vault")
+    let titleField = NSTextField(labelWithString: String(localized: "Restore Your Vault"))
     titleField.font = .boldSystemFont(ofSize: 15)
 
     let subtitleField = NSTextField(
-      wrappingLabelWithString: "Enter the recovery key you saved when you set up \(appName)."
+      wrappingLabelWithString: String(
+        localized: "Enter the recovery key you saved when you set up \(appName)."
+      )
     )
     subtitleField.font = .systemFont(ofSize: 12)
     subtitleField.textColor = .secondaryLabelColor
 
     let field = NSTextField()
-    field.placeholderString = "XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
+    field.placeholderString = String(localized: "XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX")
     field.font = .monospacedSystemFont(ofSize: 14, weight: .regular)
     field.delegate = self
     field.target = self
@@ -88,9 +90,12 @@ final class RestoreVaultSheetController: NSWindowController {
     progress.isDisplayedWhenStopped = false
     progressIndicator = progress
 
-    let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelTapped))
-    let restore = NSButton(title: "Restore", target: self, action: #selector(restoreTapped))
+    let cancelButton = NSButton(title: String(localized: "Cancel"), target: self, action: #selector(cancelTapped))
+    let restore = NSButton(title: String(localized: "Restore"), target: self, action: #selector(restoreTapped))
     restore.keyEquivalent = "\r"
+    // Same fix as `ImportPreviewViewController.importButton` (851-2426 tophat visual audit):
+    // `keyEquivalent = "\r"` alone doesn't reliably paint this blue in a custom sheet.
+    restore.bezelColor = .controlAccentColor
     restore.isEnabled = false
     restoreButton = restore
 
@@ -148,13 +153,15 @@ final class RestoreVaultSheetController: NSWindowController {
         self?.finish(outcome: .restored(key))
       } catch VaultStoreError.incorrectKey {
         self?.setLoading(false)
-        self?.show(error: "This recovery key doesn't match this vault. Double-check each group and try again.")
+        self?.show(
+          error: String(localized: "This recovery key doesn't match this vault. Double-check each group and try again.")
+        )
       } catch VaultStoreError.vaultNotFound {
         self?.setLoading(false)
-        self?.show(error: "No vault was found to restore.")
+        self?.show(error: String(localized: "No vault was found to restore."))
       } catch {
         self?.setLoading(false)
-        self?.show(error: "Something went wrong restoring this vault. Please try again.")
+        self?.show(error: String(localized: "Something went wrong restoring this vault. Please try again."))
       }
     }
   }
@@ -172,11 +179,11 @@ final class RestoreVaultSheetController: NSWindowController {
   private func message(for error: VaultCrypto.RecoveryKey.ValidationError) -> String {
     switch error {
     case .empty:
-      return "Enter your recovery key."
+      return String(localized: "Enter your recovery key.")
     case .wrongLength:
-      return "That doesn't look like a full recovery key — check that you typed every group."
+      return String(localized: "That doesn't look like a full recovery key — check that you typed every group.")
     case .checksumMismatch:
-      return "One of the characters looks mistyped. Double-check each group and try again."
+      return String(localized: "One of the characters looks mistyped. Double-check each group and try again.")
     }
   }
 

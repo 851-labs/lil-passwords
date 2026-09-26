@@ -33,32 +33,41 @@ final class ImportHelpViewController: NSViewController {
     emptyState.translatesAutoresizingMaskIntoConstraints = false
     emptyState.configure(
       symbolName: "exclamationmark.triangle",
-      title: "Couldn't Read That File",
+      title: String(localized: "Couldn't Read That File"),
       message: message
     )
 
-    let stepsTitle = NSTextField(labelWithString: "To export your passwords from Apple Passwords:")
+    let stepsTitle = NSTextField(
+      labelWithString: String(localized: "To export your passwords from Apple Passwords:")
+    )
     stepsTitle.translatesAutoresizingMaskIntoConstraints = false
     stepsTitle.font = .systemFont(ofSize: 12, weight: .semibold)
 
     let steps = NSTextField(
-      wrappingLabelWithString: """
-        1. Open the Passwords app.
-        2. Choose File → Export All Passwords…
-        3. Authenticate, then choose where to save the CSV file.
-        4. Select that file here to import it.
-        """
+      wrappingLabelWithString: String(
+        localized: """
+          1. Open the Passwords app.
+          2. Choose File → Export All Passwords…
+          3. Authenticate, then choose where to save the CSV file.
+          4. Select that file here to import it.
+          """
+      )
     )
     steps.translatesAutoresizingMaskIntoConstraints = false
     steps.font = .systemFont(ofSize: 12)
     steps.textColor = .secondaryLabelColor
 
-    let chooseButton = NSButton(title: "Choose a Different File…", target: self, action: #selector(chooseTapped))
+    let chooseButton = NSButton(
+      title: String(localized: "Choose a Different File…"), target: self, action: #selector(chooseTapped)
+    )
     chooseButton.translatesAutoresizingMaskIntoConstraints = false
     chooseButton.bezelStyle = .rounded
     chooseButton.keyEquivalent = "\r"
+    // Same fix as `ImportPreviewViewController.importButton` (851-2426 tophat visual audit):
+    // `keyEquivalent = "\r"` alone doesn't reliably paint this blue in a custom sheet.
+    chooseButton.bezelColor = .controlAccentColor
 
-    let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelTapped))
+    let cancelButton = NSButton(title: String(localized: "Cancel"), target: self, action: #selector(cancelTapped))
     cancelButton.translatesAutoresizingMaskIntoConstraints = false
     cancelButton.bezelStyle = .rounded
     cancelButton.keyEquivalent = "\u{1b}"

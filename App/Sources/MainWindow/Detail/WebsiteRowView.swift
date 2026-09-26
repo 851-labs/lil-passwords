@@ -6,8 +6,10 @@ import AppKit
 final class WebsiteRowView: NSView {
   private let valueField = NSTextField(labelWithString: "")
   private let openButton = NSButton(
-    image: NSImage(systemSymbolName: "arrow.up.forward.square", accessibilityDescription: "Open in Browser")
-      ?? NSImage(),
+    image: NSImage(
+      systemSymbolName: "arrow.up.forward.square",
+      accessibilityDescription: String(localized: "Open in Browser")
+    ) ?? NSImage(),
     target: nil,
     action: nil
   )
@@ -34,10 +36,11 @@ final class WebsiteRowView: NSView {
     openButton.isBordered = false
     openButton.bezelStyle = .inline
     openButton.contentTintColor = .secondaryLabelColor
-    openButton.toolTip = "Open in Browser"
+    openButton.toolTip = String(localized: "Open in Browser")
     openButton.target = self
     openButton.action = #selector(openTapped)
     openButton.translatesAutoresizingMaskIntoConstraints = false
+    openButton.setAccessibilityLabel(String(localized: "Open in Browser"))
 
     addSubview(valueField)
     addSubview(openButton)

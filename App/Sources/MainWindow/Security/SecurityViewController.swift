@@ -22,6 +22,10 @@ final class SecurityViewController: NSViewController {
   private var cancellable: AnyCancellable?
   private var rows: [Row] = []
   private var itemsByID: [UUID: PasswordItem] = [:]
+  /// The table's width the last time row heights were computed for it — `heightOfRow` wraps
+  /// each finding's reason text to this width (851-2426), so a resize (which changes where that
+  /// text wraps) must invalidate the cached heights, not just leave the old ones in place.
+  private var lastKnownTableWidth: CGFloat = 0
 
   private let headerBar = NSView()
   private let countLabel = NSTextField(labelWithString: "")
@@ -81,6 +85,14 @@ final class SecurityViewController: NSViewController {
     rebuildRows()
   }
 
+  override func viewDidLayout() {
+    super.viewDidLayout()
+    let width = tableView.bounds.width
+    guard width != lastKnownTableWidth else { return }
+    lastKnownTableWidth = width
+    tableView.noteHeightOfRows(withIndexesChanged: IndexSet(rows.indices))
+  }
+
   private func configureHeaderBar() {
     countLabel.translatesAutoresizingMaskIntoConstraints = false
     countLabel.font = .systemFont(ofSize: 11)
@@ -131,7 +143,7 @@ final class SecurityViewController: NSViewController {
     tableView.reloadData()
 
     let count = findings.uniqueItemIDs.count
-    countLabel.stringValue = count == 1 ? "1 Item" : "\(count) Items"
+    countLabel.stringValue = count == 1 ? String(localized: "1 Item") : String(localized: "\(count) Items")
 
     let hasFindings = !newRows.isEmpty
     scrollView.isHidden = !hasFindings
@@ -188,7 +200,8 @@ extension SecurityViewController: NSTableViewDelegate {
   func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
     switch rows[row] {
     case .section: return 28
-    case .finding: return 122
+    case .finding(_, let kind):
+      return SecurityFindingRowCellView.height(for: kind, availableWidth: tableView.bounds.width)
     }
   }
 

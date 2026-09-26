@@ -13,8 +13,8 @@ enum ImportFlow {
     dataSource: VaultViewModel, from parentWindow: NSWindow, completion: @escaping () -> Void
   ) {
     let panel = NSOpenPanel()
-    panel.title = "Import Passwords"
-    panel.prompt = "Import"
+    panel.title = String(localized: "Import Passwords")
+    panel.prompt = String(localized: "Import")
     panel.allowedContentTypes = [.commaSeparatedText]
     panel.allowsMultipleSelection = false
     panel.canChooseDirectories = false

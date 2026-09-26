@@ -10,7 +10,8 @@ final class PasswordEditRowView: NSView {
   private let secureField = NSSecureTextField()
   private let plainField = NSTextField()
   private let revealButton = NSButton(
-    image: NSImage(systemSymbolName: "eye", accessibilityDescription: "Reveal Password") ?? NSImage(),
+    image: NSImage(systemSymbolName: "eye", accessibilityDescription: String(localized: "Reveal Password"))
+      ?? NSImage(),
     target: nil,
     action: nil
   )
@@ -31,7 +32,7 @@ final class PasswordEditRowView: NSView {
 
     for field in [secureField, plainField] as [NSTextField] {
       field.stringValue = value
-      field.placeholderString = "Password"
+      field.placeholderString = String(localized: "Password")
       field.isBordered = false
       field.drawsBackground = false
       field.font = .systemFont(ofSize: 13)
@@ -43,10 +44,11 @@ final class PasswordEditRowView: NSView {
     revealButton.isBordered = false
     revealButton.bezelStyle = .inline
     revealButton.contentTintColor = .secondaryLabelColor
-    revealButton.toolTip = "Reveal Password"
+    revealButton.toolTip = String(localized: "Reveal Password")
     revealButton.target = self
     revealButton.action = #selector(revealTapped)
     revealButton.translatesAutoresizingMaskIntoConstraints = false
+    revealButton.setAccessibilityLabel(String(localized: "Reveal Password"))
 
     let stack = NSStackView(views: [secureField, plainField, revealButton])
     stack.orientation = .horizontal
@@ -72,10 +74,15 @@ final class PasswordEditRowView: NSView {
     isRevealed.toggle()
     secureField.isHidden = isRevealed
     plainField.isHidden = !isRevealed
-    revealButton.image = NSImage(
-      systemSymbolName: isRevealed ? "eye.slash" : "eye",
-      accessibilityDescription: "Reveal Password"
-    )
+    // Was always "Reveal Password" regardless of state (851-2426) — wrong once revealed, since
+    // the button now hides the value instead. The image's own `accessibilityDescription` and the
+    // button's own `setAccessibilityLabel` (VoiceOver doesn't reliably read one without the
+    // other) both need to track `isRevealed`, matching the toggling label ItemPreviewView's
+    // equivalent button already got right.
+    let label = isRevealed ? String(localized: "Hide Password") : String(localized: "Reveal Password")
+    revealButton.image = NSImage(systemSymbolName: isRevealed ? "eye.slash" : "eye", accessibilityDescription: label)
+    revealButton.setAccessibilityLabel(label)
+    revealButton.toolTip = label
     if isRevealed {
       window?.makeFirstResponder(plainField)
     } else {

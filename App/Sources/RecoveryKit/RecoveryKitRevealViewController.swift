@@ -28,15 +28,17 @@ final class RecoveryKitRevealViewController: NSViewController {
   }
 
   override func loadView() {
-    let titleField = NSTextField(labelWithString: "Save Your Recovery Key")
+    let titleField = NSTextField(labelWithString: String(localized: "Save Your Recovery Key"))
     titleField.font = .boldSystemFont(ofSize: 15)
 
     let subtitleField = NSTextField(
-      wrappingLabelWithString: """
-        This key is the only way to restore your \(appName) vault on a new Mac, or if this Mac's \
-        Keychain is ever lost. It's shown once, right now — save the PDF, print it, or copy the \
-        key below before you continue.
-        """
+      wrappingLabelWithString: String(
+        localized: """
+          This key is the only way to restore your \(appName) vault on a new Mac, or if this Mac's \
+          Keychain is ever lost. It's shown once, right now — save the PDF, print it, or copy the \
+          key below before you continue.
+          """
+      )
     )
     subtitleField.font = .systemFont(ofSize: 12)
     subtitleField.textColor = .secondaryLabelColor
@@ -51,16 +53,21 @@ final class RecoveryKitRevealViewController: NSViewController {
     pdfView.layer?.borderWidth = 1
     pdfView.layer?.cornerRadius = 6
 
-    let saveButton = NSButton(title: "Save PDF…", target: self, action: #selector(savePDF))
-    let printButton = NSButton(title: "Print…", target: self, action: #selector(printPDF))
-    let copyButton = NSButton(title: "Copy Key", target: self, action: #selector(copyKey))
+    let saveButton = NSButton(title: String(localized: "Save PDF…"), target: self, action: #selector(savePDF))
+    let printButton = NSButton(title: String(localized: "Print…"), target: self, action: #selector(printPDF))
+    let copyButton = NSButton(title: String(localized: "Copy Key"), target: self, action: #selector(copyKey))
     let buttonRow = NSStackView(views: [saveButton, printButton, copyButton])
     buttonRow.orientation = .horizontal
     buttonRow.spacing = 8
 
-    let continueButton = NSButton(title: "Continue…", target: self, action: #selector(continueTapped))
+    let continueButton = NSButton(
+      title: String(localized: "Continue…"), target: self, action: #selector(continueTapped)
+    )
     continueButton.keyEquivalent = "\r"
     continueButton.bezelStyle = .rounded
+    // Same fix as `ImportPreviewViewController.importButton` (851-2426 tophat visual audit):
+    // `keyEquivalent = "\r"` alone doesn't reliably paint this blue in a custom sheet.
+    continueButton.bezelColor = .controlAccentColor
 
     let spacer = NSView()
     spacer.setContentHuggingPriority(NSLayoutConstraint.Priority(1), for: .horizontal)
@@ -95,7 +102,7 @@ final class RecoveryKitRevealViewController: NSViewController {
   private func savePDF() {
     guard let window = view.window else { return }
     let panel = NSSavePanel()
-    panel.nameFieldStringValue = "\(appName) Recovery Kit.pdf"
+    panel.nameFieldStringValue = String(localized: "\(appName) Recovery Kit.pdf")
     panel.allowedContentTypes = [.pdf]
     panel.beginSheetModal(for: window) { [pdfData] response in
       guard response == .OK, let url = panel.url else { return }

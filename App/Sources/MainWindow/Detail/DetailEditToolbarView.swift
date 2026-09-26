@@ -15,9 +15,9 @@ final class DetailEditToolbarView: NSView {
     didSet { editButton.isEnabled = isEnabled }
   }
 
-  private let editButton = NSButton(title: "Edit", target: nil, action: nil)
-  private let cancelButton = NSButton(title: "Cancel", target: nil, action: nil)
-  private let doneButton = NSButton(title: "Done", target: nil, action: nil)
+  private let editButton = NSButton(title: String(localized: "Edit"), target: nil, action: nil)
+  private let cancelButton = NSButton(title: String(localized: "Cancel"), target: nil, action: nil)
+  private let doneButton = NSButton(title: String(localized: "Done"), target: nil, action: nil)
 
   init() {
     super.init(frame: .zero)
@@ -49,6 +49,9 @@ final class DetailEditToolbarView: NSView {
     doneButton.bezelStyle = .rounded
     doneButton.controlSize = .regular
     doneButton.keyEquivalent = "\r"
+    // Same fix as `ImportPreviewViewController.importButton` (851-2426 tophat visual audit):
+    // `keyEquivalent = "\r"` alone doesn't reliably paint this blue in a custom sheet/toolbar.
+    doneButton.bezelColor = .controlAccentColor
     doneButton.target = self
     doneButton.action = #selector(doneTapped)
     doneButton.isHidden = true

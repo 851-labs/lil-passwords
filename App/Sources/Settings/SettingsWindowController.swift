@@ -12,7 +12,7 @@ final class SettingsWindowController: NSWindowController {
   private init() {
     let tabViewController = SettingsTabViewController()
     let window = NSWindow(contentViewController: tabViewController)
-    window.title = "Settings"
+    window.title = String(localized: "Settings")
     window.identifier = NSUserInterfaceItemIdentifier("SettingsWindow")
     // Settings windows are System Settings-style panels: fixed per-tab size, not user-resizable,
     // and not part of window-cycling/restoration the way the main document window is.

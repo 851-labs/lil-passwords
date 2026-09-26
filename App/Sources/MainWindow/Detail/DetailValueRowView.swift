@@ -8,14 +8,20 @@ import AppKit
 /// leave both `nil` and just get the copy affordance.
 @MainActor
 final class DetailValueRowView: NSView {
-  var onCopy: (() -> Void)?
+  // 851-2426 tophat accessibility audit: this row's Copy button used to be unreachable by
+  // keyboard/VoiceOver at rest (`isHidden = true` until a mouse hover flipped it) — see
+  // `HoverRevealButton`'s doc comment for why that's wrong and what replaces it. `isEligible`
+  // tracks whether there's actually something to copy right now.
+  var onCopy: (() -> Void)? {
+    didSet { copyButton.isEligible = onCopy != nil }
+  }
   var onClickValue: (() -> Void)?
   var onHoverChange: ((Bool) -> Void)?
 
   let labelField = NSTextField(labelWithString: "")
   let valueField = NSTextField(labelWithString: "")
-  private let copyButton = NSButton(
-    image: NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: "Copy") ?? NSImage(),
+  private let copyButton = HoverRevealButton(
+    image: NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: String(localized: "Copy")) ?? NSImage(),
     target: nil,
     action: nil
   )
@@ -47,11 +53,17 @@ final class DetailValueRowView: NSView {
     copyButton.isBordered = false
     copyButton.bezelStyle = .inline
     copyButton.contentTintColor = .secondaryLabelColor
-    copyButton.isHidden = true
-    copyButton.toolTip = "Copy"
+    // Nothing to copy yet — `onCopy` is set right after construction by every call site, which
+    // flips this back via its `didSet` above.
+    copyButton.isEligible = false
+    copyButton.toolTip = String(localized: "Copy")
     copyButton.target = self
     copyButton.action = #selector(copyTapped)
     copyButton.translatesAutoresizingMaskIntoConstraints = false
+    // A generic "Copy" (851-2426) doesn't say what's being copied when several of these rows
+    // (username, password, …) are on screen at once — `configure(label:value:)` below refines it
+    // to "Copy Username"/"Copy Password" once the row's own label is known.
+    copyButton.setAccessibilityLabel(String(localized: "Copy"))
 
     addSubview(labelField)
     addSubview(valueField)
@@ -83,6 +95,7 @@ final class DetailValueRowView: NSView {
   func configure(label: String, value: String) {
     labelField.stringValue = label
     valueField.stringValue = value
+    copyButton.setAccessibilityLabel(String(localized: "Copy \(label)"))
   }
 
   override func updateTrackingAreas() {
@@ -96,12 +109,12 @@ final class DetailValueRowView: NSView {
   }
 
   override func mouseEntered(with event: NSEvent) {
-    copyButton.isHidden = onCopy == nil
+    copyButton.isHovering = true
     onHoverChange?(true)
   }
 
   override func mouseExited(with event: NSEvent) {
-    copyButton.isHidden = true
+    copyButton.isHovering = false
     onHoverChange?(false)
   }
 

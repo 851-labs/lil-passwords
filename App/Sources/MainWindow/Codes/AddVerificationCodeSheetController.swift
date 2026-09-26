@@ -48,7 +48,7 @@ final class AddVerificationCodeSheetController: NSWindowController {
   private init(dataSource: VaultViewModel) {
     self.dataSource = dataSource
     let window = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
-    window.title = "Add Verification Code"
+    window.title = String(localized: "Add Verification Code")
     super.init(window: window)
   }
 
@@ -98,15 +98,17 @@ final class AddVerificationCodeSheetController: NSWindowController {
     itemsTableView = nil
     continueButton = nil
 
-    let titleField = NSTextField(labelWithString: "Add Verification Code")
+    let titleField = NSTextField(labelWithString: String(localized: "Add Verification Code"))
     titleField.font = .boldSystemFont(ofSize: 15)
 
-    let subtitleField = NSTextField(wrappingLabelWithString: "Choose which item this verification code belongs to.")
+    let subtitleField = NSTextField(
+      wrappingLabelWithString: String(localized: "Choose which item this verification code belongs to.")
+    )
     subtitleField.font = .systemFont(ofSize: 12)
     subtitleField.textColor = .secondaryLabelColor
 
     let searchField = NSSearchField()
-    searchField.placeholderString = "Search"
+    searchField.placeholderString = String(localized: "Search")
     searchField.delegate = self
 
     let tableView = NSTableView()
@@ -130,9 +132,12 @@ final class AddVerificationCodeSheetController: NSWindowController {
     scrollView.borderType = .bezelBorder
     scrollView.translatesAutoresizingMaskIntoConstraints = false
 
-    let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelTapped))
-    let next = NSButton(title: "Continue", target: self, action: #selector(continueTapped))
+    let cancelButton = NSButton(title: String(localized: "Cancel"), target: self, action: #selector(cancelTapped))
+    let next = NSButton(title: String(localized: "Continue"), target: self, action: #selector(continueTapped))
     next.keyEquivalent = "\r"
+    // Same fix as `ImportPreviewViewController.importButton` (851-2426 tophat visual audit):
+    // `keyEquivalent = "\r"` alone doesn't reliably paint this blue in a custom sheet.
+    next.bezelColor = .controlAccentColor
     next.isEnabled = false
     continueButton = next
 
@@ -163,7 +168,7 @@ final class AddVerificationCodeSheetController: NSWindowController {
       footerRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -40),
     ])
 
-    window?.title = "Add Verification Code"
+    window?.title = String(localized: "Add Verification Code")
     window?.contentView = container
     window?.setContentSize(NSSize(width: 440, height: 420))
     tableView.reloadData()
@@ -188,33 +193,37 @@ final class AddVerificationCodeSheetController: NSWindowController {
 
   private func showChooseMethodStep(for item: PasswordItem) {
     let backButton = NSButton(
-      image: NSImage(systemSymbolName: "chevron.left", accessibilityDescription: "Back") ?? NSImage(),
+      image: NSImage(systemSymbolName: "chevron.left", accessibilityDescription: String(localized: "Back"))
+        ?? NSImage(),
       target: self, action: #selector(backToPickItem))
     backButton.isBordered = false
+    backButton.setAccessibilityLabel(String(localized: "Back"))
 
-    let titleField = NSTextField(labelWithString: "Add Code for \(item.title)")
+    let titleField = NSTextField(labelWithString: String(localized: "Add Code for \(item.title)"))
     titleField.font = .boldSystemFont(ofSize: 15)
 
-    let subtitleField = NSTextField(wrappingLabelWithString: "How would you like to add this verification code?")
+    let subtitleField = NSTextField(
+      wrappingLabelWithString: String(localized: "How would you like to add this verification code?")
+    )
     subtitleField.font = .systemFont(ofSize: 12)
     subtitleField.textColor = .secondaryLabelColor
 
     let setupKeyButton = methodButton(
       symbolName: "key.fill",
-      title: "Enter Setup Key",
-      subtitle: "Type in a code manually",
+      title: String(localized: "Enter Setup Key"),
+      subtitle: String(localized: "Type in a code manually"),
       action: #selector(chooseSetupKey)
     )
     let qrFileButton = methodButton(
       symbolName: "photo",
-      title: "Choose QR Image File…",
-      subtitle: "Import a QR code from an image",
+      title: String(localized: "Choose QR Image File…"),
+      subtitle: String(localized: "Import a QR code from an image"),
       action: #selector(chooseQRImageFile)
     )
     let scanButton = methodButton(
       symbolName: "display",
-      title: "Scan Screen for QR Code",
-      subtitle: "Detect a QR code currently on screen",
+      title: String(localized: "Scan Screen for QR Code"),
+      subtitle: String(localized: "Detect a QR code currently on screen"),
       action: #selector(chooseScanScreen)
     )
 
@@ -280,25 +289,27 @@ final class AddVerificationCodeSheetController: NSWindowController {
 
   private func showSetupKeyStep(for item: PasswordItem) {
     let backButton = NSButton(
-      image: NSImage(systemSymbolName: "chevron.left", accessibilityDescription: "Back") ?? NSImage(),
+      image: NSImage(systemSymbolName: "chevron.left", accessibilityDescription: String(localized: "Back"))
+        ?? NSImage(),
       target: self, action: #selector(backToChooseMethod))
     backButton.isBordered = false
+    backButton.setAccessibilityLabel(String(localized: "Back"))
 
-    let titleField = NSTextField(labelWithString: "Enter Setup Key")
+    let titleField = NSTextField(labelWithString: String(localized: "Enter Setup Key"))
     titleField.font = .boldSystemFont(ofSize: 15)
 
     let secret = NSTextField()
-    secret.placeholderString = "Setup Key"
+    secret.placeholderString = String(localized: "Setup Key")
     secret.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
     secret.delegate = self
     secretField = secret
 
     let issuer = NSTextField(string: item.title)
-    issuer.placeholderString = "Issuer (e.g. GitHub)"
+    issuer.placeholderString = String(localized: "Issuer (e.g. GitHub)")
     issuerField = issuer
 
     let account = NSTextField(string: item.usernames.first(where: { !$0.isEmpty }) ?? "")
-    account.placeholderString = "Account Name"
+    account.placeholderString = String(localized: "Account Name")
     accountField = account
 
     let error = NSTextField(labelWithString: "")
@@ -308,9 +319,12 @@ final class AddVerificationCodeSheetController: NSWindowController {
     error.isHidden = true
     keyErrorLabel = error
 
-    let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelTapped))
-    let add = NSButton(title: "Add", target: self, action: #selector(addSetupKeyTapped))
+    let cancelButton = NSButton(title: String(localized: "Cancel"), target: self, action: #selector(cancelTapped))
+    let add = NSButton(title: String(localized: "Add"), target: self, action: #selector(addSetupKeyTapped))
     add.keyEquivalent = "\r"
+    // Same fix as `ImportPreviewViewController.importButton` (851-2426 tophat visual audit):
+    // `keyEquivalent = "\r"` alone doesn't reliably paint this blue in a custom sheet.
+    add.bezelColor = .controlAccentColor
     add.isEnabled = false
     addButton = add
 
@@ -362,7 +376,7 @@ final class AddVerificationCodeSheetController: NSWindowController {
       .replacingOccurrences(of: " ", with: "")
       .replacingOccurrences(of: "-", with: "")
     guard let secretData = Base32.decode(normalized), let totp = try? TOTP(secret: secretData) else {
-      showKeyError("That setup key doesn't look valid. Double-check it and try again.")
+      showKeyError(String(localized: "That setup key doesn't look valid. Double-check it and try again."))
       return
     }
 
@@ -391,13 +405,13 @@ final class AddVerificationCodeSheetController: NSWindowController {
     panel.canChooseDirectories = false
     panel.allowsMultipleSelection = false
     panel.allowedContentTypes = [.image]
-    panel.message = "Choose an image containing this item's verification code QR code."
+    panel.message = String(localized: "Choose an image containing this item's verification code QR code.")
 
     guard panel.runModal() == .OK, let url = panel.url else { return }
     guard let uri = Self.decodeOTPAuthURI(fromImageAt: url) else {
       presentAlert(
-        message: "No Verification Code Found",
-        informative: "That image doesn't seem to contain a verification code QR code.",
+        message: String(localized: "No Verification Code Found"),
+        informative: String(localized: "That image doesn't seem to contain a verification code QR code."),
         in: window
       )
       return
@@ -425,7 +439,7 @@ final class AddVerificationCodeSheetController: NSWindowController {
         self.save(item: item, totpURI: uri.url.absoluteString)
       } catch {
         self.presentAlert(
-          message: "No Verification Code Found",
+          message: String(localized: "No Verification Code Found"),
           informative: Self.captureErrorMessage(error),
           in: window
         )
@@ -436,12 +450,16 @@ final class AddVerificationCodeSheetController: NSWindowController {
   private static func captureErrorMessage(_ error: Swift.Error) -> String {
     switch error {
     case CaptureError.noCodeFound:
-      return "No verification code QR code was found on screen. Make sure it's visible, then try again."
+      return String(
+        localized: "No verification code QR code was found on screen. Make sure it's visible, then try again."
+      )
     case CaptureError.noDisplay:
-      return "No display was available to capture."
+      return String(localized: "No display was available to capture.")
     default:
-      return "\(LilPasswordsKit.productName) couldn't capture the screen. Check that it has Screen Recording "
-        + "permission in System Settings > Privacy & Security, then try again."
+      return String(
+        localized: "\(LilPasswordsKit.productName) couldn't capture the screen. Check that it has Screen Recording "
+      )
+        + String(localized: "permission in System Settings > Privacy & Security, then try again.")
     }
   }
 
