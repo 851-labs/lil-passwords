@@ -4,7 +4,12 @@ import LilPasswordsKit
 /// A small circular countdown indicator: a ring that depletes clockwise from the top as a TOTP
 /// code's remaining validity window shrinks, turning red in the code's final seconds — matching
 /// the countdown ring Apple Passwords (and most authenticator apps) draw next to each code.
-final class CountdownRingView: NSView {
+///
+/// Named distinctly from `Detail/CountdownRingView` (851-2415's item-detail verification code
+/// row), which is a separate, simpler ring driven by a plain `fraction` property rather than a
+/// `TOTP` value directly — the two views happened to be built independently for 851-2418 and
+/// 851-2415 and don't share an implementation.
+final class CodeCountdownRingView: NSView {
   /// 1.0 when a code has just been generated, 0.0 the instant it's about to change.
   private var fractionRemaining: CGFloat = 1
 

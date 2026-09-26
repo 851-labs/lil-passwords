@@ -14,7 +14,7 @@ final class CodeRowCellView: NSTableCellView {
   private let titleField = NSTextField(labelWithString: "")
   private let subtitleField = NSTextField(labelWithString: "")
   private let codeField = NSTextField(labelWithString: "")
-  private let ringView = CountdownRingView()
+  private let ringView = CodeCountdownRingView()
   private let copiedLabel = NSTextField(labelWithString: "Copied")
 
   /// The item currently bound to this cell, kept so a stray, already-scheduled `flashCopied()`
