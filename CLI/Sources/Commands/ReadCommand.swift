@@ -21,7 +21,7 @@ struct ReadCommand: AsyncParsableCommand {
     guard let parsedReference = SecretReference(string: reference) else {
       throw LilpassError(exitCode: .usage, message: "not a valid lilpass:// reference: \"\(reference)\"")
     }
-    let value = try await LilpassCommands.read(client: AgentClient(), reference: parsedReference)
+    let value = try await LilpassCommands.read(client: AgentEndpoint.makeClient(), reference: parsedReference)
     Output.print(value, asJSON: jsonOutput.json) { value in print(value.value) }
   }
 }

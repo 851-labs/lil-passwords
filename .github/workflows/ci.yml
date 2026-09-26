@@ -43,6 +43,7 @@ jobs:
         with:
           path: |
             Packages/LilPasswordsKit/.build
+            Packages/LilpassE2E/.build
             build/SourcePackages
           key: spm-${{ runner.os }}-${{ hashFiles('**/Package.resolved', '**/Package.swift') }}
           restore-keys: spm-${{ runner.os }}-
@@ -55,3 +56,34 @@ jobs:
 
       - name: Build app, helper, and CLI (unsigned)
         run: make build
+
+      - name: End-to-end tests (built lilpass binary + disposable in-memory helper)
+        # This step used to hang CI for a full 30-minute timeout with zero output — 851-2434.
+        # Root-caused via a background `make e2e` + periodic `sample` of the stuck process, across
+        # several wrong-or-partial turns before landing on the real, stacked causes; see
+        # `Packages/LilpassE2E/Tests/LilpassE2ETests/MCPStdioSessionTests.swift`'s doc comment for the
+        # full diagnostic history. Short version: it wasn't test/suite parallelism (`.serialized` and
+        # `--no-parallel`, both still on below, guard against a *real* but different race and were
+        # never actually why this hung). It was that suite's own teardown, in two independent ways —
+        # a leaked MCP `Client` background `Task` from a missing `disconnect()` call, and a blocking
+        # `Process.waitUntilExit()` call starving Swift Concurrency's cooperative thread pool from
+        # inside `async` code — both now fixed there.
+        #
+        # This step used to retry `make e2e` up to 3 times to paper over the hang above. That's gone
+        # now: run 36272729378 (headSha 7f2d793, before either fix landed) burned all 3 retries and
+        # its 3rd HangWatchdog sample caught the exact leaked-`Client`-task livelock described above —
+        # `Client.connect(transport:)`'s message loop stuck in the Swift runtime's generic-metadata
+        # cache (`awaitSatisfyingState` / `ConcurrentReadableHashMap::find` / `MetadataCacheKey::
+        # operator==`), i.e. bug (1). Once `disconnect()` (commit f7e4693) and the `isRunning`-poll
+        # fix (also f7e4693) landed, run 36275337487 passed clean on the first and only attempt. A
+        # retry loop that can silently absorb this failure mode is worse than no retry at all — see
+        # `make e2e`'s own comment in the Makefile for why that target deliberately never retries
+        # either. If this hangs again, it should fail this step outright and name the offending test.
+        #
+        # `timeout-minutes: 10` and every suite's own `.timeLimit(.minutes(1))` trait stay on as a
+        # backstop: a genuine future hang should fail fast, with the 90s HangWatchdog's `sample` dump
+        # in the log, rather than silently burning the job's full 30-minute allowance.
+        timeout-minutes: 10
+        env:
+          E2E_EXTRA_ARGS: --verbose
+        run: make e2e

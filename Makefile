@@ -1,4 +1,4 @@
-.PHONY: project build test format lint
+.PHONY: project build test e2e format lint
 
 # 851-2441: SWIFT_DETERMINISTIC_HASHING=1 pins Swift's per-process Dictionary/Set hash seed.
 # Without it, xcodegen's project.pbxproj output for this target is nondeterministic across runs
@@ -19,6 +19,44 @@ build:
 
 test:
 	swift test --package-path Packages/LilPasswordsKit
+
+# 851-2434: end-to-end tests that run the *built* lilpass binary as a subprocess against a
+# disposable, in-memory-vault-backed helper (LilpassE2EHelper) over a real, uniquely-named XPC Mach
+# service — never the real "lil passwords" app, its real vault store, or the real keychain item.
+# Depends on `build` so `LILPASS_E2E_BINARY_PATH` always points at a freshly built lilpass.
+# E2E_EXTRA_ARGS is empty by default (kept out of normal local runs' output) — CI sets it to
+# `--verbose` for extra `swift test` diagnostics while chasing 851-2434's CI-only hang.
+#
+# --no-parallel: cheap insurance, not the fix for 851-2434's CI-only hang. Each suite here already
+# carries `.serialized`, but that trait only serializes tests *within* one suite — swift-testing
+# still runs separate suites concurrently with each other by default, and an early CI run's
+# HangWatchdog dump caught exactly that: five suites' `init()`s interleaving within milliseconds of
+# each other, racing to instantiate the same generic metadata for the first time
+# (`swift::MetadataCacheEntryBase::awaitSatisfyingState`). `--no-parallel` removes that race by
+# running one suite (and one test) at a time for the whole package. It was believed for a while to be
+# the actual fix — it wasn't: a CI run with `--no-parallel` in place still livelocked 3 times in a
+# row, always partway through `MCPStdioSessionTests`, with every suite's `init()` demonstrably running
+# strictly one at a time. See that suite's doc comment (`Packages/LilpassE2E/Tests/LilpassE2ETests/
+# MCPStdioSessionTests.swift`) for the full diagnostic history and the two real, stacked root causes
+# that were actually inside that suite's own teardown: a leaked MCP `Client` background `Task` (fixed
+# by calling `disconnect()`), and a blocking `Process.waitUntilExit()` call starving Swift
+# Concurrency's cooperative thread pool from inside `async` code (fixed by polling `isRunning` with
+# `Task.sleep` instead). `--no-parallel` and every suite's `.serialized` trait stay on anyway — they
+# guard against the race they were originally built for, which is real even if it wasn't this bug —
+# but don't mistake either one for why `make e2e` reliably passes now; the two fixes in
+# `MCPStdioSessionTests.swift` are why.
+#
+# This target deliberately does *not* retry on failure — a hang here should surface immediately to
+# whoever's running it locally, not get silently swallowed. CI's E2E step (.github/workflows/ci.yml)
+# doesn't retry either, for the same reason: a retry loop is exactly what let 851-2434's real bug
+# hide behind "residual flakiness" for as long as it did. See that step's comment for the CI run
+# that proved it (all 3 retries burned on the actual bug, not flakiness) and the fix that made a
+# single attempt reliably pass.
+e2e: build
+	swift build --package-path Packages/LilpassE2E --product LilpassE2EHelper
+	LILPASS_E2E_BINARY_PATH="$(CURDIR)/build/Build/Products/Debug/lil passwords.app/Contents/Helpers/lilpass" \
+	LILPASS_E2E_HELPER_BINARY_PATH="$$(swift build --package-path Packages/LilpassE2E --product LilpassE2EHelper --show-bin-path)/LilpassE2EHelper" \
+	swift test --package-path Packages/LilpassE2E --no-parallel $(E2E_EXTRA_ARGS)
 
 format:
 	xcrun swift-format format --in-place --recursive App Agent CLI AutoFillExtension Packages

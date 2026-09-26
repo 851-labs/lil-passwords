@@ -21,7 +21,7 @@ struct GetCommand: AsyncParsableCommand {
   @OptionGroup var jsonOutput: JSONOutputOptions
 
   func run() async throws {
-    let client = AgentClient()
+    let client = AgentEndpoint.makeClient()
     if let field {
       let value = try await LilpassCommands.getField(client: client, identifier: item, field: field)
       Output.print(value, asJSON: jsonOutput.json) { value in print(value.value) }

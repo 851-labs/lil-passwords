@@ -30,7 +30,7 @@ struct InjectCommand: AsyncParsableCommand {
       throw LilpassError(exitCode: .usage, message: "couldn't read \"\(input)\": \(error)")
     }
 
-    let injected = try await LilpassInject.inject(template: template, client: AgentClient())
+    let injected = try await LilpassInject.inject(template: template, client: AgentEndpoint.makeClient())
 
     do {
       try injected.write(to: URL(fileURLWithPath: output), atomically: true, encoding: .utf8)

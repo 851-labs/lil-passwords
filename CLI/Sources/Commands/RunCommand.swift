@@ -35,7 +35,7 @@ struct RunCommand: AsyncParsableCommand {
       throw LilpassError(
         exitCode: .usage, message: "lilpass run requires a command after --, e.g. lilpass run -- printenv")
     }
-    let resolvedEnv = try await LilpassRun.resolveEnvironment(env, client: AgentClient())
+    let resolvedEnv = try await LilpassRun.resolveEnvironment(env, client: AgentEndpoint.makeClient())
     let status = try LilpassRun.run(executable: executable, arguments: Array(command.dropFirst()), env: resolvedEnv)
     // Forwards the child's exact exit status as lilpass's own — see `Lilpass.exitReportingError`,
     // which special-cases a thrown `ExitCode` to exit with it directly rather than mapping it
