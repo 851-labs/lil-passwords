@@ -112,6 +112,11 @@ targets:
       - package: LilPasswordsKit
       - package: LilPasswordsKit
         product: LilpwCore
+      # `lilpw mcp` (851-2431). Depends transitively on the swift-sdk `MCP` product declared in
+      # Packages/LilPasswordsKit/Package.swift — no separate top-level `packages:` entry needed
+      # here, SwiftPM resolves that through LilpwMCP's own dependency graph.
+      - package: LilPasswordsKit
+        product: LilpwMCP
       - package: ArgumentParser
         product: ArgumentParser
     settings:
