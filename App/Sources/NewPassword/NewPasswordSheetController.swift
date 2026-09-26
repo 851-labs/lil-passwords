@@ -1,9 +1,9 @@
 import AppKit
 import LilPasswordsKit
 
-/// Presents the "New Password" sheet: Title, Website, User Name, a generated Password (with a
-/// menu to regenerate or switch to "No Special Characters"), and Notes — matching Apple
-/// Passwords' own New Password sheet (851-2416).
+/// Presents the "New Password" sheet: one inset rounded ``CardView`` — a centered icon and large
+/// bold Title, then User Name / Password / Website / Notes rows — plus Cancel/Save below it,
+/// matching Apple Passwords' own New Password sheet (851-2416).
 @MainActor
 final class NewPasswordSheetController: NSWindowController {
   enum Outcome {
@@ -13,27 +13,40 @@ final class NewPasswordSheetController: NSWindowController {
     case cancelled
   }
 
+  private static let iconDimension: CGFloat = 64
+
   private let vaultViewModel: any VaultViewModel
   private let generator = PasswordGenerator()
   private var passwordFormat: PasswordGenerator.Format = .appleStrong
   private var completion: ((Outcome) -> Void)?
   private var didFinish = false
 
+  private var iconView: NSImageView!
   private var titleField: NSTextField!
-  private var websiteField: NSTextField!
   private var usernameField: NSTextField!
-  private var passwordField: NSTextField!
+  private var passwordValueView: PasswordCardValueView!
+  private var websiteField: NSTextField!
   private var notesTextView: NSTextView!
   private var saveButton: NSButton!
-  private var passwordOptionsButton: NSButton!
 
   private init(vaultViewModel: any VaultViewModel) {
     self.vaultViewModel = vaultViewModel
-    let window = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+    let window = NSWindow(
+      contentRect: .zero, styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
     window.title = "New Password"
+    // Apple Passwords' own New Password sheet has no visible title bar at all — the card sits
+    // flush with the sheet's own rounded corners. `.fullSizeContentView` plus hiding the title
+    // (rather than dropping `.titled` entirely) keeps the window's title bar *metadata* (visible
+    // in the Window menu, VoiceOver, etc.) without drawing anything for it.
+    window.titleVisibility = .hidden
+    window.titlebarAppearsTransparent = true
+    window.standardWindowButton(.closeButton)?.isHidden = true
+    window.standardWindowButton(.miniaturizeButton)?.isHidden = true
+    window.standardWindowButton(.zoomButton)?.isHidden = true
     super.init(window: window)
     buildContent()
     regeneratePassword()
+    updateIcon()
   }
 
   @available(*, unavailable)
@@ -64,53 +77,80 @@ final class NewPasswordSheetController: NSWindowController {
   // MARK: - Layout
 
   private func buildContent() {
-    let titleHeading = NSTextField(labelWithString: "New Password")
-    titleHeading.font = .boldSystemFont(ofSize: 15)
+    let icon = NSImageView()
+    icon.imageScaling = .scaleProportionallyUpOrDown
+    icon.translatesAutoresizingMaskIntoConstraints = false
+    iconView = icon
 
-    let title = labeledField(placeholder: "Title")
-    titleField = title
+    let title = NSTextField()
+    title.placeholderString = "Title"
+    title.font = .boldSystemFont(ofSize: 26)
+    title.alignment = .center
+    title.isBordered = false
+    title.drawsBackground = false
     title.delegate = self
+    titleField = title
 
-    let website = labeledField(placeholder: "example.com")
-    websiteField = website
-    website.delegate = self
+    let header = NSStackView(views: [icon, title])
+    header.orientation = .vertical
+    header.alignment = .centerX
+    header.spacing = 12
+    header.edgeInsets = NSEdgeInsets(top: 24, left: 16, bottom: 20, right: 16)
+    NSLayoutConstraint.activate([
+      icon.widthAnchor.constraint(equalToConstant: Self.iconDimension),
+      icon.heightAnchor.constraint(equalToConstant: Self.iconDimension),
+      title.widthAnchor.constraint(lessThanOrEqualToConstant: 320),
+    ])
 
-    let username = labeledField(placeholder: "User Name")
+    let username = valueField(placeholder: "user")
     usernameField = username
+    let usernameRow = KeyValueRow(label: "User Name", value: username)
 
-    let password = NSTextField()
-    password.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
-    passwordField = password
-
-    let optionsButton = NSButton(
+    let passwordValue = PasswordCardValueView(value: "")
+    passwordValueView = passwordValue
+    let regenerateButton = NSButton(
       image: NSImage(systemSymbolName: "arrow.clockwise.circle", accessibilityDescription: "Password Options")
         ?? NSImage(),
       target: self,
       action: #selector(showPasswordMenu(_:))
     )
-    optionsButton.bezelStyle = .texturedRounded
-    optionsButton.isBordered = false
-    optionsButton.imagePosition = .imageOnly
-    passwordOptionsButton = optionsButton
+    regenerateButton.bezelStyle = .texturedRounded
+    regenerateButton.isBordered = false
+    regenerateButton.imagePosition = .imageOnly
+    regenerateButton.contentTintColor = .secondaryLabelColor
+    let passwordRow = KeyValueRow(label: "Password", value: passwordValue, accessory: regenerateButton)
 
-    let passwordRow = NSStackView(views: [password, optionsButton])
-    passwordRow.orientation = .horizontal
-    passwordRow.spacing = 6
-    password.setContentHuggingPriority(NSLayoutConstraint.Priority(1), for: .horizontal)
+    let website = valueField(placeholder: "example.com")
+    websiteField = website
+    website.delegate = self
+    let websiteRow = KeyValueRow(label: "Website", value: website)
 
-    let notesScrollView = NSScrollView()
-    notesScrollView.hasVerticalScroller = true
-    notesScrollView.borderType = .bezelBorder
     let notesView = NSTextView()
     notesView.font = .systemFont(ofSize: 13)
-    notesView.isEditable = true
     notesView.isRichText = false
-    notesScrollView.documentView = notesView
+    notesView.drawsBackground = false
+    notesView.textContainerInset = .zero
+    notesView.textContainer?.lineFragmentPadding = 0
     notesTextView = notesView
+    let notesScrollView = NSScrollView()
+    notesScrollView.documentView = notesView
+    notesScrollView.drawsBackground = false
+    notesScrollView.hasVerticalScroller = true
+    notesScrollView.translatesAutoresizingMaskIntoConstraints = false
+    notesScrollView.heightAnchor.constraint(equalToConstant: 54).isActive = true
+    let notesRow = KeyValueRow(label: "Notes", value: notesScrollView, stacked: true)
+
+    let card = CardView()
+    card.setContent(header: header, rows: [usernameRow, passwordRow, websiteRow, notesRow])
+
+    let footerDivider = NSBox()
+    footerDivider.boxType = .separator
 
     let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelTapped))
+    cancelButton.bezelStyle = .rounded
     cancelButton.keyEquivalent = "\u{1b}"
     let save = NSButton(title: "Save", target: self, action: #selector(saveTapped))
+    save.bezelStyle = .rounded
     save.keyEquivalent = "\r"
     saveButton = save
 
@@ -120,57 +160,81 @@ final class NewPasswordSheetController: NSWindowController {
     footerRow.orientation = .horizontal
     footerRow.spacing = 8
 
-    let stack = NSStackView(views: [
-      titleHeading,
-      formRow(label: "Title", field: title),
-      formRow(label: "Website", field: website),
-      formRow(label: "User Name", field: username),
-      formRow(label: "Password", field: passwordRow),
-      formRow(label: "Notes", field: notesScrollView),
-      footerRow,
-    ])
-    stack.orientation = .vertical
-    stack.alignment = .leading
-    stack.spacing = 12
-    stack.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
-    stack.translatesAutoresizingMaskIntoConstraints = false
-
     let container = NSView()
-    container.addSubview(stack)
+    for view in [card, footerDivider, footerRow] as [NSView] {
+      view.translatesAutoresizingMaskIntoConstraints = false
+      container.addSubview(view)
+    }
+
     NSLayoutConstraint.activate([
-      stack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-      stack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-      stack.topAnchor.constraint(equalTo: container.topAnchor),
-      stack.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-      footerRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -40),
-      notesScrollView.heightAnchor.constraint(equalToConstant: 70),
+      card.topAnchor.constraint(equalTo: container.topAnchor, constant: 20),
+      card.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
+      card.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
+
+      // The divider above Cancel/Save runs the sheet's full width, edge to edge — unlike the
+      // card's own internal row dividers, which stop short of the card's rounded corners.
+      footerDivider.topAnchor.constraint(equalTo: card.bottomAnchor, constant: 20),
+      footerDivider.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+      footerDivider.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+      footerDivider.heightAnchor.constraint(equalToConstant: 1),
+
+      footerRow.topAnchor.constraint(equalTo: footerDivider.bottomAnchor, constant: 16),
+      footerRow.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
+      footerRow.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
+      footerRow.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
     ])
 
     window?.contentView = container
-    window?.setContentSize(NSSize(width: 420, height: 430))
+
+    // The sheet's height is derived from its actual content, not a guessed constant: every row
+    // above is a fixed 40pt and the header's height comes from its own intrinsic content, so
+    // `container` has exactly one natural height for a given width. A hardcoded
+    // `setContentSize` here previously guessed a height taller than that natural content, and
+    // since the fixed-height rows below have nowhere left to absorb the extra space, `header` —
+    // the one arranged view in the card without a hard-pinned height — silently stretched to eat
+    // all of it, pushing "User Name" far down from "Title". Measuring the real fitting size
+    // avoids reintroducing that by construction.
+    let width: CGFloat = 460
+    let widthConstraint = container.widthAnchor.constraint(equalToConstant: width)
+    widthConstraint.isActive = true
+    let fittingHeight = container.fittingSize.height
+    window?.setContentSize(NSSize(width: width, height: fittingHeight))
     updateSaveEnabled()
   }
 
-  /// A label above a field/control, at a fixed row width so every row's control lines up under
-  /// the previous one despite different label lengths.
-  private func formRow(label: String, field: NSView) -> NSView {
-    let labelField = NSTextField(labelWithString: label)
-    labelField.font = .systemFont(ofSize: 11)
-    labelField.textColor = .secondaryLabelColor
-
-    field.translatesAutoresizingMaskIntoConstraints = false
-    let row = NSStackView(views: [labelField, field])
-    row.orientation = .vertical
-    row.alignment = .leading
-    row.spacing = 4
-    NSLayoutConstraint.activate([field.widthAnchor.constraint(equalToConstant: 340)])
-    return row
-  }
-
-  private func labeledField(placeholder: String) -> NSTextField {
+  /// A bezel-less, right-aligned value field for an inline ``KeyValueRow`` — "User Name" and
+  /// "Website" both use this; "Password" uses ``PasswordCardValueView`` instead since it needs
+  /// mask/reveal behavior this plain field doesn't.
+  private func valueField(placeholder: String) -> NSTextField {
     let field = NSTextField()
     field.placeholderString = placeholder
+    field.font = .systemFont(ofSize: 13)
+    field.textColor = .secondaryLabelColor
+    field.alignment = .right
+    field.isBordered = false
+    field.drawsBackground = false
+    field.lineBreakMode = .byTruncatingMiddle
     return field
+  }
+
+  // MARK: - Icon
+
+  /// Shows the app icon until a title or website is typed, then switches to the monogram for
+  /// whatever title `makeItem()` would currently resolve to — matching Apple Passwords, which
+  /// shows a per-item icon (here, the monogram, since there's no favicon fetch for an unsaved
+  /// item) once there's something to base it on.
+  private func updateIcon() {
+    let effectiveTitle = resolvedTitle()
+    iconView.image =
+      effectiveTitle.isEmpty
+      ? NSApplication.shared.applicationIconImage
+      : MonogramIcon.icon(for: effectiveTitle, dimension: Self.iconDimension)
+  }
+
+  private func resolvedTitle() -> String {
+    let trimmedTitle = titleField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !trimmedTitle.isEmpty { return trimmedTitle }
+    return Self.parseWebsite(websiteField.stringValue)?.host ?? ""
   }
 
   // MARK: - Password generation
@@ -210,7 +274,7 @@ final class NewPasswordSheetController: NSWindowController {
   }
 
   private func regeneratePassword() {
-    passwordField.stringValue = (try? generator.generate(format: passwordFormat)) ?? ""
+    passwordValueView.setValue((try? generator.generate(format: passwordFormat)) ?? "")
   }
 
   // MARK: - Save / Cancel
@@ -232,19 +296,15 @@ final class NewPasswordSheetController: NSWindowController {
   }
 
   private func makeItem() -> PasswordItem {
-    let trimmedTitle = titleField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
     let websiteURL = Self.parseWebsite(websiteField.stringValue)
     let trimmedUsername = usernameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-
-    let resolvedTitle: String =
-      !trimmedTitle.isEmpty
-      ? trimmedTitle
-      : (websiteURL?.host ?? websiteField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines))
+    let trimmedWebsite = websiteField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    let resolvedTitle = resolvedTitle()
 
     return PasswordItem(
-      title: resolvedTitle,
+      title: resolvedTitle.isEmpty ? trimmedWebsite : resolvedTitle,
       usernames: trimmedUsername.isEmpty ? [] : [trimmedUsername],
-      password: passwordField.stringValue,
+      password: passwordValueView.stringValue,
       websites: websiteURL.map { [$0] } ?? [],
       notes: notesTextView.string
     )
@@ -284,5 +344,6 @@ final class NewPasswordSheetController: NSWindowController {
 extension NewPasswordSheetController: NSTextFieldDelegate {
   func controlTextDidChange(_ notification: Notification) {
     updateSaveEnabled()
+    updateIcon()
   }
 }
