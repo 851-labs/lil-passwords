@@ -1,6 +1,5 @@
 import AppKit
 import LilPasswordsKit
-import UniformTypeIdentifiers
 
 /// Fallback implementations for menu actions that don't have a real destination yet.
 ///
@@ -23,38 +22,13 @@ extension AppDelegate {
   }
 
   @objc func importPasswords(_ sender: Any?) {
-    let panel = NSOpenPanel()
-    panel.title = "Import Passwords"
-    panel.prompt = "Import"
-    panel.allowedContentTypes = [.commaSeparatedText]
-    panel.allowsMultipleSelection = false
-    panel.canChooseDirectories = false
-    panel.canChooseFiles = true
-    guard let window = mainWindow else { return }
-
-    panel.beginSheetModal(for: window) { [weak self] response in
-      guard response == .OK else { return }
-      self?.presentComingSoonAlert(
-        title: "Import Passwords",
-        // The CSV parsing engine already exists (851-2409); what's missing is somewhere to put
-        // the imported items until the vault store is ready.
-        ticket: "851-2404"
-      )
-    }
+    guard let window = mainWindow, let vaultViewModel = mainWindowController?.vaultViewModel else { return }
+    ImportFlow.presentOpenPanel(dataSource: vaultViewModel, from: window) {}
   }
 
   @objc func exportAllPasswords(_ sender: Any?) {
-    let panel = NSSavePanel()
-    panel.title = "Export All Passwords"
-    panel.prompt = "Export"
-    panel.nameFieldStringValue = "\(LilPasswordsKit.productName) Export.csv"
-    panel.allowedContentTypes = [.commaSeparatedText]
-    guard let window = mainWindow else { return }
-
-    panel.beginSheetModal(for: window) { [weak self] response in
-      guard response == .OK else { return }
-      self?.presentComingSoonAlert(title: "Export All Passwords", ticket: "851-2410")
-    }
+    guard let window = mainWindow, let vaultViewModel = mainWindowController?.vaultViewModel else { return }
+    ExportFlow.presentExport(dataSource: vaultViewModel, from: window)
   }
 
   @objc func find(_ sender: Any?) {
