@@ -37,6 +37,15 @@ final class MainWindowController: NSWindowController {
   /// has resolved) before `LockCoordinator.state` has moved on to `.unlocked`.
   private var isSettingUpVault = false
 
+  #if DEBUG
+    /// Guards `-InitialSidebarCategory` (see `initialSidebarCategoryOverride()`) so it only fires
+    /// the first time unlocked content is shown, not on every re-lock/unlock cycle.
+    private var hasAppliedInitialSidebarCategoryOverride = false
+
+    /// Guards `-AutoUnlockForTophat` (see `requestAutoUnlockIfNeeded()`) so it only fires once.
+    private var hasRequestedAutoUnlock = false
+  #endif
+
   init(agentClient: AgentClient) {
     self.agentClient = agentClient
     self.lockCoordinator = LockCoordinator(
@@ -193,9 +202,15 @@ final class MainWindowController: NSWindowController {
 
   private func applyState(_ state: LockState) {
     switch state {
-    case .checking, .locked:
+    case .checking:
       lockScreenViewController.setUnlockFailureMessage(nil)
       presentLockScreen()
+    case .locked:
+      lockScreenViewController.setUnlockFailureMessage(nil)
+      presentLockScreen()
+      #if DEBUG
+        requestAutoUnlockIfNeeded()
+      #endif
     case .unlockFailed(let message):
       lockScreenViewController.setUnlockFailureMessage(message)
       presentLockScreen()
@@ -216,7 +231,44 @@ final class MainWindowController: NSWindowController {
     guard window?.contentViewController !== splitViewController else { return }
     window?.contentViewController = splitViewController
     window?.toolbar?.isVisible = true
+    #if DEBUG
+      applyInitialSidebarCategoryOverrideIfNeeded()
+    #endif
   }
+
+  #if DEBUG
+    /// `-InitialSidebarCategory <rawValue>` (e.g. `-InitialSidebarCategory codes`) jumps straight
+    /// to that sidebar category as soon as the vault unlocks, DEBUG-only. Exists so tophat/manual-QA
+    /// screenshots of the full-width Codes/Security/Deleted views (851-2418/851-2419/851-2420) can
+    /// be captured deterministically — by launching a build with this argument (plus
+    /// `-SeedSampleData YES`) and grabbing this process' own window via
+    /// `CGWindowListCopyWindowInfo` filtered on `kCGWindowOwnerPID` — rather than by driving a live
+    /// sidebar click through `System Events`, which can't reliably be scoped to one process among
+    /// several concurrently-running same-named instances on a shared machine. `SidebarCategory`'s
+    /// `rawValue`s (`all`/`passkeys`/`codes`/`wifi`/`security`/`deleted`) are exactly the accepted
+    /// strings. Never compiled into Release builds.
+    private func applyInitialSidebarCategoryOverrideIfNeeded() {
+      guard !hasAppliedInitialSidebarCategoryOverride else { return }
+      guard let raw = UserDefaults.standard.string(forKey: "InitialSidebarCategory"),
+        let category = SidebarCategory(rawValue: raw)
+      else { return }
+      hasAppliedInitialSidebarCategoryOverride = true
+      splitViewController.sidebarViewController.selectCategory(category)
+    }
+
+    /// `-AutoUnlockForTophat YES` drives `lockCoordinator.unlock()` as soon as `.locked` is
+    /// observed, DEBUG-only — combined with `LILPASSWORDS_FAKE_AUTH=1`/`LILPASSWORDS_OFFLINE_DEMO=1`
+    /// (see `makeAuthenticator()`/`makeAgent(real:)`), this gets a freshly-launched debug build
+    /// straight to unlocked content with no Touch ID/password prompt and no click needed, so a
+    /// tophat/manual-QA screenshot pass (see `-InitialSidebarCategory`/`-ForceAppearance`) can run
+    /// end-to-end from launch arguments alone. Never compiled into Release builds.
+    private func requestAutoUnlockIfNeeded() {
+      guard !hasRequestedAutoUnlock else { return }
+      guard UserDefaults.standard.bool(forKey: "AutoUnlockForTophat") else { return }
+      hasRequestedAutoUnlock = true
+      Task { await lockCoordinator.unlock() }
+    }
+  #endif
 
   /// First run (851-2411): no vault exists yet, so ask the helper to create one, then hand off to
   /// the real recovery kit "save your recovery key" sheet (851-2447).
