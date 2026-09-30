@@ -19,3 +19,7 @@ xcodebuild build \
 
 [[ -d "$APP_PATH" ]] || die "build succeeded but $APP_PATH is missing"
 log "Built $APP_PATH"
+
+# 851-2475: fail the release before signing/notarizing if the appex lost its
+# AutoFill capabilities (XcodeGen strips anything project.yml doesn't declare).
+"$(dirname "${BASH_SOURCE[0]}")/verify-autofill-plist.sh" "$APP_PATH"

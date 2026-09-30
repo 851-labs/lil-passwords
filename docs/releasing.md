@@ -32,7 +32,10 @@ standalone script you can also run on its own once earlier stages have run:
 1. `xcodegen generate` — regenerate `LilPasswords.xcodeproj` from `project.yml`.
 2. `build.sh` — `xcodebuild build` (Release configuration) of the app, the
    agent, and the CLI. Always builds with the project's default ad hoc
-   identity; signing happens as its own step next.
+   identity; signing happens as its own step next. Then runs
+   `verify-autofill-plist.sh`, which fails the release if the built
+   `AutoFill.appex`'s Info.plist is missing `ProvidesPasswords`/`ProvidesPasskeys`
+   (851-2475 — XcodeGen drops any plist key `project.yml` doesn't declare).
 3. `sign.sh` — signs inside out with each target's entitlements: Sparkle's
    bundled helper tools first (`Autoupdate`, `Updater.app`, its two XPC
    services), then the embedded `LilPasswordsAgent` and `lilpass`

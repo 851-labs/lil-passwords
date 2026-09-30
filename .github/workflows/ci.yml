@@ -31,12 +31,17 @@ jobs:
         run: brew install xcodegen
 
       - name: Check generated project is up to date
+        # 851-2475: diffs the whole tree, not just LilPasswords.xcodeproj — XcodeGen also rewrites
+        # every target's Info.plist from project.yml's `info.properties`, and a key that lived only
+        # in the committed plist (AutoFill's NSExtensionAttributes) was silently stripped on every
+        # regeneration without this check noticing. Untracked files count as drift too.
         run: |
           make project
-          git diff --exit-code -- LilPasswords.xcodeproj || {
-            echo "::error::LilPasswords.xcodeproj is out of date. Run 'make project' and commit the result."
+          if ! git diff --exit-code || [[ -n "$(git status --porcelain)" ]]; then
+            git status --short
+            echo "::error::Generated files are out of date with project.yml (xcodeproj and/or Info.plists). Run 'make project' and commit the result; if a plist key disappeared, declare it in project.yml's info.properties."
             exit 1
-          }
+          fi
 
       - name: Cache SwiftPM
         uses: actions/cache@v4
@@ -56,6 +61,10 @@ jobs:
 
       - name: Build app, helper, and CLI (unsigned)
         run: make build
+
+      - name: Verify AutoFill.appex declares its credential provider capabilities
+        # 851-2475: same assertion build.sh makes before every release, against CI's Debug build.
+        run: scripts/release/verify-autofill-plist.sh "build/Build/Products/Debug/lil passwords.app"
 
       - name: End-to-end tests (built lilpass binary + disposable in-memory helper)
         # This step used to hang CI for a full 30-minute timeout with zero output — 851-2434.

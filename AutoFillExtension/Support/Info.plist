@@ -22,24 +22,20 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSExtension</key>
 	<dict>
-		<key>NSExtensionPointIdentifier</key>
-		<string>com.apple.authentication-services-credential-provider-ui</string>
-		<key>NSExtensionPrincipalClass</key>
-		<string>$(PRODUCT_MODULE_NAME).CredentialProviderViewController</string>
 		<key>NSExtensionAttributes</key>
 		<dict>
 			<key>ASCredentialProviderExtensionCapabilities</key>
 			<dict>
-				<key>ProvidesPasswords</key>
-				<true/>
-				<!-- 851-2442: macOS 14+ only, but this key is simply ignored by macOS 13 (which never
-				     calls the ASPasskeyCredentialRequest-based overrides in
-				     CredentialProviderViewController.swift at all) — no #available-style gate needed
-				     in a plist. -->
 				<key>ProvidesPasskeys</key>
+				<true/>
+				<key>ProvidesPasswords</key>
 				<true/>
 			</dict>
 		</dict>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.authentication-services-credential-provider-ui</string>
+		<key>NSExtensionPrincipalClass</key>
+		<string>$(PRODUCT_MODULE_NAME).CredentialProviderViewController</string>
 	</dict>
 </dict>
 </plist>
