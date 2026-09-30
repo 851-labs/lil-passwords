@@ -10,10 +10,12 @@
 	provisioning profile from the signing team, the same empirically-confirmed failure mode
 	docs/adr/0001-storage-and-process-model.md documents for `keychain-access-groups`, and the same
 	one docs/adr/0005-autofill-credential-provider.md documents for this extension specifically.
-	That profile doesn't exist until the 851 Labs Apple Developer Program team is set up
-	(851-2400) — until then this target builds and embeds fine (ad-hoc/unsigned, `make build`
-	stays green) but AMFI will not let a locally-run copy actually load as a credential provider.
-	Documented on Linear 851-2441 for Alexandru; do not remove these keys to "fix" that — the
+	Release builds get that profile from scripts/release/prepare-autofill-profile.sh (851-2476),
+	which embeds the Developer ID profile and adds com.apple.application-identifier and
+	com.apple.developer.team-identifier to the entitlements the appex is actually signed with;
+	those two are team-specific, so they're added at release time rather than kept here. Local
+	ad hoc builds (`make build`) still embed the appex unprovisioned, so AMFI won't let a
+	locally-built copy load as a credential provider. Do not remove these keys to "fix" that; the
 	fix is a real provisioning profile, not a smaller entitlement set.
 	-->
 
