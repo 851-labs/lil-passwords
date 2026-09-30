@@ -8,6 +8,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/notarize.sh"
 
 [[ -d "$APP_PATH" ]] || die "$APP_PATH not found — run build.sh and sign.sh first"
 
+# Notarize + staple the app first so the copy inside the DMG carries its own
+# ticket (works offline after the DMG is dragged out). No-ops without creds.
+notarize_and_staple "$APP_PATH"
+
 STAGING_DIR="$SCRATCH_DIR/dmg-staging"
 rm -rf "$STAGING_DIR"
 mkdir -p "$STAGING_DIR" "$DIST_DIR"
@@ -24,7 +28,7 @@ if [[ "$IDENTITY" == "-" ]]; then
   codesign --force --sign - "$DMG_PATH"
 else
   log "Signing DMG with $IDENTITY"
-  codesign --force --sign "$IDENTITY" --timestamp "$DMG_PATH"
+  codesign --force --sign "$IDENTITY" --timestamp --keychain "$SIGNING_KEYCHAIN_PATH" "$DMG_PATH"
 fi
 
 notarize_and_staple "$DMG_PATH"

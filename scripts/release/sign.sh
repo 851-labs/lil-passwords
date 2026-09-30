@@ -33,28 +33,35 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 IDENTITY="$(signing_identity)"
 if [[ "$IDENTITY" == "-" ]]; then
   warn "Signing ad hoc ('-') — no Developer ID cert configured yet (851-2436). This build will fail Gatekeeper on other Macs, and skips hardened runtime (see comment above) so it can still launch locally."
-  # Plain strings rather than arrays: macOS's default /bin/bash (3.2) treats
-  # expanding an *empty* array under `set -u` as an unbound-variable error,
-  # and each of these is always exactly zero or one simple flag with no
-  # spaces/globbing to worry about.
-  TIMESTAMP_FLAG=""
-  RUNTIME_FLAG=""
 else
   log "Signing with Developer ID identity: $IDENTITY"
-  TIMESTAMP_FLAG="--timestamp"
-  RUNTIME_FLAG="--options runtime"
 fi
+
+# Every codesign call goes through here. With a real identity: hardened
+# runtime + secure timestamp (both required for notarization), and an
+# explicit --keychain so codesign resolves the identity (by SHA-1, see
+# import-certificate.sh) from the scratch keychain rather than whatever the
+# user's search list happens to contain. Two branches rather than a flags
+# array: macOS's /bin/bash 3.2 treats expanding an empty array under `set -u`
+# as an unbound-variable error.
+run_codesign() {
+  if [[ "$IDENTITY" == "-" ]]; then
+    codesign --force --sign - "$@"
+  else
+    codesign --force --options runtime --timestamp --keychain "$SIGNING_KEYCHAIN_PATH" --sign "$IDENTITY" "$@"
+  fi
+}
 
 codesign_plain() {
   local target="$1"
   log "codesign: ${target#"$APP_PATH"/}"
-  codesign --force $RUNTIME_FLAG $TIMESTAMP_FLAG --sign "$IDENTITY" "$target"
+  run_codesign "$target"
 }
 
 codesign_with_entitlements() {
   local target="$1" entitlements="$2"
   log "codesign: ${target#"$APP_PATH"/} ($entitlements)"
-  codesign --force $RUNTIME_FLAG $TIMESTAMP_FLAG --sign "$IDENTITY" --entitlements "$entitlements" "$target"
+  run_codesign --entitlements "$entitlements" "$target"
 }
 
 # 851-2465: `LilPasswordsAgent` and `lilpass` are bare `com.apple.product-type.tool` binaries with
@@ -70,7 +77,7 @@ codesign_with_entitlements() {
 codesign_with_entitlements_and_identifier() {
   local target="$1" entitlements="$2" identifier="$3"
   log "codesign: ${target#"$APP_PATH"/} ($entitlements, -i $identifier)"
-  codesign --force $RUNTIME_FLAG $TIMESTAMP_FLAG --sign "$IDENTITY" --identifier "$identifier" --entitlements "$entitlements" "$target"
+  run_codesign --identifier "$identifier" --entitlements "$entitlements" "$target"
 }
 
 # --- 1. Sparkle.framework's bundled helper tools ---------------------------
@@ -103,7 +110,16 @@ CLI_PATH="$APP_PATH/Contents/Helpers/lilpass"
 codesign_with_entitlements_and_identifier "$AGENT_PATH" "Config/Entitlements/Agent.entitlements" "com.851labs.lilpasswords.agent"
 codesign_with_entitlements_and_identifier "$CLI_PATH" "Config/Entitlements/CLI.entitlements" "com.851labs.lilpasswords.cli"
 
-# --- 3. The app itself, last ------------------------------------------------
+# --- 3. The AutoFill credential provider extension (Contents/PlugIns) -------
+# 851-2474: without this the appex kept the build's ad hoc signature, and
+# notarization rejected the whole app ("not signed with a valid Developer ID
+# certificate" / "does not include a secure timestamp" on AutoFill.appex).
+# Same entitlements project.yml's post-embed re-sign applies (851-2441).
+AUTOFILL_PATH="$APP_PATH/Contents/PlugIns/AutoFill.appex"
+[[ -d "$AUTOFILL_PATH" ]] || die "$AUTOFILL_PATH not found — was AutoFillExtension embedded?"
+codesign_with_entitlements "$AUTOFILL_PATH" "Config/Entitlements/AutoFillExtension.entitlements"
+
+# --- 4. The app itself, last ------------------------------------------------
 codesign_with_entitlements "$APP_PATH" "Config/Entitlements/App.entitlements"
 
 log "Verifying signature"
