@@ -32,6 +32,9 @@ mkdir -p "$SCRATCH_DIR"
 # Final artifacts CI/tophat actually publish.
 DIST_DIR="$RELEASE_ROOT/dist"
 
+# Scratch keychain import-certificate.sh puts the Developer ID identity in.
+SIGNING_KEYCHAIN_PATH="$SCRATCH_DIR/release-signing.keychain-db"
+
 VERSION="${RELEASE_VERSION:-}"
 if [[ -z "$VERSION" ]]; then
   # `v1.2.3` tag -> `1.2.3`. Falls back to the xcconfig's MARKETING_VERSION
@@ -91,16 +94,25 @@ has_notary_credentials() {
 signing_identity() {
   local cache="$SCRATCH_DIR/.signing-identity"
   if [[ -f "$cache" ]]; then
-    cat "$cache"
-    return 0
+    local cached
+    cached="$(cat "$cache")"
+    # A cached real identity is only good while its scratch keychain still
+    # holds it (a stale cache from an earlier run must trigger a re-import).
+    if [[ "$cached" == "-" ]] ||
+      security find-identity -v -p codesigning "$SIGNING_KEYCHAIN_PATH" 2>/dev/null | grep -q "$cached"; then
+      printf '%s' "$cached"
+      return 0
+    fi
   fi
 
   local identity
   if has_developer_id_cert; then
-    identity="$("$RELEASE_ROOT/scripts/release/import-certificate.sh")"
+    # stderr passes through (progress logs); stdout is only the identity.
+    identity="$("$RELEASE_ROOT/scripts/release/import-certificate.sh")" || return 1
   else
     identity="-"
   fi
   printf '%s' "$identity" >"$cache"
   printf '%s' "$identity"
 }
+

@@ -36,7 +36,8 @@ standalone script you can also run on its own once earlier stages have run:
 3. `sign.sh` — signs inside out with each target's entitlements: Sparkle's
    bundled helper tools first (`Autoupdate`, `Updater.app`, its two XPC
    services), then the embedded `LilPasswordsAgent` and `lilpass`
-   (`Contents/Helpers`), then `lil passwords.app` itself last, since its seal
+   (`Contents/Helpers`), then the AutoFill extension
+   (`Contents/PlugIns/AutoFill.appex`), then `lil passwords.app` itself last, since its seal
    has to cover everything already signed inside it. Uses whichever identity
    `scripts/release/lib.sh`'s `signing_identity()` resolves — ad hoc today, a
    real Developer ID identity once one exists. Hardened runtime
@@ -50,10 +51,13 @@ standalone script you can also run on its own once earlier stages have run:
    `codesign --verify --deep --strict`. Developer ID builds sign everything
    with one matching Team ID, so hardened runtime (required for notarization)
    just works.
-4. `make-dmg.sh` — packages the signed app into `dist/LilPasswords-<version>.dmg`
-   with the usual `.app` + `Applications` symlink layout via `hdiutil`, signs
-   the DMG itself, then notarizes + staples it (`notarize.sh`) if
-   credentials exist.
+4. `make-dmg.sh` — notarizes + staples the signed app itself (`notarize.sh`,
+   submitted as a zip) if credentials exist, so the copy inside the DMG
+   carries its own ticket and passes Gatekeeper offline once dragged out.
+   Then packages it into `dist/LilPasswords-<version>.dmg` with the usual
+   `.app` + `Applications` symlink layout via `hdiutil`, signs the DMG
+   itself, and notarizes + staples the DMG too. `notarize.sh` fails the
+   release unless Apple's verdict is `Accepted`.
 5. `generate-appcast.sh` — produces `dist/appcast.xml` from the DMG using
    Sparkle's `generate_appcast` tool, if `SPARKLE_ED_PRIVATE_KEY` exists.
 
@@ -132,6 +136,21 @@ Alexandru Turcanu's team or a future 851 Labs org team):
    release signs with the real identity, notarizes, and staples
    automatically.
 
+`import-certificate.sh` imports the `.p12` into a fresh scratch keychain
+(`build/release-scratch/release-signing.keychain-db`), adds it to the user
+keychain search list, and prints only the identity's SHA-1 hash on stdout
+(its tool output goes to stderr — 851-2474); every `codesign` call then
+passes `--keychain` for that scratch keychain. `release.sh` deletes the
+scratch keychain again on exit.
+
+To tophat a real Developer ID release locally, export the same variables the
+workflow sets (the `.p12` can be a throwaway export of the Developer ID key +
+cert with a random password; delete it afterward) plus
+`RELEASE_VERSION=0.0.x`, run `scripts/release/release.sh`, then check
+`spctl -a -vvv -t exec "build/Build/Products/Release/lil passwords.app"`
+reports `source=Notarized Developer ID`, and `xcrun stapler validate` passes
+on both the app and `dist/LilPasswords-<version>.dmg`.
+
 ### Sparkle keys
 
 Sparkle's `generate_keys` tool (bundled in the same
@@ -173,8 +192,8 @@ start" alert on every launch.
 This is the state of the repo today, and `scripts/release/release.sh` is
 expected to run start to finish in this state:
 
-- `build.sh`, `sign.sh` — build and sign the app, agent, CLI, and Sparkle's
-  helper tools with the ad hoc identity (`-`) already set as the project
+- `build.sh`, `sign.sh` — build and sign the app, agent, CLI, AutoFill
+  extension, and Sparkle's helper tools with the ad hoc identity (`-`) already set as the project
   default in `Config/Base.xcconfig`. No hardened runtime in this mode (see the
   pipeline step above) — the app launches and runs locally like any other ad
   hoc build.
