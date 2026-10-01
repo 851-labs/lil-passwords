@@ -36,6 +36,12 @@ jobs:
       NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
       NOTARY_API_KEY_P8: ${{ secrets.NOTARY_API_KEY_P8 }}
       SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+      # 851-2476: base64 Developer ID provisioning profile for the AutoFill
+      # extension (com.851labs.lilpasswords.autofill). sign.sh embeds it in
+      # AutoFill.appex; with a Developer ID cert but no profile, the appex is
+      # left out of the build (with a warning annotation) rather than shipped
+      # in a state AMFI refuses to launch.
+      AUTOFILL_PROVISIONING_PROFILE: ${{ secrets.AUTOFILL_PROVISIONING_PROFILE }}
     steps:
       - uses: actions/checkout@v4
 

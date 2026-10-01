@@ -107,6 +107,7 @@ All optional; the pipeline degrades gracefully without each one.
 | `APPLE_TEAM_ID` | Apple Developer Team ID. Optional — defaults to Alexandru Turcanu's team (`WH4QW9ND3J`, see `scripts/release/lib.sh`), who lil passwords ships under until the 851 Labs org has its own team. Only set this to override that default. |
 | `NOTARY_APPLE_ID` + `NOTARY_PASSWORD` | An Apple ID (with an [app-specific password](https://support.apple.com/en-us/102654)) enrolled in the team, for `notarytool`. Alternative to the API key below. |
 | `NOTARY_API_KEY_ID` + `NOTARY_API_ISSUER_ID` + `NOTARY_API_KEY_P8` | An App Store Connect API key instead of an Apple ID/password, for `notarytool`. |
+| `AUTOFILL_PROVISIONING_PROFILE` | Base64-encoded Developer ID provisioning profile for the AutoFill extension (`com.851labs.lilpasswords.autofill`) — see [AutoFill provisioning profile](#autofill-provisioning-profile). Without it, a Developer ID build leaves `AutoFill.appex` out. |
 | `SPARKLE_ED_PRIVATE_KEY` | The EdDSA private key Sparkle uses to sign appcast entries — see [Sparkle keys](#sparkle-keys). |
 | `HOMEBREW_TAP_TOKEN` | A token with write access to 851-labs/homebrew-tap, used to open the cask-bump PR — see [Homebrew cask](#homebrew-cask). |
 
@@ -154,6 +155,44 @@ cert with a random password; delete it afterward) plus
 reports `source=Notarized Developer ID`, and `xcrun stapler validate` passes
 on both the app and `dist/LilPasswords-<version>.dmg`.
 
+### AutoFill provisioning profile
+
+851-2476: `AutoFill.appex` is signed with the restricted
+`com.apple.developer.authentication-services.autofill-credential-provider`
+entitlement, and AMFI only launches a Developer ID-signed process carrying a
+restricted entitlement if it embeds a provisioning profile allowing it. The
+profile ("lil passwords AutoFill Developer ID") is a **Developer ID** profile
+for App ID `com.851labs.lilpasswords.autofill` with the AutoFill Credential
+Provider capability, created against the current Developer ID Application
+certificate. Store it as `AUTOFILL_PROVISIONING_PROFILE`
+(`base64 -i profile.provisionprofile | pbcopy`).
+
+With a Developer ID identity, `sign.sh` runs `prepare-autofill-profile.sh`,
+which decodes the profile and fails the release unless it matches the team,
+covers the appex's bundle ID, grants the AutoFill entitlement, is a Developer
+ID (all-devices) profile, hasn't expired, and lists the certificate being
+signed with. It then copies the profile to
+`AutoFill.appex/Contents/embedded.provisionprofile` *before* signing, and signs
+the appex with `Config/Entitlements/AutoFillExtension.entitlements` plus
+`com.apple.application-identifier` and `com.apple.developer.team-identifier`
+(a provisioned macOS extension has to carry both). `verify-autofill-profile.sh`
+then checks that every profile-gated entitlement in the signature is allowed
+by the embedded profile.
+
+**If the secret is missing** (Developer ID signing only): the appex is left
+out of the build, with a warning and a GitHub Actions annotation. An
+unprovisioned appex would still register and show up in System Settings →
+AutoFill & Passwords, then get killed by AMFI when the user selected it. A
+release without AutoFill is better than one with AutoFill that looks like it
+works and doesn't. Ad hoc builds (no certificate) keep embedding the appex
+unprovisioned as before: a Developer ID profile can't apply to an ad hoc
+signature.
+
+**Renewing the Developer ID certificate** invalidates this profile (it lists
+the certificates it trusts). `prepare-autofill-profile.sh` fails the release
+in that case, so regenerate the profile against the new certificate and update
+the secret at the same time as `DEVELOPER_ID_CERT_P12`.
+
 ### Sparkle keys
 
 Sparkle's `generate_keys` tool (bundled in the same
@@ -197,7 +236,8 @@ expected to run start to finish in this state:
 
 - `build.sh`, `sign.sh` — build and sign the app, agent, CLI, AutoFill
   extension, and Sparkle's helper tools with the ad hoc identity (`-`) already set as the project
-  default in `Config/Base.xcconfig`. No hardened runtime in this mode (see the
+  default in `Config/Base.xcconfig`. The AutoFill extension is signed without a provisioning
+  profile in this mode, so it can't load as a credential provider. No hardened runtime in this mode (see the
   pipeline step above) — the app launches and runs locally like any other ad
   hoc build.
 - `make-dmg.sh` — packages and ad hoc-signs the DMG. `notarize.sh` warns and

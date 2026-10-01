@@ -15,7 +15,9 @@ log "lil passwords release: version $VERSION (build $BUILD_NUMBER)"
 # Each run imports the Developer ID cert fresh, and removes the scratch
 # keychain (private key included) from disk and the search list on exit.
 cleanup_signing() {
-  rm -f "$SCRATCH_DIR/.signing-identity" "$SCRATCH_DIR/notary-api-key.p8"
+  rm -f "$SCRATCH_DIR/.signing-identity" "$SCRATCH_DIR/notary-api-key.p8" \
+    "$SCRATCH_DIR/autofill.provisionprofile" "$SCRATCH_DIR/autofill-profile.plist" \
+    "$SCRATCH_DIR/AutoFillExtension.signed.entitlements"
   if [[ -f "$SIGNING_KEYCHAIN_PATH" ]]; then
     security delete-keychain "$SIGNING_KEYCHAIN_PATH" 2>/dev/null || rm -f "$SIGNING_KEYCHAIN_PATH"
   fi

@@ -115,9 +115,46 @@ codesign_with_entitlements_and_identifier "$CLI_PATH" "Config/Entitlements/CLI.e
 # notarization rejected the whole app ("not signed with a valid Developer ID
 # certificate" / "does not include a secure timestamp" on AutoFill.appex).
 # Same entitlements project.yml's post-embed re-sign applies (851-2441).
+#
+# 851-2476: the appex carries the *restricted*
+# com.apple.developer.authentication-services.autofill-credential-provider
+# entitlement, so with a real Developer ID identity AMFI only lets it launch if
+# the bundle embeds a Developer ID provisioning profile from the same team that
+# allows every restricted entitlement it's signed with. prepare-autofill-profile.sh
+# decodes AUTOFILL_PROVISIONING_PROFILE, checks it, copies it to
+# Contents/embedded.provisionprofile, and writes the entitlements to sign with:
+# the base file plus com.apple.application-identifier and
+# com.apple.developer.team-identifier, which a provisioned macOS extension must
+# carry in its signature (the profile's keychain-access-groups is an allowance,
+# not a requirement, so it isn't added). The profile is copied in *before*
+# codesign so the appex's seal covers it.
+#
+# Profile missing with a Developer ID identity: the appex is left out of the
+# build (loud warning + GitHub Actions annotation) rather than shipped
+# unprovisioned. An unprovisioned copy would still register with pluginkit and
+# show up in System Settings → AutoFill & Passwords, and then AMFI would kill it
+# the moment the user picked it: a broken feature that looks like it works.
+# Leaving it out ships a working app without AutoFill instead. Ad hoc builds
+# (no cert) keep the appex unprovisioned as before: a Developer ID profile
+# can't apply to an ad hoc signature anyway.
 AUTOFILL_PATH="$APP_PATH/Contents/PlugIns/AutoFill.appex"
+AUTOFILL_ENTITLEMENTS="Config/Entitlements/AutoFillExtension.entitlements"
 [[ -d "$AUTOFILL_PATH" ]] || die "$AUTOFILL_PATH not found — was AutoFillExtension embedded?"
-codesign_with_entitlements "$AUTOFILL_PATH" "Config/Entitlements/AutoFillExtension.entitlements"
+if [[ "$IDENTITY" == "-" ]]; then
+  codesign_with_entitlements "$AUTOFILL_PATH" "$AUTOFILL_ENTITLEMENTS"
+elif [[ -z "${AUTOFILL_PROVISIONING_PROFILE:-}" ]]; then
+  message="AUTOFILL_PROVISIONING_PROFILE is not set: leaving AutoFill.appex OUT of this Developer ID build. An unprovisioned appex carrying the restricted autofill-credential-provider entitlement would register in System Settings and then be killed by AMFI on launch. This release ships without the AutoFill extension. See docs/releasing.md (851-2476)."
+  warn "$message"
+  if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+    echo "::warning title=AutoFill extension left out::$message"
+  fi
+  rm -rf "$AUTOFILL_PATH"
+  rmdir "$APP_PATH/Contents/PlugIns" 2>/dev/null || true
+else
+  SIGNED_ENTITLEMENTS="$("$(dirname "${BASH_SOURCE[0]}")/prepare-autofill-profile.sh" "$AUTOFILL_PATH" "$AUTOFILL_ENTITLEMENTS" "$IDENTITY")"
+  codesign_with_entitlements "$AUTOFILL_PATH" "$SIGNED_ENTITLEMENTS"
+  "$(dirname "${BASH_SOURCE[0]}")/verify-autofill-profile.sh" "$AUTOFILL_PATH"
+fi
 
 # --- 4. The app itself, last ------------------------------------------------
 codesign_with_entitlements "$APP_PATH" "Config/Entitlements/App.entitlements"
